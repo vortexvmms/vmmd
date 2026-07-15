@@ -1,11 +1,11 @@
-"""VMMS Backend — Phase 1 diagnostics v0.1.3."""
+"""VMMS Backend — Phase 1 diagnostics v0.1.4."""
 import os
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="VMMS API", version="0.1.3")
+app = FastAPI(title="VMMS API", version="0.1.4")
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,22 +43,6 @@ async def health():
                 r = await client.get(f"{SUPABASE_URL}/rest/v1/", headers=supabase_headers())
                 detail["status_code"] = r.status_code
                 detail["supabase_says"] = r.text[:150]
-                db_status = "connected" if r.status_code in (200, 404, 406) else "error"
-        except Exception as e:
-            detail["exception"] = type(e).__name__
-            db_status = "unreachable"
-    return {"server": "ok", "database": db_status, "diag": detail}    detail = {}
-    detail["url_set"] = bool(SUPABASE_URL)
-    detail["url_looks_right"] = SUPABASE_URL.startswith("https://") and SUPABASE_URL.endswith(".supabase.co")
-    detail["key_set"] = bool(SUPABASE_ANON_KEY)
-    detail["key_prefix"] = SUPABASE_ANON_KEY[:15] if SUPABASE_ANON_KEY else ""
-
-    db_status = "not_configured"
-    if SUPABASE_URL and SUPABASE_ANON_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.get(f"{SUPABASE_URL}/rest/v1/", headers=supabase_headers())
-                detail["supabase_status_code"] = r.status_code
                 db_status = "connected" if r.status_code in (200, 404, 406) else "error"
         except Exception as e:
             detail["exception"] = type(e).__name__
