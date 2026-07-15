@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Vortex Manpower Management System</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-red-700 text-white p-4 shadow">
+    <h1 class="text-xl font-bold">VMMS</h1>
+    <p class="text-red-100 text-sm">Vortex Manpower Management System</p>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 p-4 max-w-md mx-auto w-full">
+    <div class="bg-white rounded-xl shadow p-6 mt-6 text-center">
+      <div class="text-5xl mb-3">🏗️</div>
+      <h2 class="text-lg font-bold text-gray-800 mb-1">Phase 1 — System Check</h2>
+      <p class="text-gray-500 text-sm mb-6">If all three rows below show green, the setup is complete.</p>
+
+      <div class="space-y-3 text-left">
+        <div id="chk-frontend" class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <span class="text-sm font-medium text-gray-700">1. Website (frontend)</span>
+          <span class="text-sm font-bold text-green-600">✔ Working</span>
+        </div>
+        <div id="chk-backend" class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <span class="text-sm font-medium text-gray-700">2. Server (backend)</span>
+          <span class="text-sm font-bold text-gray-400" id="backend-status">Checking…</span>
+        </div>
+        <div id="chk-db" class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <span class="text-sm font-medium text-gray-700">3. Database</span>
+          <span class="text-sm font-bold text-gray-400" id="db-status">Checking…</span>
+        </div>
+      </div>
+
+      <button onclick="runChecks()" class="mt-6 w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-base">
+        Check Again
+      </button>
+      <p id="hint" class="text-xs text-gray-400 mt-4"></p>
+    </div>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 p-4">
+    VMMS Phase 1 · Internal Use Only
+  </footer>
+
+  <script>
+    async function runChecks() {
+      const be = document.getElementById('backend-status');
+      const db = document.getElementById('db-status');
+      const hint = document.getElementById('hint');
+      be.textContent = 'Checking…'; be.className = 'text-sm font-bold text-gray-400';
+      db.textContent = 'Checking…'; db.className = 'text-sm font-bold text-gray-400';
+      hint.textContent = '';
+
+      if (!window.VMMS_CONFIG || !VMMS_CONFIG.BACKEND_URL || VMMS_CONFIG.BACKEND_URL.includes('PASTE-')) {
+        be.textContent = '✖ Not set up yet'; be.className = 'text-sm font-bold text-red-600';
+        db.textContent = '— Waiting'; db.className = 'text-sm font-bold text-gray-400';
+        hint.textContent = 'Backend address not entered yet. See Setup Guide, Step 5.';
+        return;
+      }
+      try {
+        const r = await fetch(VMMS_CONFIG.BACKEND_URL + '/api/v1/health', { cache: 'no-store' });
+        const data = await r.json();
+        be.textContent = '✔ Working'; be.className = 'text-sm font-bold text-green-600';
+        if (data.database === 'connected') {
+          db.textContent = '✔ Connected'; db.className = 'text-sm font-bold text-green-600';
+        } else {
+          db.textContent = '✖ Not connected'; db.className = 'text-sm font-bold text-red-600';
+          hint.textContent = 'Server is running but database keys are missing. See Setup Guide, Step 4.';
+        }
+      } catch (e) {
+        be.textContent = '✖ Cannot reach'; be.className = 'text-sm font-bold text-red-600';
+        db.textContent = '— Waiting'; db.className = 'text-sm font-bold text-gray-400';
+        hint.textContent = 'Server not reachable. First visit of the day can take up to 1 minute to wake up — press Check Again after a short wait.';
+      }
+    }
+    runChecks();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

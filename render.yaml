@@ -1,0 +1,15 @@
+# Render.com blueprint — creates the VMMS backend service automatically.
+# In Render: New + → Blueprint → connect the vmms repository → Apply.
+services:
+  - type: web
+    name: vmms-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SUPABASE_URL
+        sync: false   # you will paste this value in the Render dashboard
+      - key: SUPABASE_ANON_KEY
+        sync: false   # you will paste this value in the Render dashboard
