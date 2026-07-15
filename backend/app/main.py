@@ -1,22 +1,12 @@
-"""
-VMMS Backend — Phase 1
-FastAPI application with a single health-check endpoint.
-Confirms: (1) server is running, (2) database connection works.
-"""
+"""VMMS Backend — Phase 1 (with detailed database diagnostics)."""
 import os
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(
-    title="VMMS API",
-    description="Vortex Manpower Management System — internal API",
-    version="0.1.0",
-)
+app = FastAPI(title="VMMS API", version="0.1.1")
 
-# Allow the frontend (GitHub Pages) to call this API.
-# In Phase 3 this will be restricted to the exact frontend address.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,8 +14,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
 
 
 @app.get("/")
@@ -35,16 +25,28 @@ def root():
 
 @app.get("/api/v1/health")
 async def health():
-    """Health check: server status + database reachability."""
+    detail = {}
+    # Describe settings WITHOUT revealing secrets
+    detail["url_set"] = bool(SUPABASE_URL)
+    detail["url_looks_right"] = SUPABASE_URL.startswith("https://") and SUPABASE_URL.endswith(".supabase.co")
+    detail["key_set"] = bool(SUPABASE_ANON_KEY)
+    detail["key_length"] = len(SUPABASE_ANON_KEY)
+    detail["key_prefix"] = SUPABASE_ANON_KEY[:15] if SUPABASE_ANON_KEY else ""
+
     db_status = "not_configured"
     if SUPABASE_URL and SUPABASE_ANON_KEY:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.get(
                     f"{SUPABASE_URL}/rest/v1/",
-                    headers={"apikey": SUPABASE_ANON_KEY},
+                    headers={
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+                    },
                 )
+                detail["supabase_status_code"] = r.status_code
                 db_status = "connected" if r.status_code in (200, 404) else "error"
-        except Exception:
+        except Exception as e:
+            detail["exception"] = type(e).__name__
             db_status = "unreachable"
-    return {"server": "ok", "database": db_status}
+    return {"server": "ok", "database": db_status, "diag": detail}
