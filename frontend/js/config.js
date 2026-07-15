@@ -3,5 +3,5 @@
 // replace the text below with your backend address.
 // Example: BACKEND_URL: "https://vmms-backend.onrender.com"
 window.VMMS_CONFIG = {
-  BACKEND_URL: "https://https://vmms-backend-7j1v.onrender.com"
+  BACKEND_URL: "https://vmms-backend-7j1v.onrender.com"
 };
