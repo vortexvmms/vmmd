@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Home</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold">VMMS</h1>
+      <p class="text-red-100 text-sm" id="who">Loading…</p>
+    </div>
+    <button onclick="vmmsLogout()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg">
+      Log Out
+    </button>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full">
+    <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
+
+    <div id="content" class="hidden">
+      <div class="bg-white rounded-xl shadow p-5 mt-4">
+        <p class="text-sm text-gray-500">Signed in as</p>
+        <p class="text-lg font-bold text-gray-800" id="name">—</p>
+        <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
+      </div>
+
+      <div class="mt-6 space-y-3" id="menu"></div>
+
+      <p class="text-xs text-gray-400 text-center mt-8">
+        Menu items unlock as each phase is completed.
+      </p>
+    </div>
+
+    <div id="noprofile" class="hidden bg-white rounded-xl shadow p-6 mt-10 text-center">
+      <div class="text-4xl mb-3">⚠️</div>
+      <p class="font-bold text-gray-800 mb-2">Login works, but no VMMS role is linked yet.</p>
+      <p class="text-sm text-gray-500">Ask the administrator to link your account (Phase 3 guide, Step 3).</p>
+      <button onclick="vmmsLogout()" class="mt-5 bg-red-700 text-white font-bold px-6 py-2 rounded-lg">Back to Login</button>
+    </div>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 p-4">
+    VMMS · Internal Use Only
+  </footer>
+
+  <script>
+    requireLogin();
+
+    const ROLE_LABELS = {
+      admin:    "Administrator",
+      main_sup: "Main Supervisor",
+      site_sup: "Site Supervisor",
+      payroll:  "Payroll",
+    };
+
+    // Menu per role. Phases not yet built are shown locked.
+    const MENUS = {
+      admin:    [["Workers", 4], ["Sites", 5], ["Daily Allocation", 6], ["Attendance", 7], ["Dashboard", 10], ["Reports", 11], ["Settings", 12]],
+      main_sup: [["Daily Allocation", 6], ["WhatsApp Allocation", 9], ["Dashboard", 10], ["Reports", 11]],
+      site_sup: [["My Site — Attendance", 7], ["WhatsApp Update", 9]],
+      payroll:  [["Reports", 11], ["Monthly Man-Hours", 12]],
+    };
+    const DONE_PHASE = 3; // raise this as phases complete
+
+    async function load() {
+      try {
+        const r = await vmmsApi("/api/v1/me");
+        if (r.status === 403) {
+          document.getElementById("loading").classList.add("hidden");
+          document.getElementById("noprofile").classList.remove("hidden");
+          return;
+        }
+        if (!r.ok) throw new Error("NOT_SIGNED_IN");
+        const me = await r.json();
+
+        document.getElementById("who").textContent = me.email || "";
+        document.getElementById("name").textContent = me.name;
+        document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
+
+        const menu = document.getElementById("menu");
+        (MENUS[me.role] || []).forEach(([label, phase]) => {
+          const unlocked = phase <= DONE_PHASE;
+          const div = document.createElement("div");
+          div.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between " + (unlocked ? "" : "opacity-50");
+          div.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
+            (unlocked ? `<span class="text-red-700 font-bold">›</span>`
+                      : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
+          menu.appendChild(div);
+        });
+
+        document.getElementById("loading").classList.add("hidden");
+        document.getElementById("content").classList.remove("hidden");
+      } catch (ex) {
+        vmmsLogout();
+      }
+    }
+    load();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

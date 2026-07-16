@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Login</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow">
+    <h1 class="text-xl font-bold">VMMS</h1>
+    <p class="text-red-100 text-sm">Vortex Manpower Management System</p>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full">
+    <div class="bg-white rounded-xl shadow p-6 mt-10">
+      <h2 class="text-lg font-bold text-gray-800 mb-1 text-center">Sign In</h2>
+      <p class="text-gray-500 text-sm mb-6 text-center">Use the email and password given by your administrator.</p>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="email">Email</label>
+          <input id="email" type="email" required autocomplete="username" inputmode="email"
+                 class="w-full border border-gray-300 rounded-lg p-3 text-base focus:outline-none focus:ring-2 focus:ring-red-600">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="password">Password</label>
+          <input id="password" type="password" required autocomplete="current-password"
+                 class="w-full border border-gray-300 rounded-lg p-3 text-base focus:outline-none focus:ring-2 focus:ring-red-600">
+        </div>
+
+        <p id="error" class="text-sm font-medium text-red-600 hidden"></p>
+
+        <button id="btn" type="submit"
+                class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-base disabled:opacity-60">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 p-4">
+    VMMS · Internal Use Only
+  </footer>
+
+  <script>
+    // already signed in? go straight to home
+    if (getSession()) window.location.href = "home.html";
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("btn");
+      const err = document.getElementById("error");
+      err.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+      try {
+        await vmmsLogin(
+          document.getElementById("email").value.trim(),
+          document.getElementById("password").value
+        );
+        window.location.href = "home.html";
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Sign In";
+      }
+    });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
