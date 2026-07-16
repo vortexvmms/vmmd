@@ -120,3 +120,46 @@
   </script>
 </body>
 </html>
+
+        <p id="error" class="text-sm font-medium text-red-600 hidden"></p>
+
+        <button id="btn" type="submit"
+                class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-base disabled:opacity-60">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer class="text-center text-xs text-gray-400 p-4">
+    VMMS · Internal Use Only
+  </footer>
+
+  <script>
+    // already signed in? go straight to home
+    if (getSession()) window.location.href = "home.html";
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("btn");
+      const err = document.getElementById("error");
+      err.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Signing in…";
+      try {
+        await vmmsLogin(
+          document.getElementById("email").value.trim(),
+          document.getElementById("password").value
+        );
+        window.location.href = "home.html";
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Sign In";
+      }
+    });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
