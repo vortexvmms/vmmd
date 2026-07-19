@@ -133,6 +133,11 @@
               Present
             </label>
           </div>
+          <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1">
+            <span class="text-xs text-gray-500">Reason:</span>
+            <button class="abs-chip text-xs font-bold px-3 py-1.5 rounded-full ${x.absence_type !== "mc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>Absent</button>
+            <button class="mc-chip text-xs font-bold px-3 py-1.5 rounded-full ${x.absence_type === "mc" ? "bg-yellow-500 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>MC</button>
+          </div>
           <div class="${x.present ? "" : "hidden"}">
             <div class="flex items-center flex-wrap gap-1">
               ${PRESETS.map(([t, lbl]) =>
@@ -148,6 +153,10 @@
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
+        div.querySelector(".abs-chip").addEventListener("click", () =>
+          mark(x, { present: false, absence_type: "absent" }, div));
+        div.querySelector(".mc-chip").addEventListener("click", () =>
+          mark(x, { present: false, absence_type: "mc" }, div));
         div.querySelectorAll(".tchip").forEach(b =>
           b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
         div.querySelector(".tcustom").addEventListener("click", () => {
