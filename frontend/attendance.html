@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Attendance</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold">Attendance</h1>
+        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3">
+      <input id="date" type="date" class="flex-1 rounded-lg p-2 text-gray-800 text-base">
+      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
+    <div id="submitted-banner" class="hidden bg-green-100 border border-green-300 text-green-800 rounded-xl p-3 mb-3 text-sm font-medium text-center">
+      ✓ This day has been submitted and locked.
+    </div>
+
+    <div id="bulkbar" class="bg-white rounded-xl shadow p-3 mb-3 flex items-center gap-2">
+      <span class="text-sm text-gray-600 flex-1">Set end time for all:</span>
+      <input id="bulk-time" type="time" step="900" value="17:00" class="border border-gray-300 rounded-lg p-2 text-base">
+      <button onclick="bulkSet()" class="bg-gray-800 text-white font-bold px-3 py-2 rounded-lg text-sm">Apply</button>
+    </div>
+
+    <div id="list" class="space-y-2"></div>
+    <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers allocated for this site and date.</p>
+  </main>
+
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
+    <div class="max-w-md mx-auto flex items-center gap-3">
+      <p class="text-sm text-gray-600 flex-1" id="hours-total">—</p>
+      <button id="submit-btn" onclick="submitDay()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
+        Submit Day
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+
+  <script>
+    requireLogin();
+
+    let ME = null, ROWS = [], SITES = [];
+
+    function toast(msg, long = false) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
+    }
+    function fmtDate(d) { return d.toISOString().slice(0, 10); }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      document.getElementById("date").value = fmtDate(new Date());
+      await loadDay();   // first load discovers the sites this user can see
+    }
+
+    async function loadDay() {
+      const date = document.getElementById("date").value;
+      const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
+      const all = r.ok ? await r.json() : [];
+
+      // build site dropdown from what this user is allowed to see
+      const siteMap = {};
+      all.forEach(x => siteMap[x.site_id] = x.site_name);
+      SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
+      const sel = document.getElementById("site");
+      const prev = sel.value;
+      sel.innerHTML = SITES.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+      if (prev && siteMap[prev]) sel.value = prev;
+
+      ROWS = all.filter(x => x.site_id === sel.value);
+      render();
+    }
+
+    function render() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      document.getElementById("empty").classList.toggle("hidden", ROWS.length > 0);
+
+      const submitted = ROWS.length > 0 && ROWS.every(x => x.submitted);
+      const canEdit = !submitted || ME.role === "admin";
+      document.getElementById("submitted-banner").classList.toggle("hidden", !submitted);
+      document.getElementById("bulkbar").classList.toggle("hidden", !canEdit || ROWS.length === 0);
+      document.getElementById("submit-btn").disabled = submitted || ROWS.length === 0;
+      document.getElementById("submit-btn").textContent = submitted ? "Submitted ✓" : "Submit Day";
+
+      let tn = 0, to = 0, present = 0;
+      ROWS.forEach(x => { if (x.present) { present++; tn += x.normal_hours; to += x.ot_hours; } });
+      document.getElementById("summary").textContent =
+        `${present}/${ROWS.length} present`;
+      document.getElementById("hours-total").textContent =
+        `Normal ${tn.toFixed(1)}h · OT ${to.toFixed(1)}h`;
+
+      ROWS.forEach(x => {
+        const div = document.createElement("div");
+        div.className = "bg-white rounded-xl shadow p-4" + (x.present ? "" : " opacity-60");
+        div.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <p class="font-medium text-gray-800">${x.worker_name}</p>
+              <p class="text-xs text-gray-400">${x.worker_code} · start ${x.start_time}</p>
+            </div>
+            <label class="flex items-center gap-1 text-sm">
+              <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""} ${canEdit ? "" : "disabled"}>
+              Present
+            </label>
+          </div>
+          <div class="flex items-center gap-2 ${x.present ? "" : "hidden"}">
+            <span class="text-sm text-gray-500">End:</span>
+            <input type="time" step="900" value="${x.end_time || ""}" ${canEdit ? "" : "disabled"}
+                   class="end-in border border-gray-300 rounded-lg p-2 text-base flex-1">
+            <span class="text-xs font-bold ${x.ot_hours > 0 ? "text-red-700" : "text-gray-500"} hrs-lbl">
+              ${x.end_time ? `${x.normal_hours}+${x.ot_hours} OT` : "—"}
+            </span>
+          </div>`;
+        const cb = div.querySelector(".present-cb");
+        const ein = div.querySelector(".end-in");
+        cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
+        ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value }, div); });
+        list.appendChild(div);
+      });
+    }
+
+    async function mark(x, changes, div) {
+      try {
+        let reason = null;
+        if (x.submitted && ME.role === "admin") {
+          reason = prompt("This day is already submitted. Reason for the change (required, goes to audit log):");
+          if (!reason) { await loadDay(); return; }
+        }
+        const r = await vmmsApi("/api/v1/attendance/mark", {
+          method: "PATCH",
+          body: JSON.stringify({ allocation_id: x.allocation_id, ...changes, edit_reason: reason }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not save");
+        await loadDay();
+      } catch (ex) {
+        toast(ex.message, true);
+        await loadDay();
+      }
+    }
+
+    async function bulkSet() {
+      const t = document.getElementById("bulk-time").value;
+      if (!t) return;
+      try {
+        const r = await vmmsApi("/api/v1/attendance/bulk_end", {
+          method: "POST",
+          body: JSON.stringify({
+            work_date: document.getElementById("date").value,
+            site_id: document.getElementById("site").value,
+            end_time: t,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not apply");
+        toast(`End time ${t} set for ${data.updated} workers — adjust exceptions individually`);
+        await loadDay();
+      } catch (ex) { toast(ex.message, true); }
+    }
+
+    async function submitDay() {
+      if (!confirm("Submit and lock this day? After submitting, changes need the administrator.")) return;
+      try {
+        const r = await vmmsApi("/api/v1/attendance/submit", {
+          method: "POST",
+          body: JSON.stringify({
+            work_date: document.getElementById("date").value,
+            site_id: document.getElementById("site").value,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not submit");
+        toast(`Day submitted — ${data.submitted} workers locked`);
+        await loadDay();
+      } catch (ex) { toast(ex.message, true); }
+    }
+
+    document.getElementById("date").addEventListener("change", loadDay);
+    document.getElementById("site").addEventListener("change", loadDay);
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
