@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.10.0")
+app = FastAPI(title="VMMS API", version="0.12.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,7 +97,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 10, "status": "running"}
+    return {"app": "VMMS", "phase": 12, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -652,6 +652,9 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         end_nd = body.end_next_day if body.end_next_day is not None else (att["end_next_day"] if att else False)
         present = body.present if body.present is not None else (att["present"] if att else True)
 
+        if user["role"] != "admin" and await month_locked(client, user["token"], alloc["work_date"]):
+            raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
+
         day_type = await get_day_type(client, user["token"], alloc["work_date"])
         normal, ot = (0.0, 0.0)
         if present and end:
@@ -690,6 +693,8 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
+            raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
         day_type = await get_day_type(client, user["token"], body.work_date)
         updated = 0
         for a in rows:
@@ -727,6 +732,8 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
+            raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
         missing = [
             (a.get("workers") or {}).get("name", "?")
             for a in rows
@@ -941,3 +948,190 @@ async def dashboard(user: dict = Depends(get_current_user)):
             "month_ot_hours": round(month_ot, 1),
             "site_summary": summary,
         }
+
+# ---------------- Reports & Monthly Man-Hours (Phases 11–12 · spec §9) ----------------
+async def month_locked(client: httpx.AsyncClient, token: str, work_date: str) -> bool:
+    m = work_date[:7] + "-01"
+    r = await client.get(f"{REST}/month_locks",
+                         params={"month": f"eq.{m}", "select": "month"},
+                         headers=supabase_headers(token))
+    return r.status_code == 200 and bool(r.json())
+
+
+async def _range_rows(client, token, dfrom: str, dto: str, site_id: str | None):
+    params = {"work_date": f"gte.{dfrom}", "status": "eq.allocated",
+              "select": "work_date,site_id,sites(site_name),"
+                        "workers(name,worker_code),"
+                        "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at)",
+              "order": "work_date.asc"}
+    r = await client.get(f"{REST}/allocations",
+                         params={**params, "and": f"(work_date.lte.{dto}" + (f",site_id.eq.{site_id}" if site_id else "") + ")"},
+                         headers=supabase_headers(token))
+    if r.status_code != 200:
+        raise HTTPException(status_code=500, detail="Could not load report data")
+    return r.json()
+
+
+@app.get("/api/v1/reports/attendance")
+async def report_attendance(dfrom: str, dto: str, site_id: str = "",
+                            user: dict = Depends(get_current_user)):
+    d1, d2 = date_cls.fromisoformat(dfrom), date_cls.fromisoformat(dto)
+    if d2 < d1 or (d2 - d1).days > 62:
+        raise HTTPException(status_code=400, detail="Date range must be 1–62 days")
+    async with httpx.AsyncClient(timeout=20) as client:
+        rows = await _range_rows(client, user["token"], dfrom, dto, site_id or None)
+        out = []
+        for a in rows:
+            att = a.get("attendance")
+            out.append({
+                "date": a["work_date"],
+                "site": (a.get("sites") or {}).get("site_name", "?"),
+                "worker_code": (a.get("workers") or {}).get("worker_code", ""),
+                "worker": (a.get("workers") or {}).get("name", "?"),
+                "present": att["present"] if att else None,
+                "start": att["start_time"][:5] if att and att["start_time"] else "",
+                "end": att["end_time"][:5] if att and att["end_time"] else "",
+                "nh": float(att["normal_hours"]) if att and att["present"] else 0,
+                "ot": float(att["ot_hours"]) if att and att["present"] else 0,
+                "day_type": att["day_type"] if att else "",
+                "submitted": bool(att and att["submitted_at"]),
+            })
+        return out
+
+
+@app.get("/api/v1/reports/manhours")
+async def report_manhours(month: str, user: dict = Depends(get_current_user)):
+    # month = YYYY-MM
+    dfrom = month + "-01"
+    y, m = int(month[:4]), int(month[5:7])
+    dto = (date_cls(y + (m == 12), (m % 12) + 1, 1) - timedelta(days=1)).isoformat()
+    async with httpx.AsyncClient(timeout=20) as client:
+        rows = await _range_rows(client, user["token"], dfrom, dto, None)
+        sites: dict[str, dict] = {}
+        workers: dict[str, dict] = {}
+        for a in rows:
+            att = a.get("attendance")
+            if not att or not att["present"]:
+                continue
+            sname = (a.get("sites") or {}).get("site_name", "?")
+            w = a.get("workers") or {}
+            nh, ot = float(att["normal_hours"]), float(att["ot_hours"])
+
+            s = sites.setdefault(sname, {"days": set(), "workers": set(), "nh": 0.0, "ot": 0.0})
+            s["days"].add(a["work_date"])
+            s["workers"].add(w.get("worker_code", "?"))
+            s["nh"] += nh
+            s["ot"] += ot
+
+            wk = workers.setdefault(w.get("worker_code", "?"),
+                                    {"name": w.get("name", "?"), "days": 0, "nh": 0.0, "ot": 0.0})
+            wk["days"] += 1
+            wk["nh"] += nh
+            wk["ot"] += ot
+
+        locked = await month_locked(client, user["token"], dfrom)
+        return {
+            "month": month, "locked": locked,
+            "sites": [{"site": k, "attendance_days": len(v["days"]),
+                       "total_workers": len(v["workers"]),
+                       "nh": round(v["nh"], 1), "ot": round(v["ot"], 1)}
+                      for k, v in sorted(sites.items())],
+            "workers": [{"worker_code": k, "name": v["name"], "days": v["days"],
+                         "nh": round(v["nh"], 1), "ot": round(v["ot"], 1)}
+                        for k, v in sorted(workers.items())],
+            "totals": {"nh": round(sum(v["nh"] for v in sites.values()), 1),
+                       "ot": round(sum(v["ot"] for v in sites.values()), 1)},
+        }
+
+
+class MonthBody(BaseModel):
+    month: str  # YYYY-MM
+
+
+@app.post("/api/v1/months/lock")
+async def lock_month(body: MonthBody, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "payroll"):
+        raise HTTPException(status_code=403, detail="Only Payroll or the Administrator can close a month")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.post(
+            f"{REST}/month_locks",
+            params={"on_conflict": "month"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "return=minimal,resolution=ignore-duplicates"},
+            json={"month": body.month + "-01", "locked_by": user["user_id"]})
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not close the month")
+        await audit(client, user, "lock_month", "month", body.month, None, {"locked": True})
+        return {"ok": True, "month": body.month, "locked": True}
+
+
+@app.post("/api/v1/months/unlock")
+async def unlock_month(body: MonthBody, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the Administrator can re-open a month")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.delete(
+            f"{REST}/month_locks",
+            params={"month": f"eq.{body.month}-01"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not re-open the month")
+        await audit(client, user, "unlock_month", "month", body.month, {"locked": True}, {"locked": False})
+        return {"ok": True, "month": body.month, "locked": False}
+
+
+# ---------------- Settings & Public Holidays (Phase 12) ----------------
+class HolidayBody(BaseModel):
+    holiday_date: str
+    description: str
+
+
+@app.get("/api/v1/holidays")
+async def list_holidays(user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{REST}/public_holidays",
+                             params={"select": "holiday_date,description", "order": "holiday_date.asc"},
+                             headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
+
+
+@app.post("/api/v1/holidays", status_code=201)
+async def add_holiday(body: HolidayBody, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can edit holidays")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.post(f"{REST}/public_holidays",
+                              headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                              json={"holiday_date": body.holiday_date, "description": body.description.strip()})
+        if r.status_code == 409:
+            raise HTTPException(status_code=409, detail="That date is already a holiday")
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not save holiday")
+        await audit(client, user, "add_holiday", "holiday", body.holiday_date, None,
+                    {"description": body.description})
+        return {"ok": True}
+
+
+@app.delete("/api/v1/holidays/{holiday_date}")
+async def delete_holiday(holiday_date: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can edit holidays")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.delete(f"{REST}/public_holidays",
+                                params={"holiday_date": f"eq.{holiday_date}"},
+                                headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete holiday")
+        await audit(client, user, "delete_holiday", "holiday", holiday_date, None, None)
+        return {"ok": True}
+
+
+@app.get("/api/v1/settings")
+async def list_settings(user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{REST}/settings",
+                             params={"select": "key,value,effective_from", "order": "key.asc"},
+                             headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
