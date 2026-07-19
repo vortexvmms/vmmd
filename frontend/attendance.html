@@ -32,10 +32,15 @@
       ✓ This day has been submitted and locked.
     </div>
 
-    <div id="bulkbar" class="bg-white rounded-xl shadow p-3 mb-3 flex items-center gap-2">
-      <span class="text-sm text-gray-600 flex-1">Set end time for all:</span>
-      <input id="bulk-time" type="time" step="900" value="17:00" class="border border-gray-300 rounded-lg p-2 text-base">
-      <button onclick="bulkSet()" class="bg-gray-800 text-white font-bold px-3 py-2 rounded-lg text-sm">Apply</button>
+    <div id="bulkbar" class="bg-white rounded-xl shadow p-3 mb-3">
+      <p class="text-sm text-gray-600 mb-2">Set end time for ALL workers:</p>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="bulkApply('17:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">5 PM</button>
+        <button onclick="bulkApply('19:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">7 PM</button>
+        <button onclick="bulkApply('22:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">10 PM</button>
+        <input id="bulk-time" type="time" step="900" class="border border-gray-300 rounded-lg p-2 text-sm flex-1 min-w-[100px]">
+        <button onclick="bulkSet()" class="border-2 border-gray-800 text-gray-800 font-bold px-3 py-2 rounded-lg text-sm">Apply</button>
+      </div>
     </div>
 
     <div id="list" class="space-y-2"></div>
@@ -57,6 +62,10 @@
     requireLogin();
 
     let ME = null, ROWS = [], SITES = [];
+
+    // Quick end-time cards (site request 19/07/2026)
+    const PRESETS = [["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
+                     ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -124,17 +133,27 @@
               Present
             </label>
           </div>
-          <div class="flex items-center gap-2 ${x.present ? "" : "hidden"}">
-            <span class="text-sm text-gray-500">End:</span>
+          <div class="${x.present ? "" : "hidden"}">
+            <div class="flex items-center flex-wrap gap-1">
+              ${PRESETS.map(([t, lbl]) =>
+                `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}" ${canEdit ? "" : "disabled"}>${lbl}</button>`).join("")}
+              <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>⋯</button>
+              <span class="text-xs font-bold ${x.ot_hours > 0 ? "text-red-700" : "text-gray-500"} ml-auto">
+                ${x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"}
+              </span>
+            </div>
             <input type="time" step="900" value="${x.end_time || ""}" ${canEdit ? "" : "disabled"}
-                   class="end-in border border-gray-300 rounded-lg p-2 text-base flex-1">
-            <span class="text-xs font-bold ${x.ot_hours > 0 ? "text-red-700" : "text-gray-500"} hrs-lbl">
-              ${x.end_time ? `${x.normal_hours}+${x.ot_hours} OT` : "—"}
-            </span>
+                   class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
           </div>`;
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
+        div.querySelectorAll(".tchip").forEach(b =>
+          b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
+        div.querySelector(".tcustom").addEventListener("click", () => {
+          ein.classList.toggle("hidden");
+          if (!ein.classList.contains("hidden")) ein.focus();
+        });
         ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value }, div); });
         list.appendChild(div);
       });
@@ -160,9 +179,14 @@
       }
     }
 
+    async function bulkApply(t) {
+      document.getElementById("bulk-time").value = t;
+      await bulkSet();
+    }
+
     async function bulkSet() {
       const t = document.getElementById("bulk-time").value;
-      if (!t) return;
+      if (!t) { toast("Pick a time first"); return; }
       try {
         const r = await vmmsApi("/api/v1/attendance/bulk_end", {
           method: "POST",
