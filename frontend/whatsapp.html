@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — WhatsApp Message</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold">WhatsApp Message</h1>
+        <p class="text-red-100 text-xs" id="hint">Choose type and date, then Generate</p>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3" id="type-row">
+      <button id="t-alloc" class="flex-1 bg-white text-red-700 font-bold rounded-lg p-2 text-sm">Allocation (all sites)</button>
+      <button id="t-update" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Site Update</button>
+    </div>
+    <div class="flex gap-2 mt-2">
+      <input id="date" type="date" class="flex-1 rounded-lg p-2 text-gray-800 text-base">
+      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white hidden"></select>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
+    <button onclick="generate()" id="gen"
+            class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-base mb-3">
+      Generate Message
+    </button>
+
+    <p id="warn" class="hidden text-sm font-medium text-yellow-700 bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-3"></p>
+
+    <textarea id="msg" readonly rows="16"
+              class="w-full border border-gray-300 rounded-xl p-3 text-sm font-mono bg-white hidden"></textarea>
+  </main>
+
+  <div id="actionbar" class="hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
+    <div class="max-w-md mx-auto flex gap-3">
+      <button onclick="copyMsg()" class="flex-1 border-2 border-red-700 text-red-700 font-bold py-3 rounded-lg">
+        Copy
+      </button>
+      <button onclick="shareMsg()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg">
+        Share to WhatsApp
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+
+  <script>
+    requireLogin();
+
+    let ME = null, TYPE = "alloc";
+
+    function toast(msg, long = false) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
+    }
+    function fmtDate(d) { return d.toISOString().slice(0, 10); }
+
+    function setType(t) {
+      TYPE = t;
+      document.getElementById("t-alloc").className =
+        "flex-1 font-bold rounded-lg p-2 text-sm " + (t === "alloc" ? "bg-white text-red-700" : "bg-red-900 text-white");
+      document.getElementById("t-update").className =
+        "flex-1 font-bold rounded-lg p-2 text-sm " + (t === "update" ? "bg-white text-red-700" : "bg-red-900 text-white");
+      document.getElementById("site").classList.toggle("hidden", t !== "update");
+      // allocation message is for TOMORROW by default; update is for TODAY
+      document.getElementById("date").value =
+        fmtDate(new Date(Date.now() + (t === "alloc" ? 24 * 3600 * 1000 : 0)));
+      document.getElementById("msg").classList.add("hidden");
+      document.getElementById("actionbar").classList.add("hidden");
+      document.getElementById("warn").classList.add("hidden");
+    }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+
+      if (ME.role === "site_sup") {
+        document.getElementById("type-row").classList.add("hidden");
+        setType("update");
+      } else {
+        setType("alloc");
+      }
+      await loadSites();
+    }
+
+    async function loadSites() {
+      // site list for the update message — taken from that day's sheet,
+      // so site supervisors only ever see their own site(s)
+      const date = document.getElementById("date").value;
+      const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
+      const all = r.ok ? await r.json() : [];
+      const map = {};
+      all.forEach(x => map[x.site_id] = x.site_name);
+      const sel = document.getElementById("site");
+      sel.innerHTML = Object.entries(map).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+    }
+
+    async function generate() {
+      const btn = document.getElementById("gen");
+      btn.disabled = true; btn.textContent = "Generating…";
+      try {
+        const date = document.getElementById("date").value;
+        let url;
+        if (TYPE === "alloc") {
+          url = `/api/v1/messages/allocation?date=${date}`;
+        } else {
+          const sid = document.getElementById("site").value;
+          if (!sid) throw new Error("No site available for this date");
+          url = `/api/v1/messages/update?date=${date}&site_id=${sid}`;
+        }
+        const r = await vmmsApi(url);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not generate");
+
+        document.getElementById("msg").value = data.message;
+        document.getElementById("msg").classList.remove("hidden");
+        document.getElementById("actionbar").classList.remove("hidden");
+
+        const warn = document.getElementById("warn");
+        if (TYPE === "update" && data.missing_end_time > 0) {
+          warn.textContent = `⚠ ${data.missing_end_time} worker(s) have no end time yet — they are NOT in the message. Fill their end times in Attendance first.`;
+          warn.classList.remove("hidden");
+        } else if (TYPE === "alloc" && data.workers === 0) {
+          warn.textContent = "⚠ No workers allocated for this date yet.";
+          warn.classList.remove("hidden");
+        } else {
+          warn.classList.add("hidden");
+        }
+      } catch (ex) {
+        toast(ex.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = "Generate Message";
+      }
+    }
+
+    async function copyMsg() {
+      try {
+        await navigator.clipboard.writeText(document.getElementById("msg").value);
+        toast("Copied — paste into WhatsApp");
+      } catch {
+        document.getElementById("msg").select();
+        document.execCommand("copy");
+        toast("Copied — paste into WhatsApp");
+      }
+    }
+
+    async function shareMsg() {
+      const text = document.getElementById("msg").value;
+      if (navigator.share) {
+        try { await navigator.share({ text }); } catch {}
+      } else {
+        window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+      }
+    }
+
+    document.getElementById("t-alloc").addEventListener("click", () => setType("alloc"));
+    document.getElementById("t-update").addEventListener("click", () => setType("update"));
+    document.getElementById("date").addEventListener("change", loadSites);
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
