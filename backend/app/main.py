@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.7.0")
+app = FastAPI(title="VMMS API", version="0.9.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,7 +97,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 7, "status": "running"}
+    return {"app": "VMMS", "phase": 9, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -749,3 +749,111 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
         await audit(client, user, "submit_day", "attendance",
                     f"{body.work_date}:{body.site_id}", None, {"workers": len(att_ids)})
         return {"ok": True, "submitted": len(att_ids)}
+
+# ---------------- WhatsApp Generators (Phase 9 · spec §7, real formats) ----------------
+MONTHS = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
+          "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
+DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+DIVIDER = "________________________________"
+
+
+def format_allocation_message(work_date: str, site_names: list[str],
+                              by_site: dict[str, list[str]],
+                              home_leave: list[str]) -> str:
+    """Spec §7.1 — confirmed against the real 16-JULY-2026 sample:
+    bold header, DD-MONTH-YYYY + day name in caps, underscore dividers,
+    plain names, empty sites still listed, HOME LEAVE section last."""
+    d = date_cls.fromisoformat(work_date)
+    lines = ["*MANPOWER DISTRIBUTION*",
+             f"{d.day:02d}-{MONTHS[d.month - 1]}-{d.year}",
+             DAYS[d.weekday()]]
+    for sname in site_names:
+        lines.append(DIVIDER)
+        lines.append(sname)
+        lines.extend(by_site.get(sname, []))
+    if home_leave:
+        lines.append(DIVIDER)
+        lines.append("HOME LEAVE")
+        lines.extend(home_leave)
+    return "\n".join(lines)
+
+
+def format_update_message(work_date: str, site_name: str, supervisor: str,
+                          rows: list[dict]) -> str:
+    """Spec §7.2 — standardised update format (Rev 2 decision):
+    SITE / DATE / SUPERVISOR header, numbered 'Name-HH:MM' lines,
+    non-default starts shown as 'Name-HH:MM/HH:MM', absent omitted."""
+    d = date_cls.fromisoformat(work_date)
+    lines = [f"SITE: {site_name}",
+             f"DATE: {d.day:02d}/{d.month:02d}/{d.year}",
+             f"SUPERVISOR: {supervisor}",
+             ""]
+    n = 0
+    for r in rows:
+        n += 1
+        t = r["end_time"]
+        if r.get("start_time") and r["start_time"] != "08:00":
+            t = f'{r["start_time"]}/{r["end_time"]}'
+        lines.append(f'{n}.{r["name"]}-{t}')
+    return "\n".join(lines)
+
+
+@app.get("/api/v1/messages/allocation")
+async def allocation_message(date: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "main_sup"):
+        raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can generate this message")
+    async with httpx.AsyncClient(timeout=10) as client:
+        rs = await client.get(f"{REST}/sites",
+                              params={"status": "eq.active", "select": "id,site_name", "order": "site_name.asc"},
+                              headers=supabase_headers(user["token"]))
+        sites = rs.json() if rs.status_code == 200 else []
+        ra = await client.get(f"{REST}/allocations",
+                              params={"work_date": f"eq.{date}", "status": "eq.allocated",
+                                      "select": "site_id,workers(name),sites(site_name)"},
+                              headers=supabase_headers(user["token"]))
+        allocs = ra.json() if ra.status_code == 200 else []
+        rw = await client.get(f"{REST}/workers",
+                              params={"status": "eq.on_leave", "select": "name", "order": "name.asc"},
+                              headers=supabase_headers(user["token"]))
+        leave = [w["name"] for w in (rw.json() if rw.status_code == 200 else [])]
+
+        by_site: dict[str, list[str]] = {}
+        for a in allocs:
+            sname = (a.get("sites") or {}).get("site_name", "?")
+            by_site.setdefault(sname, []).append((a.get("workers") or {}).get("name", "?"))
+        for k in by_site:
+            by_site[k].sort()
+
+        msg = format_allocation_message(date, [s["site_name"] for s in sites], by_site, leave)
+        await audit(client, user, "generate_allocation_msg", "message", date, None,
+                    {"workers": len(allocs)})
+        return {"message": msg, "workers": len(allocs), "sites": len(sites),
+                "home_leave": len(leave)}
+
+
+@app.get("/api/v1/messages/update")
+async def update_message(date: str, site_id: str,
+                         user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        rows = await _load_day(client, user["token"], date, site_id)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        site_name = (rows[0].get("sites") or {}).get("site_name", "?")
+
+        present, missing = [], 0
+        for a in rows:
+            att = a.get("attendance")
+            if not att or not att["present"]:
+                continue
+            if not att["end_time"]:
+                missing += 1
+                continue
+            present.append({"name": (a.get("workers") or {}).get("name", "?"),
+                            "start_time": att["start_time"][:5] if att["start_time"] else "08:00",
+                            "end_time": att["end_time"][:5]})
+        present.sort(key=lambda x: x["name"])
+
+        msg = format_update_message(date, site_name, user["name"], present)
+        await audit(client, user, "generate_update_msg", "message",
+                    f"{date}:{site_id}", None, {"workers": len(present)})
+        return {"message": msg, "workers": len(present), "missing_end_time": missing}
