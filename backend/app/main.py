@@ -1,12 +1,12 @@
 """
-VMMS Backend — Phase 5  ·  v0.5.0
-Phase 4: Worker Master API (workers list/create/update + audit).
-Phase 5 adds the Site Master API:
-  GET    /api/v1/sites                     list incl. supervisors (all roles)
-  POST   /api/v1/sites                     create (admin)
-  PATCH  /api/v1/sites/{id}                edit name / archive (admin)
-  GET    /api/v1/users?role=site_sup       user list for assignment (admin)
-  PUT    /api/v1/sites/{id}/supervisors    assign supervisors (admin)
+VMMS Backend — Phase 6  ·  v0.6.0
+Phase 4: Worker Master · Phase 5: Site Master.
+Phase 6 adds Daily Allocation (spec FR-4):
+  GET    /api/v1/allocations?date=          day's allocations (role-scoped by RLS)
+  POST   /api/v1/allocations/bulk           save one site's list for a date
+  POST   /api/v1/allocations/copy           copy a whole day to another date
+One worker = one site per day, enforced here AND by the database
+unique constraint (work_date, worker_id).
 """
 import os
 
@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.5.0")
+app = FastAPI(title="VMMS API", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,7 +96,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 5, "status": "running"}
+    return {"app": "VMMS", "phase": 6, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -374,3 +374,142 @@ async def assign_supervisors(site_id: str, body: SupervisorAssign,
         await audit(client, user, "assign_supervisors", "site", site_id,
                     {"user_ids": old_ids}, {"user_ids": body.user_ids})
         return {"ok": True, "site_id": site_id, "user_ids": body.user_ids}
+
+# ---------------- Daily Allocation (Phase 6) ----------------
+class AllocationBulk(BaseModel):
+    work_date: str          # YYYY-MM-DD
+    site_id: str
+    worker_ids: list[str]
+
+
+class AllocationCopy(BaseModel):
+    from_date: str
+    to_date: str
+
+
+def require_allocator(user: dict):
+    if user["role"] not in ("admin", "main_sup"):
+        raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can edit allocations")
+
+
+@app.get("/api/v1/allocations")
+async def list_allocations(date: str, user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{date}", "status": "eq.allocated",
+                    "select": "id,work_date,site_id,worker_id,sites(site_name,site_code),workers(name,worker_code,status)"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load allocations")
+        return [{
+            "id": a["id"], "work_date": a["work_date"],
+            "site_id": a["site_id"], "worker_id": a["worker_id"],
+            "site_name": (a.get("sites") or {}).get("site_name", "?"),
+            "worker_name": (a.get("workers") or {}).get("name", "?"),
+            "worker_code": (a.get("workers") or {}).get("worker_code", ""),
+            "worker_status": (a.get("workers") or {}).get("status", ""),
+        } for a in r.json()]
+
+
+@app.post("/api/v1/allocations/bulk")
+async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current_user)):
+    require_allocator(user)
+    requested = set(body.worker_ids)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        # everything already allocated on this date (all sites)
+        r = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{body.work_date}", "status": "eq.allocated",
+                    "select": "id,site_id,worker_id,sites(site_name),workers(name)"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not check existing allocations")
+        existing = r.json()
+
+        # hard stop: worker already on ANOTHER site that day (spec FR-4.2)
+        conflicts = [
+            f'{(a.get("workers") or {}).get("name", "?")} → {(a.get("sites") or {}).get("site_name", "?")}'
+            for a in existing
+            if a["worker_id"] in requested and a["site_id"] != body.site_id
+        ]
+        if conflicts:
+            raise HTTPException(
+                status_code=409,
+                detail="Already allocated elsewhere that day: " + "; ".join(conflicts))
+
+        this_site = {a["worker_id"]: a["id"] for a in existing if a["site_id"] == body.site_id}
+        to_remove = [aid for wid, aid in this_site.items() if wid not in requested]
+        to_add = [wid for wid in requested if wid not in this_site]
+
+        if to_remove:
+            d = await client.delete(
+                f"{REST}/allocations",
+                params={"id": f"in.({','.join(to_remove)})"},
+                headers=supabase_headers(user["token"]),
+            )
+            if d.status_code not in (200, 204):
+                raise HTTPException(status_code=500, detail="Could not remove workers")
+
+        if to_add:
+            i = await client.post(
+                f"{REST}/allocations",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json=[{"work_date": body.work_date, "site_id": body.site_id,
+                       "worker_id": wid, "status": "allocated",
+                       "created_by": user["user_id"], "updated_by": user["user_id"]}
+                      for wid in to_add],
+            )
+            if i.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail="Could not save allocation")
+
+        await audit(client, user, "allocate", "allocation",
+                    f"{body.work_date}:{body.site_id}",
+                    {"worker_ids": sorted(this_site.keys())},
+                    {"worker_ids": sorted(requested)})
+        return {"ok": True, "added": len(to_add), "removed": len(to_remove)}
+
+
+@app.post("/api/v1/allocations/copy")
+async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current_user)):
+    require_allocator(user)
+    async with httpx.AsyncClient(timeout=10) as client:
+        src = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{body.from_date}", "status": "eq.allocated",
+                    "select": "site_id,worker_id,workers(status)"},
+            headers=supabase_headers(user["token"]),
+        )
+        if src.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not read the source day")
+        rows = src.json()
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"No allocation found on {body.from_date}")
+
+        # copy only workers still active; skip anyone already allocated on the target date
+        payload = [{"work_date": body.to_date, "site_id": a["site_id"],
+                    "worker_id": a["worker_id"], "status": "allocated",
+                    "created_by": user["user_id"], "updated_by": user["user_id"]}
+                   for a in rows if (a.get("workers") or {}).get("status") == "active"]
+        skipped_leave = len(rows) - len(payload)
+
+        i = await client.post(
+            f"{REST}/allocations",
+            params={"on_conflict": "work_date,worker_id"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "return=representation,resolution=ignore-duplicates"},
+            json=payload,
+        )
+        if i.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not copy the day")
+        copied = len(i.json())
+
+        await audit(client, user, "copy_day", "allocation",
+                    f"{body.from_date}->{body.to_date}", None,
+                    {"copied": copied, "skipped_on_leave": skipped_leave})
+        return {"ok": True, "copied": copied,
+                "skipped_on_leave": skipped_leave,
+                "skipped_already_allocated": len(payload) - copied}
