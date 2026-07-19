@@ -14,9 +14,13 @@
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between">
-    <div>
-      <h1 class="text-xl font-bold">VMMS</h1>
-      <p class="text-red-100 text-sm" id="who">Loading…</p>
+    <div class="flex items-center gap-3">
+      <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
+           class="h-9 bg-white rounded-lg p-1" onerror="this.style.display='none'">
+      <div>
+        <h1 class="text-xl font-bold">VMMS</h1>
+        <p class="text-red-100 text-sm" id="who">Loading…</p>
+      </div>
     </div>
     <button onclick="vmmsLogout()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg">
       Log Out
