@@ -1,10 +1,12 @@
 """
-VMMS Backend — Phase 4  ·  v0.4.0
-Adds the Worker Master API:
-  GET    /api/v1/workers            list + search + filter (all roles)
-  POST   /api/v1/workers            create (admin only)
-  PATCH  /api/v1/workers/{id}       edit name/status (admin; main_sup may change status only)
-Every create/update is written to the audit log.
+VMMS Backend — Phase 5  ·  v0.5.0
+Phase 4: Worker Master API (workers list/create/update + audit).
+Phase 5 adds the Site Master API:
+  GET    /api/v1/sites                     list incl. supervisors (all roles)
+  POST   /api/v1/sites                     create (admin)
+  PATCH  /api/v1/sites/{id}                edit name / archive (admin)
+  GET    /api/v1/users?role=site_sup       user list for assignment (admin)
+  PUT    /api/v1/sites/{id}/supervisors    assign supervisors (admin)
 """
 import os
 
@@ -13,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.4.0")
+app = FastAPI(title="VMMS API", version="0.5.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,7 +96,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 4, "status": "running"}
+    return {"app": "VMMS", "phase": 5, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -222,3 +224,153 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
         await audit(client, user, "update", "worker", worker_id,
                     old_rows[0], {k: v for k, v in changes.items() if k != "updated_by"})
         return row
+
+
+# ---------------- Site Master (Phase 5) ----------------
+class SiteCreate(BaseModel):
+    site_code: str
+    site_name: str
+
+
+class SiteUpdate(BaseModel):
+    site_name: str | None = None
+    status: str | None = None  # active | archived
+
+
+class SupervisorAssign(BaseModel):
+    user_ids: list[str]
+
+
+@app.get("/api/v1/sites")
+async def list_sites(user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/sites",
+            params={"select": "id,site_code,site_name,status,site_supervisors(user_id,users(name))",
+                    "order": "site_name.asc"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load sites")
+        out = []
+        for s in r.json():
+            sups = []
+            for link in (s.get("site_supervisors") or []):
+                u = link.get("users") or {}
+                sups.append({"user_id": link["user_id"], "name": u.get("name", "?")})
+            out.append({"id": s["id"], "site_code": s["site_code"],
+                        "site_name": s["site_name"], "status": s["status"],
+                        "supervisors": sups})
+        return out
+
+
+@app.post("/api/v1/sites", status_code=201)
+async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can add sites")
+    code = body.site_code.strip().upper()
+    name = body.site_name.strip().upper()   # site names print in CAPS in WhatsApp messages
+    if not code or not name:
+        raise HTTPException(status_code=400, detail="Site code and name are required")
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.post(
+            f"{REST}/sites",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"site_code": code, "site_name": name, "status": "active"},
+        )
+        if r.status_code == 409:
+            raise HTTPException(status_code=409, detail=f"Site code {code} already exists")
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not save site")
+        row = r.json()[0]
+        await audit(client, user, "create", "site", row["id"], None,
+                    {"site_code": code, "site_name": name})
+        return row
+
+
+@app.patch("/api/v1/sites/{site_id}")
+async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can edit sites")
+    changes = {}
+    if body.site_name is not None and body.site_name.strip():
+        changes["site_name"] = body.site_name.strip().upper()
+    if body.status is not None:
+        if body.status not in ("active", "archived"):
+            raise HTTPException(status_code=400, detail="Invalid status")
+        changes["status"] = body.status
+    if not changes:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        old = await client.get(
+            f"{REST}/sites",
+            params={"id": f"eq.{site_id}", "select": "site_code,site_name,status"},
+            headers=supabase_headers(user["token"]),
+        )
+        old_rows = old.json() if old.status_code == 200 else []
+        if not old_rows:
+            raise HTTPException(status_code=404, detail="Site not found")
+
+        r = await client.patch(
+            f"{REST}/sites",
+            params={"id": f"eq.{site_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=changes,
+        )
+        if r.status_code != 200 or not r.json():
+            raise HTTPException(status_code=500, detail="Could not update site")
+        row = r.json()[0]
+        await audit(client, user, "update", "site", site_id, old_rows[0], changes)
+        return row
+
+
+@app.get("/api/v1/users")
+async def list_users(role: str = "", user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not allowed")
+    params = {"select": "id,name,role,status", "order": "name.asc"}
+    if role:
+        params["role"] = f"eq.{role}"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{REST}/users", params=params,
+                             headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load users")
+        return r.json()
+
+
+@app.put("/api/v1/sites/{site_id}/supervisors")
+async def assign_supervisors(site_id: str, body: SupervisorAssign,
+                             user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can assign supervisors")
+    async with httpx.AsyncClient(timeout=10) as client:
+        old = await client.get(
+            f"{REST}/site_supervisors",
+            params={"site_id": f"eq.{site_id}", "select": "user_id"},
+            headers=supabase_headers(user["token"]),
+        )
+        old_ids = [x["user_id"] for x in (old.json() if old.status_code == 200 else [])]
+
+        d = await client.delete(
+            f"{REST}/site_supervisors",
+            params={"site_id": f"eq.{site_id}"},
+            headers=supabase_headers(user["token"]),
+        )
+        if d.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not update assignments")
+
+        if body.user_ids:
+            i = await client.post(
+                f"{REST}/site_supervisors",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json=[{"site_id": site_id, "user_id": uid} for uid in body.user_ids],
+            )
+            if i.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail="Could not save assignments")
+
+        await audit(client, user, "assign_supervisors", "site", site_id,
+                    {"user_ids": old_ids}, {"user_ids": body.user_ids})
+        return {"ok": True, "site_id": site_id, "user_ids": body.user_ids}
