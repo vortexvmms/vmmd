@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Dashboard</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Dashboard</h1>
+      <p class="text-red-100 text-xs" id="asof">Loading…</p>
+    </div>
+    <button onclick="load()" class="text-xl">⟳</button>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-10">
+    <div class="grid grid-cols-2 gap-3" id="cards"></div>
+
+    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">TODAY'S UPDATES</h2>
+    <div class="bg-white rounded-xl shadow p-4">
+      <div class="flex items-start gap-2 mb-2">
+        <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
+        <p class="text-sm text-gray-700 flex-1" id="pending">—</p>
+      </div>
+      <div class="flex items-start gap-2">
+        <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
+        <p class="text-sm text-gray-700 flex-1" id="completed">—</p>
+      </div>
+    </div>
+
+    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (THIS MONTH)</h2>
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs">
+          <tr>
+            <th class="text-left p-3">Site</th>
+            <th class="text-right p-3">Today</th>
+            <th class="text-right p-3">Normal h</th>
+            <th class="text-right p-3">OT h</th>
+          </tr>
+        </thead>
+        <tbody id="sites"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+
+    function card(label, value, accent) {
+      return `<div class="bg-white rounded-xl shadow p-4">
+        <p class="text-2xl font-bold ${accent || "text-gray-800"}">${value}</p>
+        <p class="text-xs text-gray-500 mt-1">${label}</p></div>`;
+    }
+
+    async function load() {
+      const r = await vmmsApi("/api/v1/dashboard");
+      if (!r.ok) { if (r.status === 401) vmmsLogout(); return; }
+      const d = await r.json();
+
+      const [y, m, dd] = d.date.split("-");
+      document.getElementById("asof").textContent = `As of ${dd}/${m}/${y}`;
+
+      document.getElementById("cards").innerHTML =
+        card("Active workers", d.total_workers) +
+        card("On leave", d.on_leave, "text-yellow-600") +
+        card("Active sites", d.total_sites) +
+        card("Allocated today", d.today_allocated, "text-red-700") +
+        card("Month normal hours", d.month_normal_hours) +
+        card("Month OT hours", d.month_ot_hours, "text-red-700");
+
+      document.getElementById("pending").textContent =
+        d.pending_updates.length ? d.pending_updates.join(", ") : "None — all sites submitted ✓";
+      document.getElementById("completed").textContent =
+        d.completed_updates.length ? d.completed_updates.join(", ") : "None yet";
+
+      document.getElementById("sites").innerHTML = d.site_summary.map(s =>
+        `<tr class="border-t border-gray-100">
+           <td class="p-3 font-medium text-gray-800">${s.site_name}</td>
+           <td class="p-3 text-right">${s.today}</td>
+           <td class="p-3 text-right">${s.month_nh}</td>
+           <td class="p-3 text-right ${s.month_ot > 0 ? "text-red-700 font-bold" : ""}">${s.month_ot}</td>
+         </tr>`).join("");
+    }
+
+    load();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
