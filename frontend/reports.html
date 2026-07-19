@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Reports</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    @media print {
+      header, #controls, #actions { display: none !important; }
+      body { background: white; }
+      #tablebox { box-shadow: none; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Reports</h1>
+      <p class="text-red-100 text-xs" id="count">Set filters and Run</p>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
+    <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 space-y-3">
+      <div class="flex gap-2">
+        <div class="flex-1">
+          <label class="text-xs text-gray-500">From</label>
+          <input id="from" type="date" class="w-full border border-gray-300 rounded-lg p-2">
+        </div>
+        <div class="flex-1">
+          <label class="text-xs text-gray-500">To</label>
+          <input id="to" type="date" class="w-full border border-gray-300 rounded-lg p-2">
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <select id="site" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white">
+          <option value="">All sites</option>
+        </select>
+        <select id="view" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white">
+          <option value="detail">Detail (day by day)</option>
+          <option value="worker">Summary by worker</option>
+          <option value="site">Summary by site</option>
+        </select>
+      </div>
+      <input id="wsearch" type="search" placeholder="Filter by worker name (optional)"
+             class="w-full border border-gray-300 rounded-lg p-2">
+      <button onclick="run()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Run Report</button>
+    </div>
+
+    <div id="actions" class="hidden flex gap-3 mb-3">
+      <button onclick="exportXlsx()" class="flex-1 border-2 border-green-700 text-green-700 font-bold py-2 rounded-lg text-sm">Export Excel</button>
+      <button onclick="window.print()" class="flex-1 border-2 border-gray-500 text-gray-600 font-bold py-2 rounded-lg text-sm">Print / PDF</button>
+    </div>
+
+    <div id="tablebox" class="bg-white rounded-xl shadow overflow-x-auto">
+      <table class="w-full text-xs" id="tbl"></table>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+    let DATA = [], HEADERS = [], ROWS = [];
+
+    function fmtD(iso) { const [y,m,d] = iso.split("-"); return `${d}/${m}/${y}`; }
+
+    async function boot() {
+      const me = await vmmsApi("/api/v1/me");
+      if (!me.ok) { vmmsLogout(); return; }
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById("from").value = today.slice(0,8) + "01";
+      document.getElementById("to").value = today;
+      const rs = await vmmsApi("/api/v1/sites");
+      if (rs.ok) {
+        const sites = (await rs.json()).filter(s => s.status === "active");
+        document.getElementById("site").innerHTML =
+          '<option value="">All sites</option>' +
+          sites.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+      }
+    }
+
+    async function run() {
+      const f = document.getElementById("from").value, t = document.getElementById("to").value;
+      const sid = document.getElementById("site").value;
+      const r = await vmmsApi(`/api/v1/reports/attendance?dfrom=${f}&dto=${t}${sid ? "&site_id=" + sid : ""}`);
+      if (!r.ok) { const e = await r.json(); alert(e.detail || "Failed"); return; }
+      DATA = await r.json();
+      const q = document.getElementById("wsearch").value.trim().toLowerCase();
+      if (q) DATA = DATA.filter(x => x.worker.toLowerCase().includes(q));
+      render();
+    }
+
+    function render() {
+      const view = document.getElementById("view").value;
+      if (view === "detail") {
+        HEADERS = ["Date", "Site", "ID", "Worker", "Present", "Start", "End", "Normal", "OT", "Day"];
+        ROWS = DATA.map(x => [fmtD(x.date), x.site, x.worker_code, x.worker,
+                              x.present === null ? "-" : (x.present ? "Yes" : "Absent"),
+                              x.start, x.end, x.nh, x.ot, x.day_type]);
+      } else if (view === "worker") {
+        const agg = {};
+        DATA.forEach(x => {
+          if (!x.present) return;
+          const a = agg[x.worker_code] ??= { name: x.worker, days: 0, nh: 0, ot: 0 };
+          a.days++; a.nh += x.nh; a.ot += x.ot;
+        });
+        HEADERS = ["ID", "Worker", "Days", "Normal h", "OT h"];
+        ROWS = Object.entries(agg).sort((a,b) => a[1].name.localeCompare(b[1].name))
+          .map(([c, a]) => [c, a.name, a.days, a.nh.toFixed(1), a.ot.toFixed(1)]);
+      } else {
+        const agg = {};
+        DATA.forEach(x => {
+          if (!x.present) return;
+          const a = agg[x.site] ??= { days: new Set(), workers: new Set(), nh: 0, ot: 0 };
+          a.days.add(x.date); a.workers.add(x.worker_code); a.nh += x.nh; a.ot += x.ot;
+        });
+        HEADERS = ["Site", "Attendance days", "Workers", "Normal h", "OT h"];
+        ROWS = Object.entries(agg).sort()
+          .map(([s, a]) => [s, a.days.size, a.workers.size, a.nh.toFixed(1), a.ot.toFixed(1)]);
+      }
+      document.getElementById("count").textContent = `${ROWS.length} rows`;
+      document.getElementById("actions").classList.remove("hidden");
+      document.getElementById("tbl").innerHTML =
+        "<thead class='bg-gray-50 text-gray-500'><tr>" +
+        HEADERS.map(h => `<th class="text-left p-2">${h}</th>`).join("") + "</tr></thead><tbody>" +
+        ROWS.map(r => "<tr class='border-t border-gray-100'>" +
+          r.map(c => `<td class="p-2">${c}</td>`).join("") + "</tr>").join("") + "</tbody>";
+    }
+
+    function exportXlsx() {
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["VMMS Report", "", "Generated: " + new Date().toLocaleString("en-SG")],
+        [], HEADERS, ...ROWS]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      XLSX.writeFile(wb, "VMMS_Report.xlsx");
+    }
+
+    document.getElementById("view").addEventListener("change", () => { if (DATA.length) render(); });
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
