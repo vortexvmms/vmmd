@@ -103,7 +103,7 @@
       if (view === "detail") {
         HEADERS = ["Date", "Site", "ID", "Worker", "Present", "Start", "End", "Normal", "OT", "Day"];
         ROWS = DATA.map(x => [fmtD(x.date), x.site, x.worker_code, x.worker,
-                              x.present === null ? "-" : (x.present ? "Yes" : "Absent"),
+                              x.present === null ? "-" : (x.present ? "Yes" : (x.absence === "mc" ? "MC" : "Absent")),
                               x.start, x.end, x.nh, x.ot, x.day_type]);
       } else if (view === "worker") {
         const agg = {};
