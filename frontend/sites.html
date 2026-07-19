@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Sites</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Sites</h1>
+      <p class="text-red-100 text-xs" id="count">Loading…</p>
+    </div>
+    <label class="text-xs flex items-center gap-1">
+      <input id="show-archived" type="checkbox" class="accent-white"> Archived
+    </label>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-24">
+    <div id="list" class="space-y-2"></div>
+    <p id="empty" class="hidden text-center text-gray-400 mt-10">No sites.</p>
+  </main>
+
+  <button id="fab" onclick="openForm()" class="hidden fixed bottom-6 right-6 bg-red-700 hover:bg-red-800 text-white text-3xl w-14 h-14 rounded-full shadow-lg leading-none">+</button>
+
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 z-20 flex items-end sm:items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+      <h2 id="m-title" class="text-lg font-bold text-gray-800 mb-4">Add Site</h2>
+
+      <label class="block text-sm font-medium text-gray-700 mb-1">Site Code</label>
+      <input id="m-code" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 uppercase" placeholder="e.g. PKJV-T5">
+
+      <label class="block text-sm font-medium text-gray-700 mb-1">Site Name (as printed in WhatsApp message — CAPS)</label>
+      <input id="m-name" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 uppercase" placeholder="e.g. PKJV-T5">
+
+      <div id="m-status-wrap" class="hidden">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+        <select id="m-status" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 bg-white">
+          <option value="active">Active</option>
+          <option value="archived">Archived (hidden from allocation, kept in reports)</option>
+        </select>
+      </div>
+
+      <div id="m-sups-wrap" class="hidden">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Site Supervisors</label>
+        <div id="m-sups" class="border border-gray-200 rounded-lg p-3 mb-3 space-y-2 text-sm"></div>
+      </div>
+
+      <p id="m-error" class="text-sm font-medium text-red-600 hidden mb-2"></p>
+
+      <div class="flex gap-3 mt-2">
+        <button onclick="closeForm()" class="flex-1 border border-gray-300 text-gray-700 font-bold py-3 rounded-lg">Cancel</button>
+        <button id="m-save" onclick="save()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow"></div>
+
+  <script>
+    requireLogin();
+
+    let ME = null, SITES = [], SUPS = [], EDIT = null;
+
+    function toast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), 2500);
+    }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      if (ME.role === "admin") {
+        document.getElementById("fab").classList.remove("hidden");
+        const ru = await vmmsApi("/api/v1/users?role=site_sup");
+        if (ru.ok) SUPS = (await ru.json()).filter(u => u.status === "active");
+      }
+      await load();
+    }
+
+    async function load() {
+      const r = await vmmsApi("/api/v1/sites");
+      if (!r.ok) { toast("Could not load sites"); return; }
+      SITES = await r.json();
+      render();
+    }
+
+    function render() {
+      const showArch = document.getElementById("show-archived").checked;
+      const rows = SITES.filter(s => showArch || s.status === "active");
+      document.getElementById("count").textContent =
+        `${SITES.filter(s => s.status === "active").length} active sites`;
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
+      rows.forEach(s => {
+        const sups = s.supervisors.map(x => x.name).join(", ") || "No supervisor assigned";
+        const div = document.createElement("div");
+        div.className = "bg-white rounded-xl shadow p-4";
+        div.innerHTML =
+          `<div class="flex items-center justify-between">
+             <p class="font-medium text-gray-800">${s.site_name}</p>
+             <span class="text-xs font-bold px-3 py-1 rounded-full ${s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}">${s.status === "active" ? "Active" : "Archived"}</span>
+           </div>
+           <p class="text-xs text-gray-400 mt-1">${s.site_code} · ${sups}</p>`;
+        if (ME.role === "admin") {
+          div.classList.add("cursor-pointer", "active:bg-gray-50");
+          div.onclick = () => openForm(s);
+        }
+        list.appendChild(div);
+      });
+    }
+
+    function openForm(s = null) {
+      EDIT = s;
+      document.getElementById("m-title").textContent = s ? "Edit Site" : "Add Site";
+      document.getElementById("m-code").value = s ? s.site_code : "";
+      document.getElementById("m-code").disabled = !!s;
+      document.getElementById("m-name").value = s ? s.site_name : "";
+      document.getElementById("m-status-wrap").classList.toggle("hidden", !s);
+      if (s) document.getElementById("m-status").value = s.status;
+
+      const wrap = document.getElementById("m-sups-wrap");
+      wrap.classList.toggle("hidden", !s);
+      if (s) {
+        const box = document.getElementById("m-sups");
+        if (!SUPS.length) {
+          box.innerHTML = '<p class="text-gray-400">No Site Supervisor accounts yet — create them in Supabase (Phase 3 guide, Steps 4–5) with role site_sup.</p>';
+        } else {
+          const assigned = new Set(s.supervisors.map(x => x.user_id));
+          box.innerHTML = SUPS.map(u =>
+            `<label class="flex items-center gap-2">
+               <input type="checkbox" class="sup-cb accent-red-700" value="${u.id}" ${assigned.has(u.id) ? "checked" : ""}>
+               <span>${u.name}</span>
+             </label>`).join("");
+        }
+      }
+      document.getElementById("m-error").classList.add("hidden");
+      document.getElementById("modal").classList.remove("hidden");
+    }
+
+    function closeForm() { document.getElementById("modal").classList.add("hidden"); }
+
+    async function save() {
+      const err = document.getElementById("m-error");
+      const btn = document.getElementById("m-save");
+      err.classList.add("hidden");
+      btn.disabled = true; btn.textContent = "Saving…";
+      try {
+        if (EDIT) {
+          const r = await vmmsApi(`/api/v1/sites/${EDIT.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              site_name: document.getElementById("m-name").value,
+              status: document.getElementById("m-status").value,
+            }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || "Could not save");
+
+          if (SUPS.length) {
+            const ids = [...document.querySelectorAll(".sup-cb:checked")].map(c => c.value);
+            const r2 = await vmmsApi(`/api/v1/sites/${EDIT.id}/supervisors`, {
+              method: "PUT", body: JSON.stringify({ user_ids: ids }),
+            });
+            const d2 = await r2.json();
+            if (!r2.ok) throw new Error(d2.detail || "Could not save supervisors");
+          }
+        } else {
+          const r = await vmmsApi("/api/v1/sites", {
+            method: "POST",
+            body: JSON.stringify({
+              site_code: document.getElementById("m-code").value,
+              site_name: document.getElementById("m-name").value,
+            }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || "Could not save");
+        }
+        closeForm();
+        toast(EDIT ? "Site updated" : "Site added");
+        await load();
+      } catch (ex) {
+        err.textContent = ex.message; err.classList.remove("hidden");
+      } finally {
+        btn.disabled = false; btn.textContent = "Save";
+      }
+    }
+
+    document.getElementById("show-archived").addEventListener("change", render);
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
