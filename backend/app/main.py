@@ -1,21 +1,22 @@
 """
-VMMS Backend — Phase 6  ·  v0.6.0
-Phase 4: Worker Master · Phase 5: Site Master.
-Phase 6 adds Daily Allocation (spec FR-4):
-  GET    /api/v1/allocations?date=          day's allocations (role-scoped by RLS)
-  POST   /api/v1/allocations/bulk           save one site's list for a date
-  POST   /api/v1/allocations/copy           copy a whole day to another date
-One worker = one site per day, enforced here AND by the database
-unique constraint (work_date, worker_id).
+VMMS Backend — Phase 7  ·  v0.7.0
+Phase 4: Workers · Phase 5: Sites · Phase 6: Daily Allocation.
+Phase 7 adds the Site Supervisor module + the OT hours engine
+(spec FR-5, FR-6, §6 rules confirmed at review):
+  GET    /api/v1/attendance?date=&site_id=   day sheet (site_sup sees own sites only)
+  PATCH  /api/v1/attendance/mark             present / end time → hours computed
+  POST   /api/v1/attendance/bulk_end         set one end time for the whole site
+  POST   /api/v1/attendance/submit           submit & lock the site's day
 """
 import os
+from datetime import date as date_cls
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.6.0")
+app = FastAPI(title="VMMS API", version="0.7.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,7 +97,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 6, "status": "running"}
+    return {"app": "VMMS", "phase": 7, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -513,3 +514,238 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
         return {"ok": True, "copied": copied,
                 "skipped_on_leave": skipped_leave,
                 "skipped_already_allocated": len(payload) - copied}
+
+# ---------------- OT Hours Engine (Phase 7 · spec §6, confirmed Rev 3) ----------------
+def _to_min(t: str) -> int:
+    h, m = t.split(":")[:2]
+    return int(h) * 60 + int(m)
+
+
+def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tuple[float, float]:
+    """Returns (normal_hours, ot_hours) per the confirmed rules:
+    R1 weekday 8h normal then OT · R2 1h lunch deducted ·
+    R3 no lunch if finished by 12:00 noon · R4 Saturday OT after lunch ·
+    R5 Sunday/PH all OT. Past-midnight credited to the start date."""
+    s = _to_min(start)
+    e_raw = _to_min(end)
+    e = e_raw + (1440 if end_next_day else 0)
+    if e <= s:
+        raise ValueError("End time must be after start time")
+
+    # R2/R3: deduct 1h lunch only when work spans the 12:00–13:00 window
+    finished_by_noon = (not end_next_day) and e_raw <= 720
+    lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
+    worked = (e - s - lunch) / 60.0
+
+    if day_type in ("SUN", "PH"):
+        normal, ot = 0.0, worked                       # R5
+    elif day_type == "SAT":
+        morning = max(0, min(e, 720) - s) / 60.0       # R4: normal only before noon
+        normal = min(4.0, morning, worked)
+        ot = worked - normal
+    else:  # WD
+        normal = min(8.0, worked)                      # R1
+        ot = max(0.0, worked - 8.0)
+
+    return round(normal, 2), round(ot, 2)
+
+
+async def get_day_type(client: httpx.AsyncClient, token: str, work_date: str) -> str:
+    ph = await client.get(
+        f"{REST}/public_holidays",
+        params={"holiday_date": f"eq.{work_date}", "select": "holiday_date"},
+        headers=supabase_headers(token),
+    )
+    if ph.status_code == 200 and ph.json():
+        return "PH"
+    wd = date_cls.fromisoformat(work_date).weekday()   # Mon=0 … Sun=6
+    return "SAT" if wd == 5 else ("SUN" if wd == 6 else "WD")
+
+
+# ---------------- Site Supervisor Module (Phase 7) ----------------
+class AttendanceMark(BaseModel):
+    allocation_id: str
+    present: bool | None = None
+    start_time: str | None = None      # admin/main_sup only (rain/permit delays)
+    end_time: str | None = None        # "HH:MM"
+    end_next_day: bool | None = None
+    edit_reason: str | None = None
+
+
+class BulkEnd(BaseModel):
+    work_date: str
+    site_id: str
+    end_time: str
+
+
+class SubmitDay(BaseModel):
+    work_date: str
+    site_id: str
+
+
+async def _load_day(client, token, work_date: str, site_id: str | None):
+    params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
+              "select": "id,site_id,worker_id,sites(site_name),workers(name,worker_code),"
+                        "attendance(id,present,start_time,end_time,end_next_day,"
+                        "normal_hours,ot_hours,day_type,submitted_at)"}
+    if site_id:
+        params["site_id"] = f"eq.{site_id}"
+    r = await client.get(f"{REST}/allocations", params=params,
+                         headers=supabase_headers(token))
+    if r.status_code != 200:
+        raise HTTPException(status_code=500, detail="Could not load the day sheet")
+    return r.json()
+
+
+@app.get("/api/v1/attendance")
+async def day_sheet(date: str, site_id: str = "",
+                    user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        rows = await _load_day(client, user["token"], date, site_id or None)
+        out = []
+        for a in rows:
+            att = a.get("attendance") or None
+            out.append({
+                "allocation_id": a["id"], "site_id": a["site_id"],
+                "site_name": (a.get("sites") or {}).get("site_name", "?"),
+                "worker_name": (a.get("workers") or {}).get("name", "?"),
+                "worker_code": (a.get("workers") or {}).get("worker_code", ""),
+                "present": att["present"] if att else True,
+                "start_time": (att["start_time"][:5] if att and att["start_time"] else "08:00"),
+                "end_time": (att["end_time"][:5] if att and att["end_time"] else None),
+                "end_next_day": att["end_next_day"] if att else False,
+                "normal_hours": float(att["normal_hours"]) if att else 0,
+                "ot_hours": float(att["ot_hours"]) if att else 0,
+                "submitted": bool(att and att["submitted_at"]),
+            })
+        return sorted(out, key=lambda x: (x["site_name"], x["worker_name"]))
+
+
+@app.patch("/api/v1/attendance/mark")
+async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if body.start_time and user["role"] == "site_sup":
+        raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        # the allocation (RLS scopes site_sup to own sites automatically)
+        ra = await client.get(
+            f"{REST}/allocations",
+            params={"id": f"eq.{body.allocation_id}",
+                    "select": "id,work_date,site_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at)"},
+            headers=supabase_headers(user["token"]),
+        )
+        arows = ra.json() if ra.status_code == 200 else []
+        if not arows:
+            raise HTTPException(status_code=404, detail="Allocation not found (or not your site)")
+        alloc = arows[0]
+        att = alloc.get("attendance")
+
+        if att and att["submitted_at"] and user["role"] == "site_sup":
+            raise HTTPException(status_code=403, detail="Day already submitted — ask the administrator to amend")
+        if att and att["submitted_at"] and not body.edit_reason:
+            raise HTTPException(status_code=400, detail="A reason is required when editing a submitted day")
+
+        start = body.start_time or (att["start_time"][:5] if att and att["start_time"] else "08:00")
+        end = body.end_time if body.end_time is not None else (att["end_time"][:5] if att and att["end_time"] else None)
+        end_nd = body.end_next_day if body.end_next_day is not None else (att["end_next_day"] if att else False)
+        present = body.present if body.present is not None else (att["present"] if att else True)
+
+        day_type = await get_day_type(client, user["token"], alloc["work_date"])
+        normal, ot = (0.0, 0.0)
+        if present and end:
+            try:
+                normal, ot = compute_hours(day_type, start, end, end_nd)
+            except ValueError as ve:
+                raise HTTPException(status_code=400, detail=str(ve))
+
+        payload = {"present": present, "start_time": start, "end_time": end,
+                   "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
+                   "day_type": day_type, "edit_reason": body.edit_reason}
+        if att:
+            ru = await client.patch(
+                f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
+                headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+                json=payload)
+        else:
+            ru = await client.post(
+                f"{REST}/attendance",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+                json={**payload, "allocation_id": body.allocation_id})
+        if ru.status_code not in (200, 201) or not ru.json():
+            raise HTTPException(status_code=500, detail="Could not save attendance")
+
+        await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
+                    {k: att.get(k) for k in ("present", "end_time")} if att else None,
+                    {"present": present, "end_time": end, "normal": normal, "ot": ot})
+        return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
+
+
+@app.post("/api/v1/attendance/bulk_end")
+async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=15) as client:
+        rows = await _load_day(client, user["token"], body.work_date, body.site_id)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        day_type = await get_day_type(client, user["token"], body.work_date)
+        updated = 0
+        for a in rows:
+            att = a.get("attendance")
+            if att and att["submitted_at"]:
+                continue
+            present = att["present"] if att else True
+            if not present:
+                continue
+            start = att["start_time"][:5] if att and att["start_time"] else "08:00"
+            normal, ot = compute_hours(day_type, start, body.end_time, False)
+            payload = {"present": True, "start_time": start, "end_time": body.end_time,
+                       "end_next_day": False, "normal_hours": normal, "ot_hours": ot,
+                       "day_type": day_type}
+            if att:
+                await client.patch(f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
+                                   headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                                   json=payload)
+            else:
+                await client.post(f"{REST}/attendance",
+                                  headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                                  json={**payload, "allocation_id": a["id"]})
+            updated += 1
+        await audit(client, user, "bulk_end", "attendance",
+                    f"{body.work_date}:{body.site_id}", None,
+                    {"end_time": body.end_time, "workers": updated})
+        return {"ok": True, "updated": updated}
+
+
+@app.post("/api/v1/attendance/submit")
+async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "site_sup"):
+        raise HTTPException(status_code=403, detail="Only the Site Supervisor or Administrator can submit")
+    async with httpx.AsyncClient(timeout=15) as client:
+        rows = await _load_day(client, user["token"], body.work_date, body.site_id)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        missing = [
+            (a.get("workers") or {}).get("name", "?")
+            for a in rows
+            if not a.get("attendance")
+            or (a["attendance"]["present"] and not a["attendance"]["end_time"])
+        ]
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail="End time missing for: " + ", ".join(missing[:5]) +
+                                       (f" (+{len(missing)-5} more)" if len(missing) > 5 else ""))
+        att_ids = [a["attendance"]["id"] for a in rows if a.get("attendance")]
+        r = await client.patch(
+            f"{REST}/attendance",
+            params={"id": f"in.({','.join(att_ids)})"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"submitted_at": "now()", "submitted_by": user["user_id"]},
+        )
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not submit the day")
+        await audit(client, user, "submit_day", "attendance",
+                    f"{body.work_date}:{body.site_id}", None, {"workers": len(att_ids)})
+        return {"ok": True, "submitted": len(att_ids)}
