@@ -75,6 +75,7 @@
         card("On leave", d.on_leave, "text-yellow-600") +
         card("Active sites", d.total_sites) +
         card("Allocated today", d.today_allocated, "text-red-700") +
+        card("Today MC", d.today_mc ?? 0, "text-yellow-600") +
         card("Month normal hours", d.month_normal_hours) +
         card("Month OT hours", d.month_ot_hours, "text-red-700");
 
