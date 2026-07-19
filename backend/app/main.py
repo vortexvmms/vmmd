@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.12.0")
+app = FastAPI(title="VMMS API", version="0.12.1")
 
 app.add_middleware(
     CORSMiddleware,
@@ -178,6 +178,48 @@ async def create_worker(body: WorkerCreate, user: dict = Depends(get_current_use
         await audit(client, user, "create", "worker", row["id"], None,
                     {"worker_code": code, "name": name, "status": "active"})
         return row
+
+
+class WorkerBulk(BaseModel):
+    workers: list[WorkerCreate]
+
+
+@app.post("/api/v1/workers/bulk")
+async def bulk_create_workers(body: WorkerBulk, user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can add workers")
+    clean, errors = [], []
+    seen = set()
+    for i, w in enumerate(body.workers, 1):
+        code = w.worker_code.strip().upper()
+        name = w.name.strip()
+        if not code or not name:
+            errors.append(f"Line {i}: missing ID or name")
+            continue
+        if code in seen:
+            errors.append(f"Line {i}: duplicate ID {code} in your list")
+            continue
+        seen.add(code)
+        clean.append({"worker_code": code, "name": name, "status": "active",
+                      "created_by": user["user_id"], "updated_by": user["user_id"]})
+    if not clean:
+        raise HTTPException(status_code=400, detail="Nothing valid to import. " + "; ".join(errors[:3]))
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            f"{REST}/workers",
+            params={"on_conflict": "worker_code"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "return=representation,resolution=ignore-duplicates"},
+            json=clean)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Import failed — nothing saved")
+        added = len(r.json())
+        await audit(client, user, "bulk_import", "worker", f"{added} workers", None,
+                    {"attempted": len(clean), "added": added})
+        return {"ok": True, "added": added,
+                "skipped_existing": len(clean) - added,
+                "line_errors": errors}
 
 
 @app.patch("/api/v1/workers/{worker_id}")
@@ -547,6 +589,9 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
         normal = min(8.0, worked)                      # R1
         ot = max(0.0, worked - 8.0)
 
+    # Company practice (CR 19/07/2026): OT counted in half-hour steps,
+    # rounded DOWN (0.75 -> 0.5, 2.2 -> 2.0). Normal hours unchanged.
+    ot = int(ot * 2) / 2
     return round(normal, 2), round(ot, 2)
 
 
