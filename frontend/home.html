@@ -62,14 +62,14 @@
       payroll:  "Payroll",
     };
 
-    // Menu per role. Phases not yet built are shown locked.
+    // Menu per role: [label, phase, page]. Phases not yet built are shown locked.
     const MENUS = {
-      admin:    [["Workers", 4], ["Sites", 5], ["Daily Allocation", 6], ["Attendance", 7], ["Dashboard", 10], ["Reports", 11], ["Settings", 12]],
-      main_sup: [["Daily Allocation", 6], ["WhatsApp Allocation", 9], ["Dashboard", 10], ["Reports", 11]],
-      site_sup: [["My Site — Attendance", 7], ["WhatsApp Update", 9]],
-      payroll:  [["Reports", 11], ["Monthly Man-Hours", 12]],
+      admin:    [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Settings", 12, "settings.html"]],
+      main_sup: [["Workers (leave status)", 4, "workers.html"], ["Daily Allocation", 6, "allocation.html"], ["WhatsApp Allocation", 9, "allocation.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"]],
+      site_sup: [["My Site — Attendance", 7, "attendance.html"], ["WhatsApp Update", 9, "attendance.html"]],
+      payroll:  [["Reports", 11, "reports.html"], ["Monthly Man-Hours", 12, "manhours.html"]],
     };
-    const DONE_PHASE = 3; // raise this as phases complete
+    const DONE_PHASE = 4; // raise this as phases complete
 
     async function load() {
       try {
@@ -87,14 +87,15 @@
         document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
 
         const menu = document.getElementById("menu");
-        (MENUS[me.role] || []).forEach(([label, phase]) => {
+        (MENUS[me.role] || []).forEach(([label, phase, page]) => {
           const unlocked = phase <= DONE_PHASE;
-          const div = document.createElement("div");
-          div.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between " + (unlocked ? "" : "opacity-50");
-          div.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
+          const el = document.createElement(unlocked ? "a" : "div");
+          if (unlocked) el.href = page;
+          el.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
+          el.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
             (unlocked ? `<span class="text-red-700 font-bold">›</span>`
                       : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
-          menu.appendChild(div);
+          menu.appendChild(el);
         });
 
         document.getElementById("loading").classList.add("hidden");
