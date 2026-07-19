@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Settings</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <h1 class="text-lg font-bold flex-1">Settings</h1>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-10">
+
+    <h2 class="text-sm font-bold text-gray-500 mb-2">PUBLIC HOLIDAYS (Singapore)</h2>
+    <p class="text-xs text-gray-400 mb-2">Full-day OT applies on these dates. Keep this list matched to the official MOM gazetted holidays each year.</p>
+    <div class="bg-white rounded-xl shadow p-4 mb-3" id="hol-form">
+      <div class="flex gap-2">
+        <input id="h-date" type="date" class="flex-1 border border-gray-300 rounded-lg p-2">
+        <input id="h-desc" placeholder="Holiday name" class="flex-1 border border-gray-300 rounded-lg p-2">
+        <button onclick="addHol()" class="bg-red-700 text-white font-bold px-4 rounded-lg">Add</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl shadow divide-y divide-gray-100 mb-8" id="hol-list"></div>
+
+    <h2 class="text-sm font-bold text-gray-500 mb-2">OT RULE PARAMETERS (read-only)</h2>
+    <p class="text-xs text-gray-400 mb-2">These are the rules confirmed in the specification (Rev 5 §6). Changing them is a controlled change — contact the developer so the calculation engine and this record stay in step.</p>
+    <div class="bg-white rounded-xl shadow divide-y divide-gray-100" id="set-list"></div>
+  </main>
+
+  <div id="toast" class="hidden fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow"></div>
+
+  <script>
+    requireLogin();
+
+    function toast(m) {
+      const t = document.getElementById("toast");
+      t.textContent = m; t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), 2500);
+    }
+    function fmtD(iso) { const [y,m,d] = iso.split("-"); return `${d}/${m}/${y}`; }
+
+    let ME = null;
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      if (ME.role !== "admin") {
+        document.body.innerHTML = '<p class="p-8 text-center text-gray-500">Settings are administrator-only.</p>';
+        return;
+      }
+      await Promise.all([loadHol(), loadSet()]);
+    }
+
+    async function loadHol() {
+      const r = await vmmsApi("/api/v1/holidays");
+      const rows = r.ok ? await r.json() : [];
+      document.getElementById("hol-list").innerHTML = rows.length ? rows.map(h =>
+        `<div class="flex items-center p-3">
+           <div class="flex-1">
+             <p class="text-sm font-medium text-gray-800">${fmtD(h.holiday_date)}</p>
+             <p class="text-xs text-gray-400">${h.description}</p>
+           </div>
+           <button onclick="delHol('${h.holiday_date}')" class="text-red-600 text-sm font-bold">Remove</button>
+         </div>`).join("")
+        : '<p class="p-4 text-sm text-gray-400">No holidays entered.</p>';
+    }
+
+    async function addHol() {
+      const d = document.getElementById("h-date").value;
+      const n = document.getElementById("h-desc").value.trim();
+      if (!d || !n) { toast("Enter date and name"); return; }
+      const r = await vmmsApi("/api/v1/holidays", {
+        method: "POST", body: JSON.stringify({ holiday_date: d, description: n }) });
+      const data = await r.json();
+      if (!r.ok) { toast(data.detail || "Failed"); return; }
+      document.getElementById("h-date").value = "";
+      document.getElementById("h-desc").value = "";
+      toast("Holiday added");
+      await loadHol();
+    }
+
+    async function delHol(d) {
+      if (!confirm(`Remove holiday ${fmtD(d)}? Hours on that date will calculate as a normal day from now on.`)) return;
+      const r = await vmmsApi(`/api/v1/holidays/${d}`, { method: "DELETE" });
+      if (!r.ok) { toast("Failed"); return; }
+      toast("Removed");
+      await loadHol();
+    }
+
+    async function loadSet() {
+      const r = await vmmsApi("/api/v1/settings");
+      const rows = r.ok ? await r.json() : [];
+      document.getElementById("set-list").innerHTML = rows.map(s =>
+        `<div class="p-3">
+           <p class="text-xs text-gray-400">${s.key}</p>
+           <p class="text-sm font-medium text-gray-800">${JSON.stringify(s.value)}</p>
+         </div>`).join("");
+    }
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
