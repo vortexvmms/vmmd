@@ -37,8 +37,24 @@
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers found.</p>
   </main>
 
-  <!-- Add button (admin only) -->
+  <!-- Add buttons (admin only) -->
+  <button id="fab-bulk" onclick="openBulk()" class="hidden fixed bottom-6 right-24 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-4 h-14 rounded-full shadow-lg">BULK<br>ADD</button>
   <button id="fab" onclick="openForm()" class="hidden fixed bottom-6 right-6 bg-red-700 hover:bg-red-800 text-white text-3xl w-14 h-14 rounded-full shadow-lg leading-none">+</button>
+
+  <!-- Bulk import modal -->
+  <div id="bulk-modal" class="hidden fixed inset-0 bg-black/50 z-20 flex items-end sm:items-center justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-lg font-bold text-gray-800 mb-1">Bulk Add Workers</h2>
+      <p class="text-xs text-gray-500 mb-3">One worker per line: <b>ID, Full Name</b><br>Example:<br><span class="font-mono">W013, Arumugam Kumaravel<br>W014, Ali Md Shujon</span><br>Existing IDs are skipped, never overwritten.</p>
+      <textarea id="bulk-text" rows="10" placeholder="W013, Worker Name&#10;W014, Worker Name"
+                class="w-full border border-gray-300 rounded-lg p-3 text-sm font-mono mb-2"></textarea>
+      <p id="bulk-result" class="hidden text-sm rounded-lg p-3 mb-2"></p>
+      <div class="flex gap-3">
+        <button onclick="closeBulk()" class="flex-1 border border-gray-300 text-gray-700 font-bold py-3 rounded-lg">Close</button>
+        <button id="bulk-save" onclick="runBulk()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Import</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Add/Edit modal -->
   <div id="modal" class="hidden fixed inset-0 bg-black/50 z-20 flex items-end sm:items-center justify-center">
@@ -92,7 +108,10 @@
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
-      if (ME.role === "admin") document.getElementById("fab").classList.remove("hidden");
+      if (ME.role === "admin") {
+        document.getElementById("fab").classList.remove("hidden");
+        document.getElementById("fab-bulk").classList.remove("hidden");
+      }
       await load();
     }
 
@@ -178,6 +197,45 @@
         err.textContent = ex.message; err.classList.remove("hidden");
       } finally {
         btn.disabled = false; btn.textContent = "Save";
+      }
+    }
+
+    function openBulk() {
+      document.getElementById("bulk-result").classList.add("hidden");
+      document.getElementById("bulk-modal").classList.remove("hidden");
+    }
+    function closeBulk() { document.getElementById("bulk-modal").classList.add("hidden"); }
+
+    async function runBulk() {
+      const lines = document.getElementById("bulk-text").value.split("\n")
+        .map(l => l.trim()).filter(l => l);
+      const workers = lines.map(l => {
+        const i = l.indexOf(",");
+        return i > 0
+          ? { worker_code: l.slice(0, i).trim(), name: l.slice(i + 1).trim() }
+          : { worker_code: "", name: l };   // missing comma -> flagged by server
+      });
+      if (!workers.length) { toast("Paste your list first"); return; }
+      const btn = document.getElementById("bulk-save");
+      btn.disabled = true; btn.textContent = "Importing…";
+      try {
+        const r = await vmmsApi("/api/v1/workers/bulk", {
+          method: "POST", body: JSON.stringify({ workers }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Import failed");
+        const res = document.getElementById("bulk-result");
+        res.className = "text-sm rounded-lg p-3 mb-2 bg-green-50 text-green-800 border border-green-200";
+        res.innerHTML = `✓ ${d.added} added · ${d.skipped_existing} already existed (skipped)` +
+          (d.line_errors.length ? `<br>⚠ ${d.line_errors.join("<br>⚠ ")}` : "");
+        res.classList.remove("hidden");
+        await load();
+      } catch (ex) {
+        const res = document.getElementById("bulk-result");
+        res.className = "text-sm rounded-lg p-3 mb-2 bg-red-50 text-red-700 border border-red-200";
+        res.textContent = ex.message;
+        res.classList.remove("hidden");
+      } finally {
+        btn.disabled = false; btn.textContent = "Import";
       }
     }
 
