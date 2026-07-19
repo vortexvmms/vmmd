@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.9.0")
+app = FastAPI(title="VMMS API", version="0.10.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,7 +97,7 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
 # ---------------- basics ----------------
 @app.get("/")
 def root():
-    return {"app": "VMMS", "phase": 9, "status": "running"}
+    return {"app": "VMMS", "phase": 10, "status": "running"}
 
 
 @app.get("/api/v1/health")
@@ -857,3 +857,87 @@ async def update_message(date: str, site_id: str,
         await audit(client, user, "generate_update_msg", "message",
                     f"{date}:{site_id}", None, {"workers": len(present)})
         return {"message": msg, "workers": len(present), "missing_end_time": missing}
+
+# ---------------- Dashboard (Phase 10 · spec §8) ----------------
+from datetime import datetime, timedelta, timezone
+
+
+def sgt_today() -> str:
+    """Working dates are SGT dates (spec §12)."""
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).date().isoformat()
+
+
+@app.get("/api/v1/dashboard")
+async def dashboard(user: dict = Depends(get_current_user)):
+    today = sgt_today()
+    month_start = today[:8] + "01"
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        rw = await client.get(f"{REST}/workers",
+                              params={"select": "id,status"},
+                              headers=supabase_headers(user["token"]))
+        workers = rw.json() if rw.status_code == 200 else []
+
+        rs = await client.get(f"{REST}/sites",
+                              params={"status": "eq.active", "select": "id,site_name"},
+                              headers=supabase_headers(user["token"]))
+        sites = rs.json() if rs.status_code == 200 else []
+
+        # everything this month up to today, incl. today's detail
+        rm = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"gte.{month_start}", "status": "eq.allocated",
+                    "select": "work_date,site_id,sites(site_name),"
+                              "attendance(present,submitted_at,normal_hours,ot_hours)"},
+            headers=supabase_headers(user["token"]))
+        month_rows = rm.json() if rm.status_code == 200 else []
+
+        month_nh = month_ot = 0.0
+        today_by_site: dict[str, dict] = {}
+        site_month: dict[str, dict] = {}
+
+        for a in month_rows:
+            sname = (a.get("sites") or {}).get("site_name", "?")
+            att = a.get("attendance")
+            nh = float(att["normal_hours"]) if att and att["present"] else 0.0
+            ot = float(att["ot_hours"]) if att and att["present"] else 0.0
+            month_nh += nh
+            month_ot += ot
+
+            sm = site_month.setdefault(sname, {"nh": 0.0, "ot": 0.0})
+            sm["nh"] += nh
+            sm["ot"] += ot
+
+            if a["work_date"] == today:
+                t = today_by_site.setdefault(sname, {"allocated": 0, "submitted": 0, "with_att": 0})
+                t["allocated"] += 1
+                if att:
+                    t["with_att"] += 1
+                    if att["submitted_at"]:
+                        t["submitted"] += 1
+
+        pending, completed = [], []
+        for sname, t in today_by_site.items():
+            if t["allocated"] > 0 and t["submitted"] >= t["allocated"] and t["allocated"] == t["with_att"]:
+                completed.append(sname)
+            else:
+                pending.append(sname)
+
+        summary = [{"site_name": s["site_name"],
+                    "today": today_by_site.get(s["site_name"], {}).get("allocated", 0),
+                    "month_nh": round(site_month.get(s["site_name"], {}).get("nh", 0), 1),
+                    "month_ot": round(site_month.get(s["site_name"], {}).get("ot", 0), 1)}
+                   for s in sites]
+
+        return {
+            "date": today,
+            "total_workers": sum(1 for w in workers if w["status"] == "active"),
+            "on_leave": sum(1 for w in workers if w["status"] == "on_leave"),
+            "total_sites": len(sites),
+            "today_allocated": sum(t["allocated"] for t in today_by_site.values()),
+            "pending_updates": sorted(pending),
+            "completed_updates": sorted(completed),
+            "month_normal_hours": round(month_nh, 1),
+            "month_ot_hours": round(month_ot, 1),
+            "site_summary": summary,
+        }
