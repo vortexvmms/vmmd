@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.12.1")
+app = FastAPI(title="VMMS API", version="0.12.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -614,6 +614,7 @@ class AttendanceMark(BaseModel):
     start_time: str | None = None      # admin/main_sup only (rain/permit delays)
     end_time: str | None = None        # "HH:MM"
     end_next_day: bool | None = None
+    absence_type: str | None = None    # 'absent' | 'mc' (only when present=false)
     edit_reason: str | None = None
 
 
@@ -632,7 +633,7 @@ async def _load_day(client, token, work_date: str, site_id: str | None):
     params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
               "select": "id,site_id,worker_id,sites(site_name),workers(name,worker_code),"
                         "attendance(id,present,start_time,end_time,end_next_day,"
-                        "normal_hours,ot_hours,day_type,submitted_at)"}
+                        "normal_hours,ot_hours,day_type,submitted_at,absence_type)"}
     if site_id:
         params["site_id"] = f"eq.{site_id}"
     r = await client.get(f"{REST}/allocations", params=params,
@@ -662,6 +663,7 @@ async def day_sheet(date: str, site_id: str = "",
                 "normal_hours": float(att["normal_hours"]) if att else 0,
                 "ot_hours": float(att["ot_hours"]) if att else 0,
                 "submitted": bool(att and att["submitted_at"]),
+                "absence_type": (att.get("absence_type") if att else None) or "absent",
             })
         return sorted(out, key=lambda x: (x["site_name"], x["worker_name"]))
 
@@ -708,9 +710,15 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             except ValueError as ve:
                 raise HTTPException(status_code=400, detail=str(ve))
 
+        if body.absence_type and body.absence_type not in ("absent", "mc"):
+            raise HTTPException(status_code=400, detail="Invalid absence type")
+        absence = None if present else (
+            body.absence_type or (att.get("absence_type") if att else None) or "absent")
+
         payload = {"present": present, "start_time": start, "end_time": end,
                    "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
-                   "day_type": day_type, "edit_reason": body.edit_reason}
+                   "day_type": day_type, "absence_type": absence,
+                   "edit_reason": body.edit_reason}
         if att:
             ru = await client.patch(
                 f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
@@ -940,11 +948,12 @@ async def dashboard(user: dict = Depends(get_current_user)):
             f"{REST}/allocations",
             params={"work_date": f"gte.{month_start}", "status": "eq.allocated",
                     "select": "work_date,site_id,sites(site_name),"
-                              "attendance(present,submitted_at,normal_hours,ot_hours)"},
+                              "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)"},
             headers=supabase_headers(user["token"]))
         month_rows = rm.json() if rm.status_code == 200 else []
 
         month_nh = month_ot = 0.0
+        today_mc = 0
         today_by_site: dict[str, dict] = {}
         site_month: dict[str, dict] = {}
 
@@ -967,6 +976,8 @@ async def dashboard(user: dict = Depends(get_current_user)):
                     t["with_att"] += 1
                     if att["submitted_at"]:
                         t["submitted"] += 1
+                    if not att["present"] and att.get("absence_type") == "mc":
+                        today_mc += 1
 
         pending, completed = [], []
         for sname, t in today_by_site.items():
@@ -987,6 +998,7 @@ async def dashboard(user: dict = Depends(get_current_user)):
             "on_leave": sum(1 for w in workers if w["status"] == "on_leave"),
             "total_sites": len(sites),
             "today_allocated": sum(t["allocated"] for t in today_by_site.values()),
+            "today_mc": today_mc,
             "pending_updates": sorted(pending),
             "completed_updates": sorted(completed),
             "month_normal_hours": round(month_nh, 1),
@@ -1007,7 +1019,7 @@ async def _range_rows(client, token, dfrom: str, dto: str, site_id: str | None):
     params = {"work_date": f"gte.{dfrom}", "status": "eq.allocated",
               "select": "work_date,site_id,sites(site_name),"
                         "workers(name,worker_code),"
-                        "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at)",
+                        "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at,absence_type)",
               "order": "work_date.asc"}
     r = await client.get(f"{REST}/allocations",
                          params={**params, "and": f"(work_date.lte.{dto}" + (f",site_id.eq.{site_id}" if site_id else "") + ")"},
@@ -1034,6 +1046,7 @@ async def report_attendance(dfrom: str, dto: str, site_id: str = "",
                 "worker_code": (a.get("workers") or {}).get("worker_code", ""),
                 "worker": (a.get("workers") or {}).get("name", "?"),
                 "present": att["present"] if att else None,
+                "absence": ((att.get("absence_type") or "absent") if att and not att["present"] else ""),
                 "start": att["start_time"][:5] if att and att["start_time"] else "",
                 "end": att["end_time"][:5] if att and att["end_time"] else "",
                 "nh": float(att["normal_hours"]) if att and att["present"] else 0,
