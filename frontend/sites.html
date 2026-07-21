@@ -11,7 +11,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
@@ -106,7 +106,7 @@
       rows.forEach(s => {
         const sups = s.supervisors.map(x => x.name).join(", ") || "No supervisor assigned";
         const div = document.createElement("div");
-        div.className = "bg-white rounded-xl shadow p-4";
+        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4";
         div.innerHTML =
           `<div class="flex items-center justify-between">
              <p class="font-medium text-gray-800">${s.site_name}</p>
