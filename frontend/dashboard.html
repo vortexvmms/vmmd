@@ -11,7 +11,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
    <div class="flex items-center gap-3 max-w-5xl mx-auto w-full">
@@ -28,7 +28,7 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="cards"></div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">TODAY'S UPDATES</h2>
-    <div class="bg-white rounded-xl shadow p-4">
+    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
       <div class="flex items-start gap-2 mb-2">
         <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
         <p class="text-sm text-gray-700 flex-1" id="pending">—</p>
@@ -40,7 +40,7 @@
     </div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (THIS MONTH)</h2>
-    <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 text-gray-500 text-xs">
           <tr>
@@ -59,7 +59,7 @@
     requireLogin();
 
     function card(label, value, accent) {
-      return `<div class="bg-white rounded-xl shadow p-4">
+      return `<div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
         <p class="text-2xl font-bold ${accent || "text-gray-800"}">${value}</p>
         <p class="text-xs text-gray-500 mt-1">${label}</p></div>`;
     }
