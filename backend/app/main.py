@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.12.2")
+app = FastAPI(title="VMMS API", version="0.13.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -810,6 +810,107 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
                     f"{body.work_date}:{body.site_id}", None, {"workers": len(att_ids)})
         return {"ok": True, "submitted": len(att_ids)}
 
+
+# ---------------- Wrong-site transfer (site request 22/07/2026) ----------------
+class TransferBody(BaseModel):
+    work_date: str
+    worker_id: str
+    to_site_id: str
+
+
+@app.get("/api/v1/attendance/transferable")
+async def transferable_workers(date: str, site_id: str,
+                               user: dict = Depends(get_current_user)):
+    """Workers who did NOT turn up at their allocated site — i.e. everyone
+    allocated elsewhere today, plus anyone unallocated. Used when a worker
+    reports to the wrong site in the morning."""
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=15) as client:
+        ra = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{date}", "status": "eq.allocated",
+                    "select": "worker_id,site_id,sites(site_name),workers(name,worker_code),"
+                              "attendance(submitted_at)"},
+            headers=supabase_headers(user["token"]))
+        allocs = ra.json() if ra.status_code == 200 else []
+
+        rw = await client.get(
+            f"{REST}/workers",
+            params={"status": "eq.active", "select": "id,name,worker_code", "order": "name.asc"},
+            headers=supabase_headers(user["token"]))
+        workers = rw.json() if rw.status_code == 200 else []
+
+        alloc_by_worker = {a["worker_id"]: a for a in allocs}
+        out = []
+        for w in workers:
+            a = alloc_by_worker.get(w["id"])
+            if a and a["site_id"] == site_id:
+                continue                      # already here
+            if a and (a.get("attendance") or {}).get("submitted_at"):
+                continue                      # their day is already closed elsewhere
+            out.append({
+                "worker_id": w["id"], "name": w["name"], "worker_code": w["worker_code"],
+                "current_site": (a.get("sites") or {}).get("site_name") if a else None,
+            })
+        return out
+
+
+@app.post("/api/v1/attendance/transfer")
+async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_user)):
+    """Move a worker's allocation to the site where he actually reported.
+    Allowed for admin, main_sup, and the receiving site's supervisor."""
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=15) as client:
+        if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
+            raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
+
+        r = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{body.work_date}", "worker_id": f"eq.{body.worker_id}",
+                    "select": "id,site_id,sites(site_name),workers(name),attendance(id,submitted_at)"},
+            headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+
+        if rows:
+            a = rows[0]
+            if a["site_id"] == body.to_site_id:
+                return {"ok": True, "moved": False, "note": "Already at this site"}
+            att = a.get("attendance")
+            if att and att.get("submitted_at"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="That worker's day was already submitted at " +
+                           ((a.get("sites") or {}).get("site_name", "the other site")) +
+                           " — ask the administrator")
+            up = await client.patch(
+                f"{REST}/allocations", params={"id": f"eq.{a['id']}"},
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json={"site_id": body.to_site_id, "updated_by": user["user_id"]})
+            if up.status_code not in (200, 204):
+                raise HTTPException(status_code=500, detail="Could not move the worker")
+            await audit(client, user, "transfer_worker", "allocation", a["id"],
+                        {"site_id": a["site_id"], "site": (a.get("sites") or {}).get("site_name")},
+                        {"site_id": body.to_site_id, "reason": "reported to this site"})
+            return {"ok": True, "moved": True,
+                    "from": (a.get("sites") or {}).get("site_name", "?"),
+                    "worker": (a.get("workers") or {}).get("name", "?")}
+
+        # not allocated anywhere today -> allocate him here
+        ins = await client.post(
+            f"{REST}/allocations",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"work_date": body.work_date, "site_id": body.to_site_id,
+                  "worker_id": body.worker_id, "status": "allocated",
+                  "created_by": user["user_id"], "updated_by": user["user_id"]})
+        if ins.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not add the worker")
+        await audit(client, user, "transfer_worker", "allocation",
+                    f"{body.work_date}:{body.worker_id}", None,
+                    {"site_id": body.to_site_id, "reason": "unallocated, reported to this site"})
+        return {"ok": True, "moved": True, "from": None}
+
 # ---------------- WhatsApp Generators (Phase 9 · spec §7, real formats) ----------------
 MONTHS = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
           "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
@@ -820,41 +921,38 @@ DIVIDER = "________________________________"
 def format_allocation_message(work_date: str, site_names: list[str],
                               by_site: dict[str, list[str]],
                               home_leave: list[str]) -> str:
-    """Spec §7.1 — confirmed against the real 16-JULY-2026 sample:
-    bold header, DD-MONTH-YYYY + day name in caps, underscore dividers,
-    plain names, empty sites still listed, HOME LEAVE section last."""
+    """Spec §7.1 (Rev 7 format): worker lines are WORKERID_NAME, all caps."""
     d = date_cls.fromisoformat(work_date)
     lines = ["*MANPOWER DISTRIBUTION*",
              f"{d.day:02d}-{MONTHS[d.month - 1]}-{d.year}",
              DAYS[d.weekday()]]
     for sname in site_names:
         lines.append(DIVIDER)
-        lines.append(sname)
-        lines.extend(by_site.get(sname, []))
+        lines.append(sname.upper())
+        lines.extend(x.upper() for x in by_site.get(sname, []))
     if home_leave:
         lines.append(DIVIDER)
         lines.append("HOME LEAVE")
-        lines.extend(home_leave)
+        lines.extend(x.upper() for x in home_leave)
     return "\n".join(lines)
 
 
 def format_update_message(work_date: str, site_name: str, supervisor: str,
                           rows: list[dict]) -> str:
-    """Spec §7.2 — standardised update format (Rev 2 decision):
-    SITE / DATE / SUPERVISOR header, numbered 'Name-HH:MM' lines,
-    non-default starts shown as 'Name-HH:MM/HH:MM', absent omitted."""
+    """Spec §7.2 (Rev 7 format): WORKERID_NAME_ENDTIME, all caps.
+    Non-default starts shown as WORKERID_NAME_START-END."""
     d = date_cls.fromisoformat(work_date)
-    lines = [f"SITE: {site_name}",
+    lines = [f"SITE: {site_name.upper()}",
              f"DATE: {d.day:02d}/{d.month:02d}/{d.year}",
-             f"SUPERVISOR: {supervisor}",
+             f"SUPERVISOR: {supervisor.upper()}",
              ""]
     n = 0
     for r in rows:
         n += 1
         t = r["end_time"]
         if r.get("start_time") and r["start_time"] != "08:00":
-            t = f'{r["start_time"]}/{r["end_time"]}'
-        lines.append(f'{n}.{r["name"]}-{t}')
+            t = f'{r["start_time"]}-{r["end_time"]}'
+        lines.append(f'{n}.{r["code"]}_{r["name"].upper()}_{t}')
     return "\n".join(lines)
 
 
@@ -869,18 +967,22 @@ async def allocation_message(date: str, user: dict = Depends(get_current_user)):
         sites = rs.json() if rs.status_code == 200 else []
         ra = await client.get(f"{REST}/allocations",
                               params={"work_date": f"eq.{date}", "status": "eq.allocated",
-                                      "select": "site_id,workers(name),sites(site_name)"},
+                                      "select": "site_id,workers(name,worker_code),sites(site_name)"},
                               headers=supabase_headers(user["token"]))
         allocs = ra.json() if ra.status_code == 200 else []
         rw = await client.get(f"{REST}/workers",
-                              params={"status": "eq.on_leave", "select": "name", "order": "name.asc"},
+                              params={"status": "eq.on_leave", "select": "name,worker_code",
+                                      "order": "name.asc"},
                               headers=supabase_headers(user["token"]))
-        leave = [w["name"] for w in (rw.json() if rw.status_code == 200 else [])]
+        leave = [f'{w["worker_code"]}_{w["name"]}'
+                 for w in (rw.json() if rw.status_code == 200 else [])]
 
         by_site: dict[str, list[str]] = {}
         for a in allocs:
             sname = (a.get("sites") or {}).get("site_name", "?")
-            by_site.setdefault(sname, []).append((a.get("workers") or {}).get("name", "?"))
+            w = a.get("workers") or {}
+            by_site.setdefault(sname, []).append(
+                f'{w.get("worker_code", "?")}_{w.get("name", "?")}')
         for k in by_site:
             by_site[k].sort()
 
@@ -909,6 +1011,7 @@ async def update_message(date: str, site_id: str,
                 missing += 1
                 continue
             present.append({"name": (a.get("workers") or {}).get("name", "?"),
+                            "code": (a.get("workers") or {}).get("worker_code", "?"),
                             "start_time": att["start_time"][:5] if att["start_time"] else "08:00",
                             "end_time": att["end_time"][:5]})
         present.sort(key=lambda x: x["name"])
