@@ -11,7 +11,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
     <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
@@ -29,7 +29,7 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
-    <div id="copybar" class="hidden bg-white rounded-xl shadow p-4 mb-3 text-center">
+    <div id="copybar" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 mb-3 text-center">
       <p class="text-sm text-gray-600 mb-2">No allocation yet for this date.</p>
       <button onclick="copyDay()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">
         Copy previous day's allocation
@@ -131,7 +131,7 @@
       rows.forEach(w => {
         const other = elsewhere[w.id];
         const div = document.createElement("label");
-        div.className = "bg-white rounded-xl shadow p-4 flex items-center gap-3 " +
+        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center gap-3 " +
                         (other ? "opacity-50" : "cursor-pointer active:bg-gray-50");
         div.innerHTML =
           `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""} ${other ? "disabled" : ""}>
@@ -155,7 +155,7 @@
         list.appendChild(hdr);
         onLeave.forEach(w => {
           const div = document.createElement("div");
-          div.className = "bg-white rounded-xl shadow p-4 opacity-50";
+          div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 opacity-50";
           div.innerHTML = `<p class="font-medium text-gray-800">${w.name}</p>
                            <p class="text-xs text-gray-400">${w.worker_code} · on leave</p>`;
           list.appendChild(div);
