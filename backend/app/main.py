@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.14.0")
+app = FastAPI(title="VMMS API", version="0.15.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -486,6 +486,28 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
 
         this_site = {a["worker_id"]: a["id"] for a in existing if a["site_id"] == body.site_id}
         to_remove = [aid for wid, aid in this_site.items() if wid not in requested]
+
+        # SAFETY (22/07/2026): never silently delete attendance that has already
+        # been taken. If the supervisor has marked the worker, the allocation may
+        # not be removed here — use the transfer function on the attendance page.
+        if to_remove:
+            chk = await client.get(
+                f"{REST}/attendance",
+                params={"allocation_id": f"in.({','.join(to_remove)})",
+                        "select": "allocation_id,allocations(workers(name))"},
+                headers=supabase_headers(user["token"]))
+            locked = chk.json() if chk.status_code == 200 else []
+            if locked:
+                names = []
+                for x in locked:
+                    w = ((x.get("allocations") or {}).get("workers") or {})
+                    names.append(w.get("name", "?"))
+                raise HTTPException(
+                    status_code=409,
+                    detail="Attendance is already marked for: " + ", ".join(names[:4]) +
+                           (f" (+{len(names)-4} more)" if len(names) > 4 else "") +
+                           ". Removing them would delete their hours. Ask the site supervisor "
+                           "to correct it on the Attendance page instead.")
         to_add = [wid for wid in requested if wid not in this_site]
 
         if to_remove:
