@@ -13,7 +13,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between">
+  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between md:px-8">
     <div class="flex items-center gap-3">
       <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
            class="h-9 bg-white rounded-lg p-1" onerror="this.style.display='none'">
@@ -27,7 +27,7 @@
     </button>
   </header>
 
-  <main class="flex-1 p-4 max-w-md mx-auto w-full">
+  <main class="flex-1 p-4 max-w-md md:max-w-4xl mx-auto w-full">
     <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
 
     <div id="content" class="hidden">
@@ -37,7 +37,7 @@
         <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
       </div>
 
-      <div class="mt-6 space-y-3" id="menu"></div>
+      <div class="mt-6 space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3" id="menu"></div>
 
       <p class="text-xs text-gray-400 text-center mt-8">
         Menu items unlock as each phase is completed.
