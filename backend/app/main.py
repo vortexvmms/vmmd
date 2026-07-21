@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.13.0")
+app = FastAPI(title="VMMS API", version="0.14.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -595,6 +595,51 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
     return round(normal, 2), round(ot, 2)
 
 
+def worked_hours(start: str, end: str, end_next_day: bool) -> float:
+    """Hours actually worked in one segment, lunch rules R2/R3 applied."""
+    s = _to_min(start)
+    e_raw = _to_min(end)
+    e = e_raw + (1440 if end_next_day else 0)
+    if e <= s:
+        raise ValueError("End time must be after start time")
+    finished_by_noon = (not end_next_day) and e_raw <= 720
+    lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
+    return (e - s - lunch) / 60.0
+
+
+def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]]:
+    """Split-day support (site request 22/07/2026): a worker may work at more
+    than one site in a day. The normal-hour quota is applied ONCE across his
+    whole day, chronologically — so he is never paid two 'normal days'. Each
+    site still keeps its own share of the hours."""
+    order = sorted(range(len(segments)),
+                   key=lambda i: _to_min(segments[i]["start"]))
+    out = [(0.0, 0.0)] * len(segments)
+
+    if day_type in ("SUN", "PH"):
+        for i in order:
+            out[i] = (0.0, worked_hours(**segments[i]))
+    elif day_type == "SAT":
+        remaining_normal = 4.0
+        for i in order:
+            g = segments[i]
+            w = worked_hours(**g)
+            s, e = _to_min(g["start"]), _to_min(g["end"]) + (1440 if g["end_next_day"] else 0)
+            morning = max(0, min(e, 720) - s) / 60.0
+            n = min(remaining_normal, morning, w)
+            remaining_normal -= n
+            out[i] = (n, w - n)
+    else:
+        remaining_normal = 8.0
+        for i in order:
+            w = worked_hours(**segments[i])
+            n = min(remaining_normal, w)
+            remaining_normal -= n
+            out[i] = (n, w - n)
+
+    return [(round(n, 2), round(int(o * 2) / 2, 2)) for n, o in out]
+
+
 async def get_day_type(client: httpx.AsyncClient, token: str, work_date: str) -> str:
     ph = await client.get(
         f"{REST}/public_holidays",
@@ -689,10 +734,11 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         alloc = arows[0]
         att = alloc.get("attendance")
 
-        if att and att["submitted_at"] and user["role"] == "site_sup":
-            raise HTTPException(status_code=403, detail="Day already submitted — ask the administrator to amend")
+        # Submitted days remain correctable by the site's own supervisor until
+        # payroll closes the month (decision 22/07/2026). Reason is mandatory
+        # and the change is audit-logged.
         if att and att["submitted_at"] and not body.edit_reason:
-            raise HTTPException(status_code=400, detail="A reason is required when editing a submitted day")
+            raise HTTPException(status_code=400, detail="A reason is required when changing a submitted day")
 
         start = body.start_time or (att["start_time"][:5] if att and att["start_time"] else "08:00")
         end = body.end_time if body.end_time is not None else (att["end_time"][:5] if att and att["end_time"] else None)
@@ -732,10 +778,49 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         if ru.status_code not in (200, 201) or not ru.json():
             raise HTTPException(status_code=500, detail="Could not save attendance")
 
+        res = await recompute_worker_day(client, user["token"],
+                                         alloc["work_date"], alloc["worker_id"], day_type)
+        if res:
+            normal, ot = res.get(body.allocation_id, (normal, ot))
+
         await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
                     {k: att.get(k) for k in ("present", "end_time")} if att else None,
                     {"present": present, "end_time": end, "normal": normal, "ot": ot})
         return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
+
+
+async def recompute_worker_day(client, token, work_date: str, worker_id: str,
+                               day_type: str) -> dict:
+    """When a worker has 2+ sites on the same date, recompute all his segments
+    together so normal hours are counted once for the day."""
+    r = await client.get(
+        f"{REST}/allocations",
+        params={"work_date": f"eq.{work_date}", "worker_id": f"eq.{worker_id}",
+                "status": "eq.allocated",
+                "select": "id,attendance(id,present,start_time,end_time,end_next_day)"},
+        headers=supabase_headers(token))
+    rows = r.json() if r.status_code == 200 else []
+    segs, ids = [], []
+    for a in rows:
+        att = a.get("attendance")
+        if not att or not att["present"] or not att["end_time"]:
+            continue
+        segs.append({"start": att["start_time"][:5], "end": att["end_time"][:5],
+                     "end_next_day": att["end_next_day"]})
+        ids.append((a["id"], att["id"]))
+    if len(segs) < 2:
+        return {}
+    try:
+        pairs = compute_day(day_type, segs)
+    except ValueError:
+        return {}
+    out = {}
+    for (alloc_id, att_id), (n, o) in zip(ids, pairs):
+        await client.patch(f"{REST}/attendance", params={"id": f"eq.{att_id}"},
+                           headers={**supabase_headers(token), "Prefer": "return=minimal"},
+                           json={"normal_hours": n, "ot_hours": o})
+        out[alloc_id] = (n, o)
+    return out
 
 
 @app.post("/api/v1/attendance/bulk_end")
@@ -816,6 +901,7 @@ class TransferBody(BaseModel):
     work_date: str
     worker_id: str
     to_site_id: str
+    keep_other: bool = False   # True = split day (also worked at the other site)
 
 
 @app.get("/api/v1/attendance/transferable")
@@ -873,10 +959,24 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
             headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
 
+        rows = [a for a in rows if a["site_id"] != body.to_site_id]
+        if rows and body.keep_other:
+            ins = await client.post(
+                f"{REST}/allocations",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json={"work_date": body.work_date, "site_id": body.to_site_id,
+                      "worker_id": body.worker_id, "status": "allocated",
+                      "created_by": user["user_id"], "updated_by": user["user_id"]})
+            if ins.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail="Could not add the second site")
+            await audit(client, user, "split_day", "allocation",
+                        f"{body.work_date}:{body.worker_id}", None,
+                        {"added_site": body.to_site_id, "reason": "worked at two sites today"})
+            return {"ok": True, "moved": True, "split": True,
+                    "from": (rows[0].get("sites") or {}).get("site_name", "?")}
+
         if rows:
             a = rows[0]
-            if a["site_id"] == body.to_site_id:
-                return {"ok": True, "moved": False, "note": "Already at this site"}
             att = a.get("attendance")
             if att and att.get("submitted_at"):
                 raise HTTPException(
@@ -924,16 +1024,18 @@ def format_allocation_message(work_date: str, site_names: list[str],
     """Spec §7.1 (Rev 7 format): worker lines are WORKERID_NAME, all caps."""
     d = date_cls.fromisoformat(work_date)
     lines = ["*MANPOWER DISTRIBUTION*",
-             f"{d.day:02d}-{MONTHS[d.month - 1]}-{d.year}",
-             DAYS[d.weekday()]]
+             f"*{d.day:02d}-{MONTHS[d.month - 1]}-{d.year}*",
+             f"*{DAYS[d.weekday()]}*"]
     for sname in site_names:
         lines.append(DIVIDER)
-        lines.append(sname.upper())
-        lines.extend(x.upper() for x in by_site.get(sname, []))
+        lines.append(f"*{sname.upper()}*")
+        for i, x in enumerate(by_site.get(sname, []), 1):
+            lines.append(f"{i}. {x.upper()}")
     if home_leave:
         lines.append(DIVIDER)
-        lines.append("HOME LEAVE")
-        lines.extend(x.upper() for x in home_leave)
+        lines.append("*HOME LEAVE*")
+        for i, x in enumerate(home_leave, 1):
+            lines.append(f"{i}. {x.upper()}")
     return "\n".join(lines)
 
 
@@ -942,9 +1044,9 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
     """Spec §7.2 (Rev 7 format): WORKERID_NAME_ENDTIME, all caps.
     Non-default starts shown as WORKERID_NAME_START-END."""
     d = date_cls.fromisoformat(work_date)
-    lines = [f"SITE: {site_name.upper()}",
-             f"DATE: {d.day:02d}/{d.month:02d}/{d.year}",
-             f"SUPERVISOR: {supervisor.upper()}",
+    lines = [f"*SITE: {site_name.upper()}*",
+             f"*DATE: {d.day:02d}/{d.month:02d}/{d.year}*",
+             f"*SUPERVISOR: {supervisor.upper()}*",
              ""]
     n = 0
     for r in rows:
@@ -1040,11 +1142,20 @@ async def dashboard(user: dict = Depends(get_current_user)):
                               params={"select": "id,status"},
                               headers=supabase_headers(user["token"]))
         workers = rw.json() if rw.status_code == 200 else []
+        scoped = user["role"] == "site_sup"
 
         rs = await client.get(f"{REST}/sites",
                               params={"status": "eq.active", "select": "id,site_name"},
                               headers=supabase_headers(user["token"]))
         sites = rs.json() if rs.status_code == 200 else []
+
+        # Site Supervisors see only their own sites (request 22/07/2026)
+        if user["role"] == "site_sup":
+            rl = await client.get(f"{REST}/site_supervisors",
+                                  params={"user_id": f"eq.{user['user_id']}", "select": "site_id"},
+                                  headers=supabase_headers(user["token"]))
+            mine = {x["site_id"] for x in (rl.json() if rl.status_code == 200 else [])}
+            sites = [s for s in sites if s["id"] in mine]
 
         # everything this month up to today, incl. today's detail
         rm = await client.get(
@@ -1097,8 +1208,10 @@ async def dashboard(user: dict = Depends(get_current_user)):
 
         return {
             "date": today,
-            "total_workers": sum(1 for w in workers if w["status"] == "active"),
-            "on_leave": sum(1 for w in workers if w["status"] == "on_leave"),
+            "scoped": scoped,
+            "total_workers": (sum(t["allocated"] for t in today_by_site.values())
+                              if scoped else sum(1 for w in workers if w["status"] == "active")),
+            "on_leave": 0 if scoped else sum(1 for w in workers if w["status"] == "on_leave"),
             "total_sites": len(sites),
             "today_allocated": sum(t["allocated"] for t in today_by_site.values()),
             "today_mc": today_mc,
