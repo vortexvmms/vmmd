@@ -11,7 +11,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between md:px-8">
     <div class="flex items-center gap-3">
@@ -31,7 +31,7 @@
     <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
 
     <div id="content" class="hidden">
-      <div class="bg-white rounded-xl shadow p-5 mt-4">
+      <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-5 mt-4">
         <p class="text-sm text-gray-500">Signed in as</p>
         <p class="text-lg font-bold text-gray-800" id="name">—</p>
         <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
@@ -44,7 +44,7 @@
       </p>
     </div>
 
-    <div id="noprofile" class="hidden bg-white rounded-xl shadow p-6 mt-10 text-center">
+    <div id="noprofile" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-6 mt-10 text-center">
       <div class="text-4xl mb-3">⚠️</div>
       <p class="font-bold text-gray-800 mb-2">Login works, but no VMMS role is linked yet.</p>
       <p class="text-sm text-gray-500">Ask the administrator to link your account (Phase 3 guide, Step 3).</p>
@@ -95,7 +95,7 @@
           const unlocked = phase <= DONE_PHASE;
           const el = document.createElement(unlocked ? "a" : "div");
           if (unlocked) el.href = page;
-          el.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
+          el.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
           el.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
             (unlocked ? `<span class="text-red-700 font-bold">›</span>`
                       : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
