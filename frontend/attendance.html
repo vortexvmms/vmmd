@@ -11,7 +11,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-50 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
     <div class="flex items-center gap-3">
@@ -32,7 +32,7 @@
       ✓ Submitted. You can still correct it until payroll closes the month — a reason will be asked.
     </div>
 
-    <div id="bulkbar" class="bg-white rounded-xl shadow p-3 mb-3">
+    <div id="bulkbar" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mb-3">
       <p class="text-sm text-gray-600 mb-2">Set end time for ALL workers:</p>
       <div class="flex items-center gap-2 flex-wrap">
         <button onclick="bulkApply('17:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">5 PM</button>
@@ -136,7 +136,7 @@
 
       ROWS.forEach(x => {
         const div = document.createElement("div");
-        div.className = "bg-white rounded-xl shadow p-4" + (x.present ? "" : " opacity-60");
+        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4" + (x.present ? "" : " opacity-60");
         div.innerHTML = `
           <div class="flex items-center justify-between mb-2">
             <div>
