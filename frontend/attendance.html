@@ -29,7 +29,7 @@
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
     <div id="submitted-banner" class="hidden bg-green-100 border border-green-300 text-green-800 rounded-xl p-3 mb-3 text-sm font-medium text-center">
-      ✓ This day has been submitted and locked.
+      ✓ Submitted. You can still correct it until payroll closes the month — a reason will be asked.
     </div>
 
     <div id="bulkbar" class="bg-white rounded-xl shadow p-3 mb-3">
@@ -120,7 +120,7 @@
       document.getElementById("empty").classList.toggle("hidden", ROWS.length > 0);
 
       const submitted = ROWS.length > 0 && ROWS.every(x => x.submitted);
-      const canEdit = !submitted || ME.role === "admin";
+      const canEdit = true;   // corrections allowed until payroll closes the month
       document.getElementById("submitted-banner").classList.toggle("hidden", !submitted);
       document.getElementById("bulkbar").classList.toggle("hidden", !canEdit || ROWS.length === 0);
       document.getElementById("addbtn").classList.toggle("hidden", !canEdit || !document.getElementById("site").value);
@@ -186,8 +186,8 @@
     async function mark(x, changes, div) {
       try {
         let reason = null;
-        if (x.submitted && ME.role === "admin") {
-          reason = prompt("This day is already submitted. Reason for the change (required, goes to audit log):");
+        if (x.submitted) {
+          reason = prompt("This day is already submitted. Reason for the change (required, goes to the audit log):");
           if (!reason) { await loadDay(); return; }
         }
         const r = await vmmsApi("/api/v1/attendance/mark", {
@@ -262,16 +262,25 @@
       const rows = TRANSFERABLE.filter(w => !q ||
         w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q));
       document.getElementById("tr-list").innerHTML = rows.length ? rows.map(w =>
-        `<button class="tr-pick w-full text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-3" data-id="${w.worker_id}">
+        `<button class="tr-pick w-full text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-3" data-id="${w.worker_id}" data-site="${w.current_site || ''}">
            <p class="font-medium text-gray-800 text-sm">${w.name}</p>
            <p class="text-xs text-gray-400">${w.worker_code} · ${w.current_site ? "allocated to " + w.current_site : "not allocated today"}</p>
          </button>`).join("")
         : '<p class="text-sm text-gray-400 p-3">No workers found.</p>';
       document.querySelectorAll(".tr-pick").forEach(b =>
-        b.addEventListener("click", () => doTransfer(b.dataset.id)));
+        b.addEventListener("click", () => doTransfer(b.dataset.id, b.dataset.site || null)));
     }
 
-    async function doTransfer(workerId) {
+    async function doTransfer(workerId, currentSite) {
+      let keep = false;
+      if (currentSite) {
+        const ans = prompt(
+          `This worker is allocated to ${currentSite}.\n\n` +
+          `Type  M  = MOVED here for the whole day\n` +
+          `Type  S  = SPLIT day (worked at ${currentSite} AND here)`, "M");
+        if (ans === null) return;
+        keep = ans.trim().toUpperCase().startsWith("S");
+      }
       try {
         const r = await vmmsApi("/api/v1/attendance/transfer", {
           method: "POST",
@@ -279,12 +288,14 @@
             work_date: document.getElementById("date").value,
             worker_id: workerId,
             to_site_id: document.getElementById("site").value,
+            keep_other: keep,
           }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || "Could not move the worker");
         closeTransfer();
-        toast(d.from ? `Moved from ${d.from} to this site` : "Worker added to this site");
+        toast(d.split ? `Split day — also working here (${d.from} record kept)`
+                      : (d.from ? `Moved from ${d.from} to this site` : "Worker added to this site"), true);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
