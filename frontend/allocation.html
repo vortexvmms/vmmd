@@ -14,21 +14,21 @@
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
       <div class="flex-1">
         <h1 class="text-lg font-bold">Daily Allocation</h1>
         <p class="text-red-100 text-xs" id="summary">Loading…</p>
       </div>
     </div>
-    <div class="flex gap-2 mt-3">
+    <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
       <input id="date" type="date"
-             class="flex-1 rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+             class="flex-1 md:max-w-xs rounded-lg p-2 text-gray-800 text-base">
+      <select id="site" class="flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
+  <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
     <div id="copybar" class="hidden bg-white rounded-xl shadow p-4 mb-3 text-center">
       <p class="text-sm text-gray-600 mb-2">No allocation yet for this date.</p>
       <button onclick="copyDay()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">
@@ -36,19 +36,21 @@
       </button>
     </div>
 
-    <input id="search" type="search" placeholder="Search worker…"
-           class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
+    <div class="md:flex md:items-center md:gap-4 md:mb-3">
+      <input id="search" type="search" placeholder="Search worker…"
+             class="w-full md:flex-1 border border-gray-300 rounded-lg p-3 text-base mb-3 md:mb-0 focus:outline-none focus:ring-2 focus:ring-red-600">
 
-    <label class="flex items-center gap-2 text-sm text-gray-600 mb-3">
-      <input id="only-un" type="checkbox" class="accent-red-700"> Show unallocated workers only
-    </label>
+      <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 md:mb-0 whitespace-nowrap">
+        <input id="only-un" type="checkbox" class="accent-red-700"> Show unallocated workers only
+      </label>
+    </div>
 
-    <div id="list" class="space-y-2"></div>
+    <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
   </main>
 
   <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md mx-auto flex items-center gap-3">
+    <div class="max-w-md md:max-w-6xl mx-auto flex items-center gap-3">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 selected</p>
       <button id="save" onclick="save()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
         Save Allocation
@@ -148,7 +150,7 @@
 
       if (onLeave.length && !q && !onlyUn) {
         const hdr = document.createElement("p");
-        hdr.className = "text-xs font-bold text-gray-400 mt-4 mb-1";
+        hdr.className = "text-xs font-bold text-gray-400 mt-4 mb-1 md:col-span-full";
         hdr.textContent = "HOME LEAVE (not allocatable)";
         list.appendChild(hdr);
         onLeave.forEach(w => {
