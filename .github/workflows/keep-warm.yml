@@ -1,0 +1,19 @@
+# Keeps the free Render server awake during Singapore working hours,
+# so supervisors never wait ~50s for a cold start.
+# Times are UTC; SGT = UTC + 8.
+#   23:00-13:00 UTC  =  07:00-21:00 SGT, every 10 minutes
+name: Keep backend warm
+
+on:
+  schedule:
+    - cron: '*/10 23,0-13 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the VMMS API
+        run: |
+          curl -s -o /dev/null -w "%{http_code}\n" \
+            https://vmms-backend-7j1v.onrender.com/api/v1/health || true
