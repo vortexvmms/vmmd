@@ -25,7 +25,7 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
+  <main class="flex-1 p-4 max-w-2xl xl:max-w-6xl mx-auto w-full pb-10">
     <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 flex gap-2 items-end flex-wrap">
       <div class="flex-1 min-w-[140px]">
         <label class="text-xs text-gray-500">Month</label>
@@ -37,16 +37,21 @@
       <button id="lockbtn" onclick="toggleLock()" class="hidden bg-gray-800 text-white font-bold px-3 py-2 rounded-lg text-sm">Close Month</button>
     </div>
 
-    <div class="grid grid-cols-2 gap-3 mb-4" id="totals"></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="totals"></div>
 
-    <h2 class="text-sm font-bold text-gray-500 mb-2">PER SITE (spec §9.1)</h2>
-    <div class="bg-white rounded-xl shadow overflow-x-auto mb-6">
-      <table class="w-full text-xs" id="sitetbl"></table>
-    </div>
-
-    <h2 class="text-sm font-bold text-gray-500 mb-2">PER WORKER</h2>
-    <div class="bg-white rounded-xl shadow overflow-x-auto">
-      <table class="w-full text-xs" id="wtbl"></table>
+    <div class="xl:grid xl:grid-cols-2 xl:gap-6">
+      <div>
+        <h2 class="text-sm font-bold text-gray-500 mb-2">PER SITE (spec §9.1)</h2>
+        <div class="bg-white rounded-xl shadow overflow-x-auto mb-6">
+          <table class="w-full text-xs" id="sitetbl"></table>
+        </div>
+      </div>
+      <div>
+        <h2 class="text-sm font-bold text-gray-500 mb-2">PER WORKER</h2>
+        <div class="bg-white rounded-xl shadow overflow-x-auto">
+          <table class="w-full text-xs" id="wtbl"></table>
+        </div>
+      </div>
     </div>
   </main>
 
