@@ -13,17 +13,19 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+   <div class="flex items-center gap-3 max-w-5xl mx-auto w-full">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
     <div class="flex-1">
       <h1 class="text-lg font-bold">Dashboard</h1>
       <p class="text-red-100 text-xs" id="asof">Loading…</p>
     </div>
     <button onclick="load()" class="text-xl">⟳</button>
+   </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-10">
-    <div class="grid grid-cols-2 gap-3" id="cards"></div>
+  <main class="flex-1 p-4 max-w-md md:max-w-5xl mx-auto w-full pb-10">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="cards"></div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">TODAY'S UPDATES</h2>
     <div class="bg-white rounded-xl shadow p-4">
