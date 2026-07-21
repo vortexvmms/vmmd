@@ -29,9 +29,9 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
-    <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 space-y-3">
-      <div class="flex gap-2">
+  <main class="flex-1 p-4 max-w-2xl xl:max-w-7xl mx-auto w-full pb-10">
+    <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 space-y-3 lg:space-y-0 lg:flex lg:items-end lg:gap-3">
+      <div class="flex gap-2 lg:flex-1">
         <div class="flex-1">
           <label class="text-xs text-gray-500">From</label>
           <input id="from" type="date" class="w-full border border-gray-300 rounded-lg p-2">
@@ -41,7 +41,7 @@
           <input id="to" type="date" class="w-full border border-gray-300 rounded-lg p-2">
         </div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 lg:flex-1">
         <select id="site" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white">
           <option value="">All sites</option>
         </select>
@@ -52,11 +52,11 @@
         </select>
       </div>
       <input id="wsearch" type="search" placeholder="Filter by worker name (optional)"
-             class="w-full border border-gray-300 rounded-lg p-2">
-      <button onclick="run()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Run Report</button>
+             class="w-full lg:flex-1 border border-gray-300 rounded-lg p-2">
+      <button onclick="run()" class="w-full lg:w-auto lg:px-8 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg whitespace-nowrap">Run Report</button>
     </div>
 
-    <div id="actions" class="hidden flex gap-3 mb-3">
+    <div id="actions" class="hidden flex gap-3 mb-3 lg:max-w-md">
       <button onclick="exportXlsx()" class="flex-1 border-2 border-green-700 text-green-700 font-bold py-2 rounded-lg text-sm">Export Excel</button>
       <button onclick="window.print()" class="flex-1 border-2 border-gray-500 text-gray-600 font-bold py-2 rounded-lg text-sm">Print / PDF</button>
     </div>
