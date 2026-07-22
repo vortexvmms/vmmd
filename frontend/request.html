@@ -29,10 +29,16 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
-    <p class="text-xs text-gray-500 mb-3">
-      Tick the workers you want at your site for the chosen day, then Send Request.
-      The allocator sees your request while planning the next day.
-    </p>
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <p class="text-xs text-gray-500">
+        Tick the workers you want at your site for the chosen day, then Send Request.
+        The allocator sees your request while planning the next day.
+      </p>
+      <button id="copylast" onclick="copyLast()"
+              class="shrink-0 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
+        Copy last request
+      </button>
+    </div>
 
     <input id="search" type="search" placeholder="Search worker…"
            class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
@@ -151,6 +157,32 @@
         });
         list.appendChild(div);
       });
+    }
+
+    async function copyLast() {
+      const btn = document.getElementById("copylast");
+      const siteId = document.getElementById("site").value;
+      const before = document.getElementById("date").value;
+      btn.disabled = true; btn.textContent = "Loading…";
+      try {
+        const r = await vmmsApi(`/api/v1/requests/last?site_id=${siteId}&before=${before}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Could not load");
+        if (!d.found) { toast("No earlier request found for this site."); return; }
+        // keep only workers still active today
+        const activeIds = new Set(WORKERS.map(w => w.id));
+        const copied = d.worker_ids.filter(id => activeIds.has(id));
+        const dropped = d.worker_ids.length - copied.length;
+        SELECTED = new Set(copied);
+        const [y, m, dd] = d.request_date.split("-");
+        toast(`Copied ${copied.length} from ${dd}/${m}/${y}` +
+              (dropped ? ` (${dropped} no longer active skipped)` : "") + " — review, then Send Request.", true);
+        render();
+      } catch (ex) {
+        toast(ex.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = "Copy last request";
+      }
     }
 
     async function save() {
