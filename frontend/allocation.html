@@ -28,6 +28,8 @@
               class="flex-1 rounded-lg py-2 text-sm font-bold">By Worker</button>
       <button id="tab-site" onclick="setMode('site')"
               class="flex-1 rounded-lg py-2 text-sm font-bold">By Site</button>
+      <button id="tab-requests" onclick="setMode('requests')"
+              class="flex-1 rounded-lg py-2 text-sm font-bold">Requests</button>
     </div>
 
     <div class="flex gap-2 mt-2 max-w-6xl mx-auto w-full">
@@ -45,7 +47,7 @@
       </button>
     </div>
 
-    <div class="md:flex md:items-center md:gap-4 md:mb-3">
+    <div id="filterbar" class="md:flex md:items-center md:gap-4 md:mb-3">
       <input id="search" type="search" placeholder="Search worker…"
              class="w-full md:flex-1 border border-gray-300 rounded-lg p-3 text-base mb-3 md:mb-0 focus:outline-none focus:ring-2 focus:ring-red-600">
 
@@ -78,6 +80,7 @@
     let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
     let REQBYSITE = {}, REQANY = {};   // requests: site_id -> Set(worker_id) ; worker_id -> [site_name]
+    let REQROWS = [], ALLOCMAP = {};   // raw request rows ; worker_id -> {site_id, site_name} (where allocated)
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -111,9 +114,13 @@
 
     function applyModeChrome() {
       const on = "bg-white text-red-700", off = "bg-red-800 text-white";
-      document.getElementById("tab-worker").className = "flex-1 rounded-lg py-2 text-sm font-bold " + (MODE === "worker" ? on : off);
-      document.getElementById("tab-site").className   = "flex-1 rounded-lg py-2 text-sm font-bold " + (MODE === "site" ? on : off);
+      const cls = m => "flex-1 rounded-lg py-2 text-sm font-bold " + (MODE === m ? on : off);
+      document.getElementById("tab-worker").className = cls("worker");
+      document.getElementById("tab-site").className   = cls("site");
+      document.getElementById("tab-requests").className = cls("requests");
       document.getElementById("site").classList.toggle("hidden", MODE !== "site");
+      document.getElementById("filterbar").classList.toggle("hidden", MODE === "requests");
+      document.getElementById("save").classList.toggle("hidden", MODE === "requests");
       document.getElementById("only-un-label").textContent =
         MODE === "site" ? "Show unallocated workers only" : "Show unassigned workers only";
       document.getElementById("save").textContent = MODE === "site" ? "Save Allocation" : "Save All";
@@ -125,7 +132,7 @@
       if (m === "site") {
         const siteId = document.getElementById("site").value;
         SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
-      } else {
+      } else if (m === "worker") {
         snapshotAssign();
       }
       render();
@@ -144,10 +151,12 @@
         vmmsApi(`/api/v1/requests?date=${date}`),
       ]);
       ALLOC = r.ok ? await r.json() : [];
+      ALLOCMAP = {};
+      ALLOC.forEach(a => { ALLOCMAP[a.worker_id] = { site_id: a.site_id, site_name: a.site_name }; });
       // requested workers for this date (what each site asked for)
-      const reqs = rq.ok ? await rq.json() : [];
+      REQROWS = rq.ok ? await rq.json() : [];
       REQBYSITE = {}; REQANY = {};
-      reqs.forEach(x => {
+      REQROWS.forEach(x => {
         (REQBYSITE[x.site_id] = REQBYSITE[x.site_id] || new Set()).add(x.worker_id);
         (REQANY[x.worker_id] = REQANY[x.worker_id] || []).push(x.site_name);
       });
@@ -161,7 +170,65 @@
       render();
     }
 
-    function render() { MODE === "site" ? renderSite() : renderWorker(); }
+    function render() {
+      if (MODE === "requests") return renderRequests();
+      return MODE === "site" ? renderSite() : renderWorker();
+    }
+
+    /* ---------------- REQUESTS (did each site get what it asked for?) ---------------- */
+    function renderRequests() {
+      // group requested workers by site
+      const bySite = {};
+      REQROWS.forEach(x => {
+        (bySite[x.site_id] = bySite[x.site_id] || { name: x.site_name, rows: [] }).rows.push(x);
+      });
+
+      let totalReq = 0, totalGot = 0, totalPend = 0;
+      const list = document.getElementById("list");
+      list.className = "space-y-4";
+      list.innerHTML = "";
+      const siteIds = Object.keys(bySite).sort((a, b) => bySite[a].name.localeCompare(bySite[b].name));
+      document.getElementById("empty").classList.toggle("hidden", siteIds.length > 0);
+      if (!siteIds.length) {
+        document.getElementById("empty").textContent = "No manpower requests for this date yet.";
+        document.getElementById("empty").classList.remove("hidden");
+      }
+
+      siteIds.forEach(sid => {
+        const grp = bySite[sid];
+        let got = 0, pend = 0;
+        const rowsHTML = grp.rows
+          .sort((a, b) => a.worker_name.localeCompare(b.worker_name))
+          .map(x => {
+            const al = ALLOCMAP[x.worker_id];
+            let chip;
+            if (al && al.site_id === sid) { got++; chip = `<span class="text-[11px] font-bold text-white bg-green-600 rounded px-2 py-0.5">ALLOCATED</span>`; }
+            else if (al) { pend++; chip = `<span class="text-[11px] font-bold text-white bg-yellow-500 rounded px-2 py-0.5">AT ${al.site_name.toUpperCase()}</span>`; }
+            else { pend++; chip = `<span class="text-[11px] font-bold text-white bg-red-600 rounded px-2 py-0.5">NOT ALLOCATED</span>`; }
+            return `<div class="flex items-center justify-between py-1.5 border-t border-gray-200">
+                      <span class="text-sm text-gray-800">${x.worker_code}_${x.worker_name}</span>${chip}
+                    </div>`;
+          }).join("");
+        totalReq += grp.rows.length; totalGot += got; totalPend += pend;
+
+        const card = document.createElement("div");
+        card.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4";
+        card.innerHTML =
+          `<div class="flex items-center justify-between mb-1">
+             <p class="font-bold text-gray-800">${grp.name}</p>
+             <p class="text-xs ${pend ? "text-red-700 font-bold" : "text-green-700 font-bold"}">
+               ${got}/${grp.rows.length} allocated${pend ? " · " + pend + " pending" : " ✓"}</p>
+           </div>${rowsHTML}`;
+        list.appendChild(card);
+      });
+
+      document.getElementById("summary").textContent =
+        totalReq ? `${totalGot}/${totalReq} requested workers allocated · ${totalPend} pending`
+                 : "No requests for this date";
+      document.getElementById("selcount").textContent =
+        totalPend ? `${totalPend} requested worker(s) still to allocate — switch to By Site or By Worker to fix.`
+                  : "All requests allocated ✓";
+    }
 
     /* ---------------- BY SITE (tick workers for one site) ---------------- */
     function renderSite() {
