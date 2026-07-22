@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.17.0")  # + manpower requests, copy last request, dashboard any-date
+app = FastAPI(title="VMMS API", version="0.18.0")  # + morning/evening attendance stages, no default tick
 
 app.add_middleware(
     CORSMiddleware,
@@ -785,6 +785,7 @@ class BulkEnd(BaseModel):
 class SubmitDay(BaseModel):
     work_date: str
     site_id: str
+    stage: str | None = "evening"   # "morning" (attendance verified) | "evening" (end times, final)
 
 
 async def _load_day(client, token, work_date: str, site_id: str | None):
@@ -814,7 +815,10 @@ async def day_sheet(date: str, site_id: str = "",
                 "site_name": (a.get("sites") or {}).get("site_name", "?"),
                 "worker_name": (a.get("workers") or {}).get("name", "?"),
                 "worker_code": (a.get("workers") or {}).get("worker_code", ""),
-                "present": att["present"] if att else True,
+                # No default tick (site request): a worker is "marked" only once the
+                # supervisor has verified him. Unmarked workers show unticked.
+                "marked": bool(att),
+                "present": att["present"] if att else False,
                 "start_time": (att["start_time"][:5] if att and att["start_time"] else "08:00"),
                 "end_time": (att["end_time"][:5] if att and att["end_time"] else None),
                 "end_next_day": att["end_next_day"] if att else False,
@@ -954,10 +958,13 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         updated = 0
         for a in rows:
             att = a.get("attendance")
-            if att and att["submitted_at"]:
+            # only workers already verified present get a bulk end time
+            # (no default tick — unmarked and absent workers are skipped)
+            if not att:
                 continue
-            present = att["present"] if att else True
-            if not present:
+            if att["submitted_at"]:
+                continue
+            if not att["present"]:
                 continue
             start = att["start_time"][:5] if att and att["start_time"] else "08:00"
             normal, ot = compute_hours(day_type, start, body.end_time, False)
@@ -979,6 +986,35 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         return {"ok": True, "updated": updated}
 
 
+@app.post("/api/v1/attendance/present_all")
+async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
+    """Quick helper: mark every not-yet-marked worker as Present (no end time).
+    The supervisor then unticks the few who are absent. Default is still unticked."""
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=15) as client:
+        rows = await _load_day(client, user["token"], body.work_date, body.site_id)
+        if not rows:
+            raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
+        if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
+            raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
+        day_type = await get_day_type(client, user["token"], body.work_date)
+        added = 0
+        for a in rows:
+            if a.get("attendance"):
+                continue   # already marked (present or absent) — leave it
+            await client.post(
+                f"{REST}/attendance",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json={"allocation_id": a["id"], "present": True, "start_time": "08:00",
+                      "end_time": None, "end_next_day": False, "normal_hours": 0, "ot_hours": 0,
+                      "day_type": day_type, "absence_type": None})
+            added += 1
+        await audit(client, user, "present_all", "attendance",
+                    f"{body.work_date}:{body.site_id}", None, {"marked_present": added})
+        return {"ok": True, "marked_present": added}
+
+
 @app.post("/api/v1/attendance/submit")
 async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
     if user["role"] not in ("admin", "site_sup"):
@@ -989,6 +1025,24 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
         if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
             raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
+
+        # MORNING stage (toolbox meeting): everyone must be verified — present, or
+        # marked absent / MC. No end times needed yet. Nothing is locked.
+        if (body.stage or "evening") == "morning":
+            unmarked = [(a.get("workers") or {}).get("name", "?")
+                        for a in rows if not a.get("attendance")]
+            if unmarked:
+                raise HTTPException(status_code=400,
+                    detail="Not yet verified: " + ", ".join(unmarked[:5]) +
+                           (f" (+{len(unmarked)-5} more)" if len(unmarked) > 5 else "") +
+                           ". Tick who is present, and mark the rest Absent or MC.")
+            present = sum(1 for a in rows if a["attendance"]["present"])
+            await audit(client, user, "submit_morning", "attendance",
+                        f"{body.work_date}:{body.site_id}", None,
+                        {"present": present, "total": len(rows)})
+            return {"ok": True, "stage": "morning", "present": present, "total": len(rows)}
+
+        # EVENING stage (final): present workers need an end time; then lock the day.
         missing = [
             (a.get("workers") or {}).get("name", "?")
             for a in rows
@@ -1010,7 +1064,7 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500, detail="Could not submit the day")
         await audit(client, user, "submit_day", "attendance",
                     f"{body.work_date}:{body.site_id}", None, {"workers": len(att_ids)})
-        return {"ok": True, "submitted": len(att_ids)}
+        return {"ok": True, "stage": "evening", "submitted": len(att_ids)}
 
 
 # ---------------- Wrong-site transfer (site request 22/07/2026) ----------------
