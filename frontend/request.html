@@ -100,7 +100,12 @@
     async function loadDay() {
       const date = document.getElementById("date").value;
       const r = await vmmsApi(`/api/v1/requests?date=${date}`);
-      REQ = r.ok ? await r.json() : [];
+      if (!r.ok) {
+        REQ = [];
+        toast("Requests are not switched on yet — the administrator must run the setup step first.", true);
+      } else {
+        REQ = await r.json();
+      }
       const siteId = document.getElementById("site").value;
       SELECTED = new Set(REQ.filter(a => a.site_id === siteId).map(a => a.worker_id));
       render();

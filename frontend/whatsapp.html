@@ -93,8 +93,9 @@
       ME = await r.json();
 
       if (ME.role === "site_sup") {
-        document.getElementById("type-row").classList.add("hidden");
-        setType("update");
+        // supervisors: their own Request + their Site Update (no all-sites Allocation)
+        document.getElementById("t-alloc").classList.add("hidden");
+        setType("request");
       } else {
         setType("alloc");
       }
