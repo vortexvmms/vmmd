@@ -10,25 +10,63 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <style>
+    .print-only { display: none; }
+    @media print {
+      @page { size: A4 portrait; margin: 14mm; }
+      body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      main { max-width: none !important; padding: 0 !important; }
+      .card { box-shadow: none !important; }
+      table { page-break-inside: auto; }
+      tr, .card { page-break-inside: avoid; }
+      h2 { page-break-after: avoid; }
+    }
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+  <header class="no-print bg-red-700 text-white p-4 shadow sticky top-0 z-10">
    <div class="flex items-center gap-3 max-w-5xl mx-auto w-full">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
     <div class="flex-1">
       <h1 class="text-lg font-bold">Dashboard</h1>
       <p class="text-red-100 text-xs" id="asof">Loading…</p>
     </div>
-    <button onclick="load()" class="text-xl">⟳</button>
+    <button onclick="load()" title="Refresh" class="text-xl">⟳</button>
+   </div>
+   <div class="flex items-center gap-2 mt-3 max-w-5xl mx-auto w-full">
+     <input id="date" type="date" class="rounded-lg p-2 text-gray-800 text-base">
+     <button onclick="setToday()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-3 py-2 rounded-lg">Today</button>
+     <div class="flex-1"></div>
+     <button onclick="window.print()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Print / PDF</button>
    </div>
   </header>
+
+  <!-- Printed A4 header (hidden on screen) -->
+  <div class="print-only" style="border-bottom:3px solid #C00000; padding-bottom:8px; margin-bottom:14px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex" style="height:34px;" onerror="this.style.display='none'">
+        <div>
+          <div style="font-size:15px; font-weight:bold; color:#C00000;">VORTEX MANPOWER MANAGEMENT SYSTEM</div>
+          <div style="font-size:11px; color:#595959;">Daily Dashboard Report</div>
+        </div>
+      </div>
+      <div style="font-size:10px; color:#595959; text-align:right; line-height:1.5;">
+        <div><b>As of:</b> <span id="p-date">—</span></div>
+        <div><b>Generated:</b> <span id="p-gen">—</span></div>
+        <div><b>Prepared by:</b> <span id="p-user">—</span></div>
+      </div>
+    </div>
+  </div>
 
   <main class="flex-1 p-4 max-w-md md:max-w-5xl mx-auto w-full pb-10">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="cards"></div>
 
-    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">TODAY'S UPDATES</h2>
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">UPDATES FOR THIS DAY</h2>
+    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
       <div class="flex items-start gap-2 mb-2">
         <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
         <p class="text-sm text-gray-700 flex-1" id="pending">—</p>
@@ -39,50 +77,76 @@
       </div>
     </div>
 
-    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (THIS MONTH)</h2>
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (MONTH TO SELECTED DATE)</h2>
+    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
       <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 text-xs">
+        <thead class="bg-gray-200 text-gray-600 text-xs">
           <tr>
             <th class="text-left p-3">Site</th>
-            <th class="text-right p-3">Today</th>
+            <th class="text-right p-3">On day</th>
             <th class="text-right p-3">Normal h</th>
             <th class="text-right p-3">OT h</th>
           </tr>
         </thead>
         <tbody id="sites"></tbody>
+        <tfoot id="sites-foot" class="border-t-2 border-gray-400 font-bold text-gray-800"></tfoot>
       </table>
     </div>
+
+    <p class="print-only" style="font-size:9px; color:#8a8a8a; margin-top:12px;">
+      VMMS · Internal Use Only · Figures are as recorded at time of printing.
+    </p>
   </main>
 
   <script>
     requireLogin();
 
+    let ME = null;
+
+    function fmtDMY(iso) { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
+    function todayIso() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+
     function card(label, value, accent) {
-      return `<div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+      return `<div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
         <p class="text-2xl font-bold ${accent || "text-gray-800"}">${value}</p>
         <p class="text-xs text-gray-500 mt-1">${label}</p></div>`;
     }
 
+    function setToday() { document.getElementById("date").value = todayIso(); load(); }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (r.ok) { ME = await r.json(); }
+      document.getElementById("date").value = todayIso();
+      await load();
+    }
+
     async function load() {
-      const r = await vmmsApi("/api/v1/dashboard");
+      const date = document.getElementById("date").value || todayIso();
+      const r = await vmmsApi(`/api/v1/dashboard?date=${date}`);
       if (!r.ok) { if (r.status === 401) vmmsLogout(); return; }
       const d = await r.json();
 
-      const [y, m, dd] = d.date.split("-");
-      document.getElementById("asof").textContent = `As of ${dd}/${m}/${y}`;
+      document.getElementById("asof").textContent = `As of ${fmtDMY(d.date)}`;
+
+      // print header fields
+      document.getElementById("p-date").textContent = fmtDMY(d.date);
+      const now = new Date();
+      document.getElementById("p-gen").textContent =
+        fmtDMY(todayIso()) + " " + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + " SGT";
+      document.getElementById("p-user").textContent = ME ? ME.name : "—";
 
       document.getElementById("cards").innerHTML = d.scoped
         ? card("My sites", d.total_sites) +
-          card("Allocated today", d.today_allocated, "text-red-700") +
-          card("Today MC", d.today_mc ?? 0, "text-yellow-600") +
+          card("Allocated this day", d.today_allocated, "text-red-700") +
+          card("MC this day", d.today_mc ?? 0, "text-yellow-600") +
           card("Month normal hours", d.month_normal_hours) +
           card("Month OT hours", d.month_ot_hours, "text-red-700")
         : card("Active workers", d.total_workers) +
           card("On leave", d.on_leave, "text-yellow-600") +
           card("Active sites", d.total_sites) +
-          card("Allocated today", d.today_allocated, "text-red-700") +
-          card("Today MC", d.today_mc ?? 0, "text-yellow-600") +
+          card("Allocated this day", d.today_allocated, "text-red-700") +
+          card("MC this day", d.today_mc ?? 0, "text-yellow-600") +
           card("Month normal hours", d.month_normal_hours) +
           card("Month OT hours", d.month_ot_hours, "text-red-700");
 
@@ -92,15 +156,25 @@
         d.completed_updates.length ? d.completed_updates.join(", ") : "None yet";
 
       document.getElementById("sites").innerHTML = d.site_summary.map(s =>
-        `<tr class="border-t border-gray-100">
+        `<tr class="border-t border-gray-200">
            <td class="p-3 font-medium text-gray-800">${s.site_name}</td>
            <td class="p-3 text-right">${s.today}</td>
            <td class="p-3 text-right">${s.month_nh}</td>
            <td class="p-3 text-right ${s.month_ot > 0 ? "text-red-700 font-bold" : ""}">${s.month_ot}</td>
          </tr>`).join("");
+
+      const tNh = d.site_summary.reduce((a, s) => a + s.month_nh, 0);
+      const tOt = d.site_summary.reduce((a, s) => a + s.month_ot, 0);
+      const tDay = d.site_summary.reduce((a, s) => a + s.today, 0);
+      document.getElementById("sites-foot").innerHTML =
+        `<tr><td class="p-3">TOTAL</td>
+             <td class="p-3 text-right">${tDay}</td>
+             <td class="p-3 text-right">${Math.round(tNh * 10) / 10}</td>
+             <td class="p-3 text-right">${Math.round(tOt * 10) / 10}</td></tr>`;
     }
 
-    load();
+    document.getElementById("date").addEventListener("change", load);
+    boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
