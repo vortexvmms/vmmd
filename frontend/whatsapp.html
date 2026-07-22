@@ -21,8 +21,9 @@
         <p class="text-red-100 text-xs" id="hint">Choose type and date, then Generate</p>
       </div>
     </div>
-    <div class="flex gap-2 mt-3" id="type-row">
-      <button id="t-alloc" class="flex-1 bg-white text-red-700 font-bold rounded-lg p-2 text-sm">Allocation (all sites)</button>
+    <div class="flex flex-wrap gap-2 mt-3" id="type-row">
+      <button id="t-alloc" class="flex-1 bg-white text-red-700 font-bold rounded-lg p-2 text-sm">Allocation</button>
+      <button id="t-request" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Request</button>
       <button id="t-update" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Site Update</button>
     </div>
     <div class="flex gap-2 mt-2">
@@ -68,16 +69,19 @@
     }
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
 
+    function btnCls(active) {
+      return "flex-1 font-bold rounded-lg p-2 text-sm " + (active ? "bg-white text-red-700" : "bg-red-900 text-white");
+    }
+
     function setType(t) {
       TYPE = t;
-      document.getElementById("t-alloc").className =
-        "flex-1 font-bold rounded-lg p-2 text-sm " + (t === "alloc" ? "bg-white text-red-700" : "bg-red-900 text-white");
-      document.getElementById("t-update").className =
-        "flex-1 font-bold rounded-lg p-2 text-sm " + (t === "update" ? "bg-white text-red-700" : "bg-red-900 text-white");
+      document.getElementById("t-alloc").className   = btnCls(t === "alloc");
+      document.getElementById("t-request").className = btnCls(t === "request");
+      document.getElementById("t-update").className  = btnCls(t === "update");
       document.getElementById("site").classList.toggle("hidden", t !== "update");
-      // allocation message is for TOMORROW by default; update is for TODAY
+      // allocation + request are for TOMORROW; update is for TODAY
       document.getElementById("date").value =
-        fmtDate(new Date(Date.now() + (t === "alloc" ? 24 * 3600 * 1000 : 0)));
+        fmtDate(new Date(Date.now() + (t === "update" ? 0 : 24 * 3600 * 1000)));
       document.getElementById("msg").classList.add("hidden");
       document.getElementById("actionbar").classList.add("hidden");
       document.getElementById("warn").classList.add("hidden");
@@ -117,6 +121,8 @@
         let url;
         if (TYPE === "alloc") {
           url = `/api/v1/messages/allocation?date=${date}`;
+        } else if (TYPE === "request") {
+          url = `/api/v1/messages/requests?date=${date}`;
         } else {
           const sid = document.getElementById("site").value;
           if (!sid) throw new Error("No site available for this date");
@@ -136,6 +142,9 @@
           warn.classList.remove("hidden");
         } else if (TYPE === "alloc" && data.workers === 0) {
           warn.textContent = "⚠ No workers allocated for this date yet.";
+          warn.classList.remove("hidden");
+        } else if (TYPE === "request" && data.workers === 0) {
+          warn.textContent = "⚠ No manpower requests submitted for this date yet.";
           warn.classList.remove("hidden");
         } else {
           warn.classList.add("hidden");
@@ -168,6 +177,7 @@
     }
 
     document.getElementById("t-alloc").addEventListener("click", () => setType("alloc"));
+    document.getElementById("t-request").addEventListener("click", () => setType("request"));
     document.getElementById("t-update").addEventListener("click", () => setType("update"));
     document.getElementById("date").addEventListener("change", loadSites);
 

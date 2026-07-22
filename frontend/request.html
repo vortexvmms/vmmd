@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Manpower Request</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold">Request Manpower</h1>
+        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
+      <input id="date" type="date"
+             class="flex-1 md:max-w-xs rounded-lg p-2 text-gray-800 text-base">
+      <select id="site" class="flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
+    <p class="text-xs text-gray-500 mb-3">
+      Tick the workers you want at your site for the chosen day, then Send Request.
+      The allocator sees your request while planning the next day.
+    </p>
+
+    <input id="search" type="search" placeholder="Search worker…"
+           class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
+
+    <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 whitespace-nowrap">
+      <input id="only-sel" type="checkbox" class="accent-red-700"> Show my picked workers only
+    </label>
+
+    <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
+    <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
+  </main>
+
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
+    <div class="max-w-md md:max-w-6xl mx-auto flex items-center gap-3">
+      <p class="text-sm text-gray-600 flex-1" id="selcount">0 requested</p>
+      <button id="save" onclick="save()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
+        Send Request
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+
+  <script>
+    requireLogin();
+
+    let ME = null, SITES = [], WORKERS = [], REQ = [], SELECTED = new Set();
+
+    function toast(msg, long = false) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
+    }
+    function fmtDate(d) { return d.toISOString().slice(0, 10); }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      if (!["admin", "main_sup", "site_sup"].includes(ME.role)) {
+        document.body.innerHTML = '<p class="p-8 text-center text-gray-500">This page is for site supervisors.</p>';
+        return;
+      }
+      const tmr = new Date(Date.now() + 24 * 3600 * 1000);
+      document.getElementById("date").value = fmtDate(tmr);
+
+      const [rs, rw] = await Promise.all([vmmsApi("/api/v1/sites"), vmmsApi("/api/v1/workers")]);
+      let sites = (await rs.json()).filter(s => s.status === "active");
+      // Site supervisors only request for their own site(s)
+      if (ME.role === "site_sup") {
+        sites = sites.filter(s => (s.supervisors || []).some(x => x.user_id === ME.user_id));
+      }
+      SITES = sites;
+      WORKERS = (await rw.json()).filter(w => w.status === "active");
+
+      if (!SITES.length) {
+        document.body.innerHTML = '<p class="p-8 text-center text-gray-500">No site is assigned to you yet. Ask the administrator to assign your site.</p>';
+        return;
+      }
+      document.getElementById("site").innerHTML =
+        SITES.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+      await loadDay();
+    }
+
+    async function loadDay() {
+      const date = document.getElementById("date").value;
+      const r = await vmmsApi(`/api/v1/requests?date=${date}`);
+      REQ = r.ok ? await r.json() : [];
+      const siteId = document.getElementById("site").value;
+      SELECTED = new Set(REQ.filter(a => a.site_id === siteId).map(a => a.worker_id));
+      render();
+    }
+
+    function render() {
+      const siteId = document.getElementById("site").value;
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const onlySel = document.getElementById("only-sel").checked;
+
+      // workers this site already requested elsewhere-info: show if another site also wants them
+      const otherWant = {};
+      REQ.forEach(a => { if (a.site_id !== siteId) (otherWant[a.worker_id] = otherWant[a.worker_id] || []).push(a.site_name); });
+
+      document.getElementById("summary").textContent =
+        `${SELECTED.size} requested · ${WORKERS.length} active workers`;
+      document.getElementById("selcount").textContent = `${SELECTED.size} requested`;
+
+      const rows = WORKERS.filter(w =>
+        (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
+        (!onlySel || SELECTED.has(w.id))
+      );
+
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
+
+      rows.forEach(w => {
+        const others = otherWant[w.id];
+        const div = document.createElement("label");
+        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center gap-3 cursor-pointer active:bg-gray-50";
+        div.innerHTML =
+          `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""}>
+           <div class="flex-1 min-w-0">
+             <p class="font-medium text-gray-800 truncate">${w.name}</p>
+             <p class="text-xs text-gray-400">${w.worker_code}${others ? ' · also asked by ' + others.join(", ") : ""}</p>
+           </div>`;
+        div.querySelector("input").addEventListener("change", (e) => {
+          e.target.checked ? SELECTED.add(w.id) : SELECTED.delete(w.id);
+          document.getElementById("selcount").textContent = `${SELECTED.size} requested`;
+          document.getElementById("summary").textContent =
+            `${SELECTED.size} requested · ${WORKERS.length} active workers`;
+        });
+        list.appendChild(div);
+      });
+    }
+
+    async function save() {
+      const btn = document.getElementById("save");
+      btn.disabled = true; btn.textContent = "Sending…";
+      try {
+        const r = await vmmsApi("/api/v1/requests/bulk", {
+          method: "POST",
+          body: JSON.stringify({
+            request_date: document.getElementById("date").value,
+            site_id: document.getElementById("site").value,
+            worker_ids: [...SELECTED],
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not send");
+        toast(`Request sent — ${data.total} worker(s) for your site`, true);
+        await loadDay();
+      } catch (ex) {
+        toast(ex.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = "Send Request";
+      }
+    }
+
+    document.getElementById("date").addEventListener("change", loadDay);
+    document.getElementById("site").addEventListener("change", () => {
+      const siteId = document.getElementById("site").value;
+      SELECTED = new Set(REQ.filter(a => a.site_id === siteId).map(a => a.worker_id));
+      render();
+    });
+    document.getElementById("search").addEventListener("input", render);
+    document.getElementById("only-sel").addEventListener("change", render);
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

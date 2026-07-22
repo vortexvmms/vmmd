@@ -77,6 +77,7 @@
     let MODE = "worker";               // "worker" (default) or "site"
     let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
+    let REQBYSITE = {}, REQANY = {};   // requests: site_id -> Set(worker_id) ; worker_id -> [site_name]
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -138,8 +139,18 @@
 
     async function loadDay() {
       const date = document.getElementById("date").value;
-      const r = await vmmsApi(`/api/v1/allocations?date=${date}`);
+      const [r, rq] = await Promise.all([
+        vmmsApi(`/api/v1/allocations?date=${date}`),
+        vmmsApi(`/api/v1/requests?date=${date}`),
+      ]);
       ALLOC = r.ok ? await r.json() : [];
+      // requested workers for this date (what each site asked for)
+      const reqs = rq.ok ? await rq.json() : [];
+      REQBYSITE = {}; REQANY = {};
+      reqs.forEach(x => {
+        (REQBYSITE[x.site_id] = REQBYSITE[x.site_id] || new Set()).add(x.worker_id);
+        (REQANY[x.worker_id] = REQANY[x.worker_id] || []).push(x.site_name);
+      });
       document.getElementById("copybar").classList.toggle("hidden", ALLOC.length > 0);
       if (MODE === "site") {
         const siteId = document.getElementById("site").value;
@@ -164,10 +175,14 @@
       const active = WORKERS.filter(w => w.status === "active");
       const onLeave = WORKERS.filter(w => w.status === "on_leave");
       const unallocCount = active.filter(w => !elsewhere[w.id] && !SELECTED.has(w.id)).length;
+      const reqSet = REQBYSITE[siteId] || new Set();
 
       document.getElementById("summary").textContent =
         `${ALLOC.length} allocated · ${unallocCount} unallocated · ${onLeave.length} on leave`;
-      document.getElementById("selcount").textContent = `${SELECTED.size} selected for this site`;
+      document.getElementById("selcount").textContent =
+        reqSet.size
+          ? `Requested here: ${reqSet.size} · Allocated: ${SELECTED.size}`
+          : `${SELECTED.size} selected for this site`;
       document.getElementById("save").disabled = false;
 
       const rows = active.filter(w =>
@@ -182,13 +197,15 @@
 
       rows.forEach(w => {
         const other = elsewhere[w.id];
+        const reqHere = reqSet.has(w.id);
         const div = document.createElement("label");
-        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center gap-3 " +
+        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 flex items-center gap-3 " +
+                        (reqHere && !other ? "border-red-400 " : "border-gray-300 ") +
                         (other ? "opacity-50" : "cursor-pointer active:bg-gray-50");
         div.innerHTML =
           `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""} ${other ? "disabled" : ""}>
            <div class="flex-1">
-             <p class="font-medium text-gray-800">${w.name}</p>
+             <p class="font-medium text-gray-800">${w.name}${reqHere ? ' <span class="ml-1 text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5 align-middle">REQUESTED</span>' : ""}</p>
              <p class="text-xs text-gray-400">${w.worker_code}${other ? " · already at " + other : ""}</p>
            </div>`;
         if (!other) {
@@ -240,14 +257,17 @@
 
       rows.forEach(w => {
         const changed = ASSIGN[w.id] !== ORIG[w.id];
+        const reqBy = REQANY[w.id];
         const div = document.createElement("div");
         div.className = "rounded-xl shadow-sm p-3 flex items-center gap-3 border " +
-                        (changed ? "bg-yellow-50 border-yellow-400" : "bg-gray-100 border-gray-300");
+                        (changed ? "bg-yellow-50 border-yellow-400"
+                                 : (reqBy ? "bg-gray-100 border-red-300" : "bg-gray-100 border-gray-300"));
         const wasNote = changed ? (ORIG[w.id] ? " · was " + siteName(ORIG[w.id]) : " · was none") : "";
+        const reqNote = reqBy ? ` <span class="text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5">REQ: ${reqBy.join(", ")}</span>` : "";
         div.innerHTML =
           `<div class="flex-1 min-w-0">
              <p class="font-medium text-gray-800 truncate">${w.name}</p>
-             <p class="text-xs text-gray-400">${w.worker_code}${wasNote}</p>
+             <p class="text-xs text-gray-400">${w.worker_code}${wasNote}${reqNote}</p>
            </div>
            <select class="w-36 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts(ASSIGN[w.id])}</select>`;
         div.querySelector("select").addEventListener("change", (e) => {
