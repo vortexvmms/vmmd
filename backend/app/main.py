@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.16.0")  # + manpower requests (site_sup → admin)
+app = FastAPI(title="VMMS API", version="0.16.1")  # + manpower requests (site_sup → admin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -577,8 +577,7 @@ async def list_requests(date: str, user: dict = Depends(get_current_user)):
             f"{REST}/manpower_requests",
             params={"request_date": f"eq.{date}",
                     "select": "id,request_date,site_id,worker_id,note,"
-                              "sites(site_name,site_code),workers(name,worker_code,status),"
-                              "requested_by:users!manpower_requests_created_by_fkey(name)"},
+                              "sites(site_name,site_code),workers(name,worker_code,status)"},
             headers=supabase_headers(user["token"]),
         )
         if r.status_code != 200:
@@ -591,7 +590,6 @@ async def list_requests(date: str, user: dict = Depends(get_current_user)):
             "worker_name": (a.get("workers") or {}).get("name", "?"),
             "worker_code": (a.get("workers") or {}).get("worker_code", ""),
             "worker_status": (a.get("workers") or {}).get("status", ""),
-            "requested_by": (a.get("requested_by") or {}).get("name", ""),
         } for a in r.json()]
 
 
@@ -1246,8 +1244,10 @@ def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> 
 
 @app.get("/api/v1/messages/requests")
 async def request_message(date: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "main_sup"):
-        raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can generate this message")
+    # admin/main_sup get the consolidated (all sites) message;
+    # a site supervisor gets only their own site's request (RLS scopes the query).
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="You cannot generate this message")
     async with httpx.AsyncClient(timeout=10) as client:
         rr = await client.get(
             f"{REST}/manpower_requests",
