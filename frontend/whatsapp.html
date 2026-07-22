@@ -168,13 +168,11 @@
       }
     }
 
-    async function shareMsg() {
+    function shareMsg() {
+      // Go straight to WhatsApp (app on phone, WhatsApp Web on desktop) with the
+      // message pre-filled; the user just picks the group.
       const text = document.getElementById("msg").value;
-      if (navigator.share) {
-        try { await navigator.share({ text }); } catch {}
-      } else {
-        window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
-      }
+      window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
     }
 
     document.getElementById("t-alloc").addEventListener("click", () => setType("alloc"));

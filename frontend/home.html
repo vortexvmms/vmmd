@@ -32,8 +32,8 @@
 
     <div id="content" class="hidden">
       <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-5 mt-4">
-        <p class="text-sm text-gray-500">Signed in as</p>
-        <p class="text-lg font-bold text-gray-800" id="name">—</p>
+        <p class="text-xl font-bold text-gray-800" id="greet">—</p>
+        <p class="text-sm text-gray-500" id="name">—</p>
         <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
       </div>
 
@@ -85,6 +85,10 @@
         const me = await r.json();
 
         document.getElementById("who").textContent = me.email || "";
+        const hr = new Date().getHours();
+        const greet = hr < 12 ? "Good morning" : (hr < 17 ? "Good afternoon" : "Good evening");
+        const first = (me.name || "").trim().split(/\s+/)[0] || "";
+        document.getElementById("greet").textContent = `${greet}, ${first}`;
         document.getElementById("name").textContent = me.name;
         document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
 

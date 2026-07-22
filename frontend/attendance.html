@@ -27,13 +27,18 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
-    <div id="submitted-banner" class="hidden bg-green-100 border border-green-300 text-green-800 rounded-xl p-3 mb-3 text-sm font-medium text-center">
-      ✓ Submitted. You can still correct it until payroll closes the month — a reason will be asked.
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-36">
+    <div id="banner" class="hidden rounded-xl p-3 mb-3 text-sm font-medium text-center"></div>
+
+    <!-- Morning (toolbox) helper -->
+    <div id="morningbar" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mb-3">
+      <p class="text-sm text-gray-600 mb-2">Morning toolbox check — tick who is present, mark the rest Absent / MC:</p>
+      <button onclick="presentAll()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">Mark all present</button>
+      <span class="text-xs text-gray-400 ml-2">then untick anyone absent</span>
     </div>
 
     <div id="bulkbar" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mb-3">
-      <p class="text-sm text-gray-600 mb-2">Set end time for ALL workers:</p>
+      <p class="text-sm text-gray-600 mb-2">Evening — set end time for present workers:</p>
       <div class="flex items-center gap-2 flex-wrap">
         <button onclick="bulkApply('17:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">5 PM</button>
         <button onclick="bulkApply('19:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">7 PM</button>
@@ -62,22 +67,26 @@
   </div>
 
   <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md mx-auto flex items-center gap-3">
-      <p class="text-sm text-gray-600 flex-1" id="hours-total">—</p>
-      <button id="submit-btn" onclick="submitDay()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
-        Submit Day
-      </button>
+    <div class="max-w-md mx-auto">
+      <p class="text-sm text-gray-600 mb-2 text-center" id="hours-total">—</p>
+      <div class="flex items-center gap-3">
+        <button id="morning-btn" onclick="submitDay('morning')" class="flex-1 border-2 border-red-700 text-red-700 font-bold px-3 py-3 rounded-lg disabled:opacity-40">
+          Submit Morning
+        </button>
+        <button id="submit-btn" onclick="submitDay('evening')" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold px-3 py-3 rounded-lg disabled:opacity-40">
+          Submit End Times
+        </button>
+      </div>
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="toast" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
 
   <script>
     requireLogin();
 
     let ME = null, ROWS = [], SITES = [];
 
-    // Quick end-time cards (site request 19/07/2026)
     const PRESETS = [["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
                      ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
 
@@ -93,15 +102,13 @@
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
       document.getElementById("date").value = fmtDate(new Date());
-      await loadDay();   // first load discovers the sites this user can see
+      await loadDay();
     }
 
     async function loadDay() {
       const date = document.getElementById("date").value;
       const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
       const all = r.ok ? await r.json() : [];
-
-      // build site dropdown from what this user is allowed to see
       const siteMap = {};
       all.forEach(x => siteMap[x.site_id] = x.site_name);
       SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
@@ -109,7 +116,6 @@
       const prev = sel.value;
       sel.innerHTML = SITES.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
       if (prev && siteMap[prev]) sel.value = prev;
-
       ROWS = all.filter(x => x.site_id === sel.value);
       render();
     }
@@ -119,65 +125,87 @@
       list.innerHTML = "";
       document.getElementById("empty").classList.toggle("hidden", ROWS.length > 0);
 
-      const submitted = ROWS.length > 0 && ROWS.every(x => x.submitted);
-      const canEdit = true;   // corrections allowed until payroll closes the month
-      document.getElementById("submitted-banner").classList.toggle("hidden", !submitted);
-      document.getElementById("bulkbar").classList.toggle("hidden", !canEdit || ROWS.length === 0);
-      document.getElementById("addbtn").classList.toggle("hidden", !canEdit || !document.getElementById("site").value);
-      document.getElementById("submit-btn").disabled = submitted || ROWS.length === 0;
-      document.getElementById("submit-btn").textContent = submitted ? "Submitted ✓" : "Submit Day";
+      const total = ROWS.length;
+      const present = ROWS.filter(x => x.present).length;
+      const notMarked = ROWS.filter(x => !x.marked).length;
+      const morningDone = total > 0 && notMarked === 0;
+      const fullySubmitted = total > 0 && ROWS.every(x => x.submitted);
 
-      let tn = 0, to = 0, present = 0;
-      ROWS.forEach(x => { if (x.present) { present++; tn += x.normal_hours; to += x.ot_hours; } });
+      // header summary — total allocated shown clearly (site request)
       document.getElementById("summary").textContent =
-        `${present}/${ROWS.length} present`;
+        `${total} allocated · ${present} present` + (notMarked ? ` · ${notMarked} not marked` : "");
+
+      let tn = 0, to = 0;
+      ROWS.forEach(x => { if (x.present) { tn += x.normal_hours; to += x.ot_hours; } });
       document.getElementById("hours-total").textContent =
-        `Normal ${tn.toFixed(1)}h · OT ${to.toFixed(1)}h`;
+        total ? `Normal ${tn.toFixed(1)}h · OT ${to.toFixed(1)}h` : "—";
+
+      // banner
+      const banner = document.getElementById("banner");
+      if (fullySubmitted) {
+        banner.className = "rounded-xl p-3 mb-3 text-sm font-medium text-center bg-green-100 border border-green-300 text-green-800";
+        banner.textContent = "✓ Day submitted. You can still correct it until payroll closes the month — a reason will be asked.";
+        banner.classList.remove("hidden");
+      } else if (morningDone) {
+        banner.className = "rounded-xl p-3 mb-3 text-sm font-medium text-center bg-blue-50 border border-blue-200 text-blue-800";
+        banner.textContent = "Morning attendance verified. In the evening set end times, then Submit End Times.";
+        banner.classList.remove("hidden");
+      } else if (total) {
+        banner.className = "rounded-xl p-3 mb-3 text-sm font-medium text-center bg-yellow-50 border border-yellow-300 text-yellow-800";
+        banner.textContent = notMarked + " worker(s) not yet verified. Tick who is present, mark the rest Absent / MC, then Submit Morning.";
+        banner.classList.remove("hidden");
+      } else banner.classList.add("hidden");
+
+      const hasSite = !!document.getElementById("site").value;
+      document.getElementById("morningbar").classList.toggle("hidden", !hasSite || total === 0 || morningDone);
+      document.getElementById("bulkbar").classList.toggle("hidden", !hasSite || total === 0);
+      document.getElementById("addbtn").classList.toggle("hidden", !hasSite);
+      document.getElementById("morning-btn").disabled = total === 0 || fullySubmitted;
+      document.getElementById("morning-btn").textContent = morningDone && !fullySubmitted ? "Morning ✓ (re-submit)" : "Submit Morning";
+      document.getElementById("submit-btn").disabled = total === 0 || fullySubmitted;
+      document.getElementById("submit-btn").textContent = fullySubmitted ? "Submitted ✓" : "Submit End Times";
 
       ROWS.forEach(x => {
+        const absent = x.marked && !x.present;
         const div = document.createElement("div");
-        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4" + (x.present ? "" : " opacity-60");
+        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 " +
+          (absent ? "border-gray-300 opacity-60" : (!x.marked ? "border-yellow-300" : "border-gray-300"));
         div.innerHTML = `
           <div class="flex items-center justify-between mb-2">
             <div>
-              <p class="font-medium text-gray-800">${x.worker_name}</p>
+              <p class="font-medium text-gray-800">${x.worker_name}
+                ${!x.marked ? '<span class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 rounded px-1.5 py-0.5 align-middle">NOT MARKED</span>' : ''}</p>
               <p class="text-xs text-gray-400">${x.worker_code} · start ${x.start_time}</p>
             </div>
             <label class="flex items-center gap-1 text-sm">
-              <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""} ${canEdit ? "" : "disabled"}>
+              <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""}>
               Present
             </label>
           </div>
           <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1">
             <span class="text-xs text-gray-500">Reason:</span>
-            <button class="abs-chip text-xs font-bold px-3 py-1.5 rounded-full ${x.absence_type !== "mc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>Absent</button>
-            <button class="mc-chip text-xs font-bold px-3 py-1.5 rounded-full ${x.absence_type === "mc" ? "bg-yellow-500 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>MC</button>
+            <button class="abs-chip text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type !== "mc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}">Absent</button>
+            <button class="mc-chip text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === "mc" ? "bg-yellow-500 text-white" : "bg-gray-100 text-gray-600"}">MC</button>
           </div>
           <div class="${x.present ? "" : "hidden"}">
             <div class="flex items-center flex-wrap gap-1">
               ${PRESETS.map(([t, lbl]) =>
-                `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}" ${canEdit ? "" : "disabled"}>${lbl}</button>`).join("")}
-              <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" ${canEdit ? "" : "disabled"}>⋯</button>
+                `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}">${lbl}</button>`).join("")}
+              <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}">⋯</button>
               <span class="text-xs font-bold ${x.ot_hours > 0 ? "text-red-700" : "text-gray-500"} ml-auto">
                 ${x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"}
               </span>
             </div>
-            <input type="time" step="900" value="${x.end_time || ""}" ${canEdit ? "" : "disabled"}
+            <input type="time" step="900" value="${x.end_time || ""}"
                    class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
           </div>`;
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
-        div.querySelector(".abs-chip").addEventListener("click", () =>
-          mark(x, { present: false, absence_type: "absent" }, div));
-        div.querySelector(".mc-chip").addEventListener("click", () =>
-          mark(x, { present: false, absence_type: "mc" }, div));
-        div.querySelectorAll(".tchip").forEach(b =>
-          b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
-        div.querySelector(".tcustom").addEventListener("click", () => {
-          ein.classList.toggle("hidden");
-          if (!ein.classList.contains("hidden")) ein.focus();
-        });
+        div.querySelector(".abs-chip").addEventListener("click", () => mark(x, { present: false, absence_type: "absent" }, div));
+        div.querySelector(".mc-chip").addEventListener("click", () => mark(x, { present: false, absence_type: "mc" }, div));
+        div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
+        div.querySelector(".tcustom").addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
         ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value }, div); });
         list.appendChild(div);
       });
@@ -197,55 +225,55 @@
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not save");
         await loadDay();
-      } catch (ex) {
-        toast(ex.message, true);
+      } catch (ex) { toast(ex.message, true); await loadDay(); }
+    }
+
+    async function presentAll() {
+      try {
+        const r = await vmmsApi("/api/v1/attendance/present_all", {
+          method: "POST",
+          body: JSON.stringify({ work_date: document.getElementById("date").value, site_id: document.getElementById("site").value }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Could not mark");
+        toast(`Marked ${d.marked_present} present — now untick anyone absent`);
         await loadDay();
-      }
+      } catch (ex) { toast(ex.message, true); }
     }
 
-    async function bulkApply(t) {
-      document.getElementById("bulk-time").value = t;
-      await bulkSet();
-    }
-
+    async function bulkApply(t) { document.getElementById("bulk-time").value = t; await bulkSet(); }
     async function bulkSet() {
       const t = document.getElementById("bulk-time").value;
       if (!t) { toast("Pick a time first"); return; }
       try {
         const r = await vmmsApi("/api/v1/attendance/bulk_end", {
           method: "POST",
-          body: JSON.stringify({
-            work_date: document.getElementById("date").value,
-            site_id: document.getElementById("site").value,
-            end_time: t,
-          }),
+          body: JSON.stringify({ work_date: document.getElementById("date").value, site_id: document.getElementById("site").value, end_time: t }),
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not apply");
-        toast(`End time ${t} set for ${data.updated} workers — adjust exceptions individually`);
+        toast(`End time ${t} set for ${data.updated} present workers — adjust exceptions individually`);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
 
-    async function submitDay() {
-      if (!confirm("Submit and lock this day? After submitting, changes need the administrator.")) return;
+    async function submitDay(stage) {
+      const morning = stage === "morning";
+      if (!morning && !confirm("Submit the end times and lock this day? After this, changes need a reason.")) return;
       try {
         const r = await vmmsApi("/api/v1/attendance/submit", {
           method: "POST",
-          body: JSON.stringify({
-            work_date: document.getElementById("date").value,
-            site_id: document.getElementById("site").value,
-          }),
+          body: JSON.stringify({ work_date: document.getElementById("date").value, site_id: document.getElementById("site").value, stage }),
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not submit");
-        toast(`Day submitted — ${data.submitted} workers locked`);
+        toast(morning ? `Morning attendance submitted — ${data.present}/${data.total} present`
+                      : `Day submitted — ${data.submitted} workers locked`, true);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
 
     let TRANSFERABLE = [];
-
     async function openTransfer() {
       const date = document.getElementById("date").value;
       const site = document.getElementById("site").value;
@@ -256,46 +284,33 @@
       renderTransfer();
     }
     function closeTransfer() { document.getElementById("tr-modal").classList.add("hidden"); }
-
     function renderTransfer() {
       const q = document.getElementById("tr-search").value.trim().toLowerCase();
-      const rows = TRANSFERABLE.filter(w => !q ||
-        w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q));
+      const rows = TRANSFERABLE.filter(w => !q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q));
       document.getElementById("tr-list").innerHTML = rows.length ? rows.map(w =>
         `<button class="tr-pick w-full text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-3" data-id="${w.worker_id}" data-site="${w.current_site || ''}">
            <p class="font-medium text-gray-800 text-sm">${w.name}</p>
            <p class="text-xs text-gray-400">${w.worker_code} · ${w.current_site ? "allocated to " + w.current_site : "not allocated today"}</p>
          </button>`).join("")
         : '<p class="text-sm text-gray-400 p-3">No workers found.</p>';
-      document.querySelectorAll(".tr-pick").forEach(b =>
-        b.addEventListener("click", () => doTransfer(b.dataset.id, b.dataset.site || null)));
+      document.querySelectorAll(".tr-pick").forEach(b => b.addEventListener("click", () => doTransfer(b.dataset.id, b.dataset.site || null)));
     }
-
     async function doTransfer(workerId, currentSite) {
       let keep = false;
       if (currentSite) {
-        const ans = prompt(
-          `This worker is allocated to ${currentSite}.\n\n` +
-          `Type  M  = MOVED here for the whole day\n` +
-          `Type  S  = SPLIT day (worked at ${currentSite} AND here)`, "M");
+        const ans = prompt(`This worker is allocated to ${currentSite}.\n\nType  M  = MOVED here for the whole day\nType  S  = SPLIT day (worked at ${currentSite} AND here)`, "M");
         if (ans === null) return;
         keep = ans.trim().toUpperCase().startsWith("S");
       }
       try {
         const r = await vmmsApi("/api/v1/attendance/transfer", {
           method: "POST",
-          body: JSON.stringify({
-            work_date: document.getElementById("date").value,
-            worker_id: workerId,
-            to_site_id: document.getElementById("site").value,
-            keep_other: keep,
-          }),
+          body: JSON.stringify({ work_date: document.getElementById("date").value, worker_id: workerId, to_site_id: document.getElementById("site").value, keep_other: keep }),
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || "Could not move the worker");
         closeTransfer();
-        toast(d.split ? `Split day — also working here (${d.from} record kept)`
-                      : (d.from ? `Moved from ${d.from} to this site` : "Worker added to this site"), true);
+        toast(d.split ? `Split day — also working here (${d.from} record kept)` : (d.from ? `Moved from ${d.from} to this site` : "Worker added to this site"), true);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
