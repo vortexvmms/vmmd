@@ -37,6 +37,15 @@
         <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
       </div>
 
+      <div id="switcher" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mt-3 flex items-center gap-2">
+        <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
+        <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
+          <option value="admin">Administrator</option>
+          <option value="main_sup">Main Supervisor</option>
+          <option value="site_sup">Site Supervisor</option>
+        </select>
+      </div>
+
       <div class="mt-6 space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3" id="menu"></div>
     </div>
 
@@ -67,11 +76,26 @@
     // Menu per role: [label, phase, page]. Phases not yet built are shown locked.
     const MENUS = {
       admin:    [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      main_sup: [["Workers (leave status)", 4, "workers.html"], ["Daily Allocation", 6, "allocation.html"], ["WhatsApp Allocation", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["How to Use", 1, "help.html"]],
+      main_sup: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Workers (leave status)", 4, "workers.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["How to Use", 1, "help.html"]],
       site_sup: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["How to Use", 1, "help.html"]],
       payroll:  [["Reports", 11, "reports.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
     };
     const DONE_PHASE = 12; // raise this as phases complete
+
+    function renderMenu(role) {
+      const menu = document.getElementById("menu");
+      menu.innerHTML = "";
+      (MENUS[role] || []).forEach(([label, phase, page]) => {
+        const unlocked = phase <= DONE_PHASE;
+        const el = document.createElement(unlocked ? "a" : "div");
+        if (unlocked) el.href = page;
+        el.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
+        el.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
+          (unlocked ? `<span class="text-red-700 font-bold">›</span>`
+                    : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
+        menu.appendChild(el);
+      });
+    }
 
     async function load() {
       try {
@@ -92,17 +116,20 @@
         document.getElementById("name").textContent = me.name;
         document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
 
-        const menu = document.getElementById("menu");
-        (MENUS[me.role] || []).forEach(([label, phase, page]) => {
-          const unlocked = phase <= DONE_PHASE;
-          const el = document.createElement(unlocked ? "a" : "div");
-          if (unlocked) el.href = page;
-          el.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
-          el.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
-            (unlocked ? `<span class="text-red-700 font-bold">›</span>`
-                      : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
-          menu.appendChild(el);
-        });
+        // Only the Administrator can act as another role (a view switch on the menu).
+        let viewRole = me.role;
+        if (me.role === "admin") {
+          viewRole = localStorage.getItem("vmms_view_role") || "admin";
+          const sw = document.getElementById("switcher");
+          const sel = document.getElementById("viewrole");
+          sel.value = viewRole;
+          sw.classList.remove("hidden");
+          sel.addEventListener("change", () => {
+            localStorage.setItem("vmms_view_role", sel.value);
+            renderMenu(sel.value);
+          });
+        }
+        renderMenu(viewRole);
 
         document.getElementById("loading").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");

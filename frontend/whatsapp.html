@@ -92,8 +92,8 @@
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
 
-      if (ME.role === "site_sup") {
-        // supervisors: their own Request + their Site Update (no all-sites Allocation)
+      if (ME.role === "site_sup" || ME.role === "main_sup") {
+        // supervisors: Request + Site Update (allocation message is Admin-only now)
         document.getElementById("t-alloc").classList.add("hidden");
         setType("request");
       } else {
