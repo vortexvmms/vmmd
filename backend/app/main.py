@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.18.0")  # + morning/evening attendance stages, no default tick
+app = FastAPI(title="VMMS API", version="0.18.1")  # main_sup may submit attendance (no allocation)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1017,8 +1017,8 @@ async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
 
 @app.post("/api/v1/attendance/submit")
 async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "site_sup"):
-        raise HTTPException(status_code=403, detail="Only the Site Supervisor or Administrator can submit")
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="Only a Supervisor or the Administrator can submit")
     async with httpx.AsyncClient(timeout=15) as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
