@@ -26,48 +26,48 @@
   <main class="flex-1 p-4 max-w-3xl mx-auto w-full pb-12">
     <div id="intro" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 mb-4 text-sm text-gray-700"></div>
     <div id="sections" class="space-y-3"></div>
+    <p class="text-xs text-gray-400 text-center mt-6">A printed manual with screenshots is also available from the office.</p>
   </main>
 
   <script>
     requireLogin();
 
-    // Each section: { h: heading, items: [ "line", ... ] }
+    // Item types: "text" (bullet), {step:"..."} numbered, {ex:"..."} worked example, {note:"..."} note.
     const COMMON_INTRO =
-      "This is your quick guide. Tap a heading to open or close it. " +
-      "The app stays signed in. First time each morning it may take up to 1 minute to wake up — please wait, don't tap many times.";
+      "This is your quick guide — the same steps as the printed manual. Tap a heading to open or close it. " +
+      "The app stays signed in. The first time you open it each morning it may take up to 1 minute to wake up — please wait, don't tap many times.";
 
-    const INSTALL = { h: "First time only — put VMMS on your phone", items: [
-      "Open Chrome and go to:  vortexvmms.github.io/vmmd",
-      "Chrome menu (⋮)  →  \"Add to Home screen\"  →  Add",
-      "The red VMMS icon now sits on your phone like an app",
-      "Sign in with the email and password given by the office. It stays signed in.",
+    const GETTING_STARTED = { h: "Getting started — phone & sign in", items: [
+      { step: "First time only: open Chrome, go to vortexvmms.github.io/vmmd, then Chrome menu (⋮) → \"Add to Home screen\" → Add. A red VMMS icon appears on your phone." },
+      { step: "Sign in with the email and password given by the office. You stay signed in on that phone." },
+      { note: "Forgot your password? Only the Administrator can reset it — call the office. Never share your password." },
     ]};
 
     const SITE_SUP = [
-      INSTALL,
+      GETTING_STARTED,
       { h: "Request manpower for the next day", items: [
-        "Open Request Manpower. Your site and tomorrow's date are already set.",
-        "Tick the workers you want at your site tomorrow, then press Send Request.",
-        "Shortcut: press \"Copy last request\" to bring back your previous list, then adjust.",
-        "You can change and re-send any time — the office sees your latest request while planning.",
+        { step: "Open Request Manpower. Your site and tomorrow's date are already set." },
+        { step: "Tick the workers you want at your site tomorrow." },
+        { step: "Shortcut: press \"Copy last request\" to bring back your previous list, then adjust." },
+        { step: "Press Send Request. You can change and re-send any time." },
+        { ex: "You need the same 8 men as yesterday plus one more. Press \"Copy last request\" to bring back yesterday's 8, tick the extra worker, then Send Request." },
       ]},
       { h: "Every morning — mark who came", items: [
-        "Open Attendance. Your site and today's date show automatically.",
-        "Everyone is ticked Present. Untick anyone who did not come.",
-        "Choose the reason: ABSENT or MC (medical leave).",
-        "Worker came to your site but was allocated elsewhere? Tap \"+ Worker reported to this site\", find his name, then choose:  M = he is with you all day  ·  S = split day (worked at both sites).",
+        { step: "Open Attendance. Your site and today's date show automatically." },
+        { step: "Everyone is ticked Present. Untick anyone who did not come and choose the reason: ABSENT or MC (medical leave)." },
+        { step: "Worker came to your site but was allocated elsewhere? Tap \"+ Worker reported to this site\", find his name, then choose  M = with you all day  ·  S = split day (worked at both sites)." },
       ]},
-      { h: "Every evening — end times and message", items: [
-        "Attendance → tap 5 PM / 7 PM / 10 PM to set the end time for ALL workers at once.",
-        "Change the few who are different — tap the time card on their row (5PM…10PM, or ⋯ for another time).",
-        "Check the bottom bar: Normal hours and OT hours for your site.",
-        "Press SUBMIT DAY.",
-        "Go to WhatsApp → Site Update → Generate → Share to WhatsApp.",
-        "Made a mistake after submitting? You can still fix it — the app will ask you to type a reason.",
+      { h: "Every evening — end times, submit, message", items: [
+        { step: "Tap \"Set all 5 PM\" (or 7 PM / 10 PM) to set the end time for everyone at once." },
+        { step: "Change the few who are different — tap the time on their row." },
+        { step: "Check the bottom bar: Normal hours and OT for your site." },
+        { step: "Press SUBMIT DAY." },
+        { step: "Go to WhatsApp → Site Update → Generate → Share to the group." },
+        { note: "Made a mistake after submitting? You can still fix it — the app will ask you to type a short reason. No need to call the office." },
       ]},
       { h: "Dashboard & reports (your sites)", items: [
-        "Dashboard shows your site's numbers. Use the date box to view any past day; press Print / PDF to save a copy.",
-        "Reports let you pick a date range for your site and export to Excel or PDF.",
+        "Your Dashboard and Reports show only your own site(s).",
+        "Use the date box to look at any past day; press Print / PDF to save a copy.",
       ]},
       { h: "What the app does for you", items: [
         "You tick present / not present → the app records attendance.",
@@ -77,19 +77,27 @@
       { h: "If something goes wrong", items: [
         "App slow to open in the morning → normal, wait up to 1 minute, it is waking up.",
         "\"Session expired\" → sign in again with your email and password.",
-        "Forgot password → call the office; only the administrator can reset it.",
+        "Forgot password → call the office; only the Administrator can reset it.",
         "Worker missing from my list → use \"+ Worker reported to this site\".",
         "Wrong end time after submit → just change it and type the reason when asked.",
       ]},
     ];
 
     const ALLOCATOR = [
-      { h: "Daily Allocation — two ways to work", items: [
-        "By Worker (default): every worker is one row with a site dropdown. Change only the workers who move, then press Save All once. Changed rows turn yellow.",
-        "By Site: pick a site, tick many workers for it, Save. Best when filling one site with a big batch.",
-        "Copy previous day: if the date is empty, press it to bring yesterday forward, then adjust.",
-        "A worker requested by a site shows a red REQUESTED badge, and the bar shows \"Requested here: X · Allocated: Y\".",
-        "A worker can only be on one site a day — the app blocks double allocation automatically.",
+      GETTING_STARTED,
+      { h: "Daily Allocation — By Worker (easy reshuffle)", items: [
+        { step: "Open Daily Allocation. The date is already set to tomorrow." },
+        { step: "Make sure the By Worker tab is selected (top-left)." },
+        { step: "For each worker who is moving, change the site dropdown on his row. The row turns yellow so you can see your changes." },
+        { step: "Press Save All once. All changes are saved together." },
+        { ex: "Yesterday Anbazhagan (VEW110) was at PCS. Tomorrow you want him at POKB. Find his row (or search his name), change his dropdown from PCS to POKB. If five more men move, change theirs too — then press Save All once. No switching sites." },
+        { note: "Choose \"— Not working —\" to drop a worker off the roster for the day. A worker can only be on one site a day; VMMS blocks double allocation." },
+      ]},
+      { h: "Daily Allocation — By Site (fill one site)", items: [
+        { step: "Tap the By Site tab, then choose a site from the dropdown." },
+        { step: "Tick the workers for that site. Workers a supervisor asked for show a red REQUESTED tag, and the bar shows \"Requested here: X · Allocated: Y\"." },
+        { step: "Press Save Allocation. Change the site and repeat." },
+        { note: "If the date is empty, press \"Copy previous day's allocation\" to bring yesterday forward, then adjust. Workers on home leave are skipped automatically." },
       ]},
       { h: "Plan changes at night", items: [
         "Open Daily Allocation for that same date, change the sites, Save.",
@@ -98,48 +106,72 @@
       { h: "WhatsApp messages", items: [
         "Allocation — one message for all sites (tomorrow's distribution).",
         "Request — one consolidated message of what every site asked for.",
-        "Site Update — per-site end-of-day message (today).",
-        "Generate → Copy or Share to WhatsApp. No typing, correct format every time.",
+        "Site Update — the end-of-day message for one site (today).",
+        { step: "Choose the type and date → Generate → Copy or Share to WhatsApp." },
       ]},
       { h: "Dashboard", items: [
-        "Pick any date to see that day's picture and the month-to-date totals per site.",
-        "Print / PDF gives an A4 report with the Vortex header for filing or sending.",
+        { step: "Use the date box to view any day; press Today to jump back." },
+        { step: "Cards show that day; the table shows month-to-date totals per site." },
+        { step: "Press Print / PDF for an A4 report with the Vortex header." },
+        { note: "For the cleanest PDF, turn on \"Background graphics\" in the print dialog so the colours print." },
       ]},
-      { h: "During the month", items: [
-        "Reports: any date range, any site — export Excel or print PDF.",
-        "Monthly Man-Hours: month-end totals per site and per worker → export Excel for payroll, then press CLOSE MONTH to lock it.",
-        "Workers: add new workers (BULK ADD for many); set On Leave when someone goes home.",
-        "Sites: add a site, archive a finished one, assign supervisors.",
+      { h: "Reports", items: [
+        { step: "Choose the From and To dates, and a site (or All sites)." },
+        { step: "Press Export Excel for a spreadsheet, or Print PDF for a printed copy." },
       ]},
-      { h: "Rules built into the system", items: [
-        "Normal hours: up to 8 hours a day (Mon–Fri); 1 hour lunch deducted.",
-        "No lunch deduction if the worker finishes by 12:00 noon.",
+      { h: "How VMMS calculates hours", items: [
+        "Normal weekday (Mon–Fri): up to 8 h a day; 1 h lunch deducted.",
+        "Finish by 12:00 noon: no lunch deduction.",
         "Saturday: normal until 12:00 (max 4 h); everything after lunch is OT.",
         "Sunday & Public Holiday: all hours are OT.",
         "OT counts in half-hour steps, rounded down (17:45 finish = 0.5 OT).",
         "Split day (two sites): 8 normal hours counted once for the day, then OT.",
       ]},
+      { h: "A full day, end to end", items: [
+        "Evening before: supervisors send their Request Manpower.",
+        "Evening: allocator fills each site (By Worker / By Site), Saves, then WhatsApp → Allocation → Share.",
+        "Next morning: supervisors mark attendance (ABSENT / MC, wrong-site M or S).",
+        "Evening: supervisors set end times, SUBMIT DAY, then WhatsApp → Site Update → Share.",
+        "Any time: watch the Dashboard for who has submitted; at month end export Man-Hours and CLOSE MONTH.",
+      ]},
     ];
 
     const ADMIN_EXTRA = [
-      { h: "Administrator only", items: [
-        "Settings: check OT rules and the public-holiday calendar each year.",
-        "Assign supervisors to sites in Sites → this controls what each supervisor can see.",
+      { h: "Workers (Administrator)", items: [
+        "Search by name or ID; filter by Active / On Leave / Inactive.",
+        "Press + to add one worker; BULK ADD to paste many (one per line: ID, Full Name).",
+        "Tap a worker to set On Leave when he goes home, or back to Active.",
+        { note: "Never delete a worker who has history — set him Inactive instead, so past records stay correct." },
+      ]},
+      { h: "Sites (Administrator)", items: [
+        "Press + to add a new site (code and name).",
+        "Tap a site to assign which supervisors may update it — this controls what each supervisor sees.",
+        "Archive a finished site instead of deleting it.",
+      ]},
+      { h: "Monthly Man-Hours (Administrator)", items: [
+        { step: "Choose the month and check totals per site and per worker." },
+        { step: "Export Excel and keep the file — it is your payroll backup." },
+        { step: "Press CLOSE MONTH to lock it; after that only the Administrator can change that month." },
+      ]},
+      { h: "Settings & admin tasks", items: [
+        "Settings: check the OT rules and public-holiday calendar at the start of each year; \"+ Add holiday\" for gazetted dates.",
         "New user logins are created in Supabase (Authentication), then linked to a VMMS role — see the setup guide.",
-        "Only the administrator can reset a password or re-open a closed month.",
+        "Only the Administrator can reset a password or re-open a closed month.",
         "Deactivate staff who leave (set inactive) instead of deleting, to keep the history.",
       ]},
     ];
 
     const PAYROLL = [
+      GETTING_STARTED,
       { h: "Reports", items: [
-        "Pick a date range and site, then export to Excel or print to PDF.",
+        { step: "Choose a date range and site." },
+        { step: "Export Excel or Print PDF." },
       ]},
       { h: "Monthly Man-Hours", items: [
-        "Choose the month and check the totals per site and per worker.",
-        "Export Excel (two sheets: per site and per worker) → use for payroll.",
-        "Keep the exported file every month — it is your backup record.",
-        "Press CLOSE MONTH when done; after this nobody can change that month except the administrator.",
+        { step: "Choose the month and check the totals per site and per worker." },
+        { step: "Export Excel (two sheets: per site and per worker) for payroll." },
+        "Keep every month's Excel file as a backup record.",
+        { step: "Press CLOSE MONTH when done; after that the month is locked." },
       ]},
     ];
 
@@ -149,8 +181,19 @@
       site_sup: SITE_SUP,
       payroll:  PAYROLL,
     };
-
     const LABEL = { admin: "Administrator", main_sup: "Main Supervisor", site_sup: "Site Supervisor", payroll: "Payroll" };
+
+    function itemHTML(it) {
+      if (typeof it === "string")
+        return `<div class="flex gap-2 mb-1"><span class="text-red-700 font-bold leading-5">•</span><span class="flex-1">${it}</span></div>`;
+      if (it.step)
+        return `<div class="flex gap-2 mb-1"><span class="text-red-700 font-bold leading-5">›</span><span class="flex-1">${it.step}</span></div>`;
+      if (it.ex)
+        return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-2 my-2 text-gray-700"><span class="font-bold">Example: </span>${it.ex}</div>`;
+      if (it.note)
+        return `<div class="border-l-4 border-red-600 bg-gray-50 rounded-r-lg p-2 my-2 italic text-gray-700">${it.note}</div>`;
+      return "";
+    }
 
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
@@ -165,12 +208,11 @@
         const d = document.createElement("details");
         d.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden";
         if (i === 0) d.open = true;
-        const lis = s.items.map(t => `<li class="mb-1">${t}</li>`).join("");
         d.innerHTML =
           `<summary class="cursor-pointer select-none p-4 font-bold text-red-700 flex items-center justify-between">
              <span>${s.h}</span><span class="text-gray-400 text-sm">▾</span>
            </summary>
-           <ul class="list-disc pl-9 pr-4 pb-4 text-sm text-gray-700">${lis}</ul>`;
+           <div class="px-4 pb-4 text-sm text-gray-700">${s.items.map(itemHTML).join("")}</div>`;
         wrap.appendChild(d);
       });
     }
