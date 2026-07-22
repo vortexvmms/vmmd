@@ -21,10 +21,19 @@
         <p class="text-red-100 text-xs" id="summary">Loading…</p>
       </div>
     </div>
+
+    <!-- View toggle -->
     <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
+      <button id="tab-worker" onclick="setMode('worker')"
+              class="flex-1 rounded-lg py-2 text-sm font-bold">By Worker</button>
+      <button id="tab-site" onclick="setMode('site')"
+              class="flex-1 rounded-lg py-2 text-sm font-bold">By Site</button>
+    </div>
+
+    <div class="flex gap-2 mt-2 max-w-6xl mx-auto w-full">
       <input id="date" type="date"
              class="flex-1 md:max-w-xs rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+      <select id="site" class="hidden flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
     </div>
   </header>
 
@@ -41,11 +50,12 @@
              class="w-full md:flex-1 border border-gray-300 rounded-lg p-3 text-base mb-3 md:mb-0 focus:outline-none focus:ring-2 focus:ring-red-600">
 
       <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 md:mb-0 whitespace-nowrap">
-        <input id="only-un" type="checkbox" class="accent-red-700"> Show unallocated workers only
+        <input id="only-un" type="checkbox" class="accent-red-700">
+        <span id="only-un-label">Show unassigned workers only</span>
       </label>
     </div>
 
-    <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-2"></div>
+    <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
   </main>
 
@@ -53,7 +63,7 @@
     <div class="max-w-md md:max-w-6xl mx-auto flex items-center gap-3">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 selected</p>
       <button id="save" onclick="save()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
-        Save Allocation
+        Save All
       </button>
     </div>
   </div>
@@ -63,7 +73,10 @@
   <script>
     requireLogin();
 
-    let ME = null, SITES = [], WORKERS = [], ALLOC = [], SELECTED = new Set();
+    let ME = null, SITES = [], WORKERS = [], ALLOC = [];
+    let MODE = "worker";               // "worker" (default) or "site"
+    let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
+    let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -72,6 +85,7 @@
     }
 
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
+    function siteName(id) { const s = SITES.find(x => x.id === id); return s ? s.site_name : "?"; }
 
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
@@ -88,27 +102,63 @@
       const [rs, rw] = await Promise.all([vmmsApi("/api/v1/sites"), vmmsApi("/api/v1/workers")]);
       SITES = (await rs.json()).filter(s => s.status === "active");
       WORKERS = (await rw.json()).filter(w => w.status !== "inactive");
-      const sel = document.getElementById("site");
-      sel.innerHTML = SITES.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
-      await loadDay();
+      document.getElementById("site").innerHTML =
+        SITES.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+      await loadDay();          // fetches the day, then renders in the current MODE
+      applyModeChrome();        // set toggle button styles + labels
+    }
+
+    function applyModeChrome() {
+      const on = "bg-white text-red-700", off = "bg-red-800 text-white";
+      document.getElementById("tab-worker").className = "flex-1 rounded-lg py-2 text-sm font-bold " + (MODE === "worker" ? on : off);
+      document.getElementById("tab-site").className   = "flex-1 rounded-lg py-2 text-sm font-bold " + (MODE === "site" ? on : off);
+      document.getElementById("site").classList.toggle("hidden", MODE !== "site");
+      document.getElementById("only-un-label").textContent =
+        MODE === "site" ? "Show unallocated workers only" : "Show unassigned workers only";
+      document.getElementById("save").textContent = MODE === "site" ? "Save Allocation" : "Save All";
+    }
+
+    function setMode(m) {
+      MODE = m;
+      applyModeChrome();
+      if (m === "site") {
+        const siteId = document.getElementById("site").value;
+        SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
+      } else {
+        snapshotAssign();
+      }
+      render();
+    }
+
+    function snapshotAssign() {
+      ASSIGN = {}; ORIG = {};
+      WORKERS.filter(w => w.status === "active").forEach(w => { ASSIGN[w.id] = ""; ORIG[w.id] = ""; });
+      ALLOC.forEach(a => { if (a.worker_id in ASSIGN) { ASSIGN[a.worker_id] = a.site_id; ORIG[a.worker_id] = a.site_id; } });
     }
 
     async function loadDay() {
       const date = document.getElementById("date").value;
       const r = await vmmsApi(`/api/v1/allocations?date=${date}`);
       ALLOC = r.ok ? await r.json() : [];
-      const siteId = document.getElementById("site").value;
-      SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
       document.getElementById("copybar").classList.toggle("hidden", ALLOC.length > 0);
+      if (MODE === "site") {
+        const siteId = document.getElementById("site").value;
+        SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
+      } else {
+        snapshotAssign();
+      }
       render();
     }
 
-    function render() {
+    function render() { MODE === "site" ? renderSite() : renderWorker(); }
+
+    /* ---------------- BY SITE (tick workers for one site) ---------------- */
+    function renderSite() {
       const siteId = document.getElementById("site").value;
       const q = document.getElementById("search").value.trim().toLowerCase();
       const onlyUn = document.getElementById("only-un").checked;
 
-      const elsewhere = {};   // worker_id -> site_name (on another site)
+      const elsewhere = {};
       ALLOC.forEach(a => { if (a.site_id !== siteId) elsewhere[a.worker_id] = a.site_name; });
 
       const active = WORKERS.filter(w => w.status === "active");
@@ -118,6 +168,7 @@
       document.getElementById("summary").textContent =
         `${ALLOC.length} allocated · ${unallocCount} unallocated · ${onLeave.length} on leave`;
       document.getElementById("selcount").textContent = `${SELECTED.size} selected for this site`;
+      document.getElementById("save").disabled = false;
 
       const rows = active.filter(w =>
         (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
@@ -125,6 +176,7 @@
       );
 
       const list = document.getElementById("list");
+      list.className = "space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2";
       list.innerHTML = "";
       document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
 
@@ -148,6 +200,67 @@
         list.appendChild(div);
       });
 
+      appendLeave(list, onLeave, q, onlyUn);
+    }
+
+    /* ---------------- BY WORKER (one row per worker, pick site) ---------------- */
+    function changeCount() {
+      return Object.keys(ASSIGN).filter(w => ASSIGN[w] !== ORIG[w]).length;
+    }
+
+    function renderWorker() {
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const onlyUn = document.getElementById("only-un").checked;
+
+      const active = WORKERS.filter(w => w.status === "active");
+      const onLeave = WORKERS.filter(w => w.status === "on_leave");
+      const assignedCount = active.filter(w => ASSIGN[w.id]).length;
+      const unassigned = active.length - assignedCount;
+
+      document.getElementById("summary").textContent =
+        `${assignedCount} assigned · ${unassigned} unassigned · ${onLeave.length} on leave`;
+      const ch = changeCount();
+      document.getElementById("selcount").textContent =
+        ch ? `${ch} change${ch > 1 ? "s" : ""} not saved` : "No changes yet";
+      document.getElementById("save").disabled = ch === 0;
+
+      const rows = active.filter(w =>
+        (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
+        (!onlyUn || !ASSIGN[w.id])
+      );
+
+      const opts = (cur) =>
+        `<option value="">— Not working —</option>` +
+        SITES.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${s.site_name}</option>`).join("");
+
+      const list = document.getElementById("list");
+      list.className = "space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2";
+      list.innerHTML = "";
+      document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
+
+      rows.forEach(w => {
+        const changed = ASSIGN[w.id] !== ORIG[w.id];
+        const div = document.createElement("div");
+        div.className = "rounded-xl shadow-sm p-3 flex items-center gap-3 border " +
+                        (changed ? "bg-yellow-50 border-yellow-400" : "bg-gray-100 border-gray-300");
+        const wasNote = changed ? (ORIG[w.id] ? " · was " + siteName(ORIG[w.id]) : " · was none") : "";
+        div.innerHTML =
+          `<div class="flex-1 min-w-0">
+             <p class="font-medium text-gray-800 truncate">${w.name}</p>
+             <p class="text-xs text-gray-400">${w.worker_code}${wasNote}</p>
+           </div>
+           <select class="w-36 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts(ASSIGN[w.id])}</select>`;
+        div.querySelector("select").addEventListener("change", (e) => {
+          ASSIGN[w.id] = e.target.value;
+          renderWorker();   // refresh counts + highlight
+        });
+        list.appendChild(div);
+      });
+
+      appendLeave(list, onLeave, q, onlyUn);
+    }
+
+    function appendLeave(list, onLeave, q, onlyUn) {
       if (onLeave.length && !q && !onlyUn) {
         const hdr = document.createElement("p");
         hdr.className = "text-xs font-bold text-gray-400 mt-4 mb-1 md:col-span-full";
@@ -163,26 +276,74 @@
       }
     }
 
-    async function save() {
+    /* ---------------- Saving ---------------- */
+    function save() { MODE === "site" ? saveSite() : saveAll(); }
+
+    async function callBulk(siteId, workerIds) {
+      const r = await vmmsApi("/api/v1/allocations/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          work_date: document.getElementById("date").value,
+          site_id: siteId,
+          worker_ids: workerIds,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || "Could not save");
+      return data;
+    }
+
+    async function saveSite() {
       const btn = document.getElementById("save");
       btn.disabled = true; btn.textContent = "Saving…";
       try {
-        const r = await vmmsApi("/api/v1/allocations/bulk", {
-          method: "POST",
-          body: JSON.stringify({
-            work_date: document.getElementById("date").value,
-            site_id: document.getElementById("site").value,
-            worker_ids: [...SELECTED],
-          }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || "Could not save");
+        const data = await callBulk(document.getElementById("site").value, [...SELECTED]);
         toast(`Saved — ${data.added} added, ${data.removed} removed`);
         await loadDay();
       } catch (ex) {
         toast(ex.message, true);
       } finally {
         btn.disabled = false; btn.textContent = "Save Allocation";
+      }
+    }
+
+    // Worker mode: apply the whole day in one click.
+    // Two passes so the backend's "already on another site" guard never trips:
+    //   pass 1 removes movers from their old site, pass 2 adds them to the new one.
+    async function saveAll() {
+      const btn = document.getElementById("save");
+      btn.disabled = true; btn.textContent = "Saving…";
+      try {
+        const ids = SITES.map(s => s.id);
+        const newBySite = {}, curBySite = {};
+        ids.forEach(id => { newBySite[id] = new Set(); curBySite[id] = new Set(); });
+        Object.entries(ASSIGN).forEach(([w, s]) => { if (s && newBySite[s]) newBySite[s].add(w); });
+        ALLOC.forEach(a => { if (curBySite[a.site_id]) curBySite[a.site_id].add(a.worker_id); });
+
+        let added = 0, removed = 0;
+        // pass 1 — shrink every site that lost anyone (keep only those staying)
+        for (const id of ids) {
+          const cur = curBySite[id], nw = newBySite[id];
+          if ([...cur].some(w => !nw.has(w))) {
+            const d = await callBulk(id, [...cur].filter(w => nw.has(w)));
+            added += d.added; removed += d.removed;
+          }
+        }
+        // pass 2 — grow every site that gained anyone (send full new roster)
+        for (const id of ids) {
+          const cur = curBySite[id], nw = newBySite[id];
+          if ([...nw].some(w => !cur.has(w))) {
+            const d = await callBulk(id, [...nw]);
+            added += d.added; removed += d.removed;
+          }
+        }
+        toast(`Saved — ${added} added, ${removed} removed across all sites`, true);
+        await loadDay();
+      } catch (ex) {
+        toast(ex.message, true);
+        await loadDay();   // resync so the screen matches the database after a partial save
+      } finally {
+        btn.disabled = false; btn.textContent = "Save All";
       }
     }
 
