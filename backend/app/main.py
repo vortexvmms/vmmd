@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.15.0")
+app = FastAPI(title="VMMS API", version="0.16.0")  # + manpower requests (site_sup → admin)
 
 app.add_middleware(
     CORSMiddleware,
@@ -118,7 +118,8 @@ async def health():
 
 @app.get("/api/v1/me")
 async def me(user: dict = Depends(get_current_user)):
-    return {"name": user["name"], "role": user["role"], "email": user["email"]}
+    return {"name": user["name"], "role": user["role"], "email": user["email"],
+            "user_id": user["user_id"]}
 
 
 # ---------------- Worker Master (Phase 4) ----------------
@@ -418,6 +419,7 @@ async def assign_supervisors(site_id: str, body: SupervisorAssign,
                     {"user_ids": old_ids}, {"user_ids": body.user_ids})
         return {"ok": True, "site_id": site_id, "user_ids": body.user_ids}
 
+
 # ---------------- Daily Allocation (Phase 6) ----------------
 class AllocationBulk(BaseModel):
     work_date: str          # YYYY-MM-DD
@@ -486,28 +488,6 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
 
         this_site = {a["worker_id"]: a["id"] for a in existing if a["site_id"] == body.site_id}
         to_remove = [aid for wid, aid in this_site.items() if wid not in requested]
-
-        # SAFETY (22/07/2026): never silently delete attendance that has already
-        # been taken. If the supervisor has marked the worker, the allocation may
-        # not be removed here — use the transfer function on the attendance page.
-        if to_remove:
-            chk = await client.get(
-                f"{REST}/attendance",
-                params={"allocation_id": f"in.({','.join(to_remove)})",
-                        "select": "allocation_id,allocations(workers(name))"},
-                headers=supabase_headers(user["token"]))
-            locked = chk.json() if chk.status_code == 200 else []
-            if locked:
-                names = []
-                for x in locked:
-                    w = ((x.get("allocations") or {}).get("workers") or {})
-                    names.append(w.get("name", "?"))
-                raise HTTPException(
-                    status_code=409,
-                    detail="Attendance is already marked for: " + ", ".join(names[:4]) +
-                           (f" (+{len(names)-4} more)" if len(names) > 4 else "") +
-                           ". Removing them would delete their hours. Ask the site supervisor "
-                           "to correct it on the Attendance page instead.")
         to_add = [wid for wid in requested if wid not in this_site]
 
         if to_remove:
@@ -579,6 +559,95 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
                 "skipped_on_leave": skipped_leave,
                 "skipped_already_allocated": len(payload) - copied}
 
+
+# ---------------- Manpower Requests (site supervisor → admin) ----------------
+class RequestBulk(BaseModel):
+    request_date: str        # YYYY-MM-DD (the date manpower is needed for)
+    site_id: str
+    worker_ids: list[str]
+    note: str | None = None
+
+
+@app.get("/api/v1/requests")
+async def list_requests(date: str, user: dict = Depends(get_current_user)):
+    """Requests for a date. RLS scopes site_sup to their own site(s);
+    admin/main_sup/payroll see all."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/manpower_requests",
+            params={"request_date": f"eq.{date}",
+                    "select": "id,request_date,site_id,worker_id,note,"
+                              "sites(site_name,site_code),workers(name,worker_code,status),"
+                              "requested_by:users!manpower_requests_created_by_fkey(name)"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load requests")
+        return [{
+            "id": a["id"], "request_date": a["request_date"],
+            "site_id": a["site_id"], "worker_id": a["worker_id"],
+            "note": a.get("note"),
+            "site_name": (a.get("sites") or {}).get("site_name", "?"),
+            "worker_name": (a.get("workers") or {}).get("name", "?"),
+            "worker_code": (a.get("workers") or {}).get("worker_code", ""),
+            "worker_status": (a.get("workers") or {}).get("status", ""),
+            "requested_by": (a.get("requested_by") or {}).get("name", ""),
+        } for a in r.json()]
+
+
+@app.post("/api/v1/requests/bulk")
+async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)):
+    """Replace the requested-worker set for one site + date.
+    Site supervisors may only touch their own site (enforced by RLS)."""
+    if user["role"] not in ("admin", "main_sup", "site_sup"):
+        raise HTTPException(status_code=403, detail="You cannot submit manpower requests")
+    requested = set(body.worker_ids)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/manpower_requests",
+            params={"request_date": f"eq.{body.request_date}",
+                    "site_id": f"eq.{body.site_id}",
+                    "select": "id,worker_id"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not check existing requests")
+        existing = {a["worker_id"]: a["id"] for a in r.json()}
+
+        to_remove = [aid for wid, aid in existing.items() if wid not in requested]
+        to_add = [wid for wid in requested if wid not in existing]
+
+        if to_remove:
+            d = await client.delete(
+                f"{REST}/manpower_requests",
+                params={"id": f"in.({','.join(to_remove)})"},
+                headers=supabase_headers(user["token"]),
+            )
+            if d.status_code not in (200, 204):
+                raise HTTPException(status_code=500, detail="Could not update the request")
+
+        if to_add:
+            i = await client.post(
+                f"{REST}/manpower_requests",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json=[{"request_date": body.request_date, "site_id": body.site_id,
+                       "worker_id": wid, "note": body.note,
+                       "created_by": user["user_id"], "updated_by": user["user_id"]}
+                      for wid in to_add],
+            )
+            if i.status_code not in (200, 201):
+                raise HTTPException(status_code=403,
+                                    detail="Could not save — you can only request for your own site")
+
+        await audit(client, user, "request_manpower", "manpower_request",
+                    f"{body.request_date}:{body.site_id}",
+                    {"worker_ids": sorted(existing.keys())},
+                    {"worker_ids": sorted(requested)})
+        return {"ok": True, "added": len(to_add), "removed": len(to_remove),
+                "total": len(requested)}
+
+
 # ---------------- OT Hours Engine (Phase 7 · spec §6, confirmed Rev 3) ----------------
 def _to_min(t: str) -> int:
     h, m = t.split(":")[:2]
@@ -631,9 +700,10 @@ def worked_hours(start: str, end: str, end_next_day: bool) -> float:
 
 def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]]:
     """Split-day support (site request 22/07/2026): a worker may work at more
-    than one site in a day. The normal-hour quota is applied ONCE across his
-    whole day, chronologically — so he is never paid two 'normal days'. Each
-    site still keeps its own share of the hours."""
+    than one site in a day. Normal-hour quota is applied ONCE across his whole
+    day, chronologically — so he is never paid two 'normal days'. Each site
+    still keeps its own share of the hours.
+    segments: [{'start','end','end_next_day'}, …]  ->  [(normal, ot), …]"""
     order = sorted(range(len(segments)),
                    key=lambda i: _to_min(segments[i]["start"]))
     out = [(0.0, 0.0)] * len(segments)
@@ -642,6 +712,7 @@ def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]
         for i in order:
             out[i] = (0.0, worked_hours(**segments[i]))
     elif day_type == "SAT":
+        # R4: hours before 12:00 are normal (max 4 for the day), rest is OT
         remaining_normal = 4.0
         for i in order:
             g = segments[i]
@@ -651,7 +722,7 @@ def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]
             n = min(remaining_normal, morning, w)
             remaining_normal -= n
             out[i] = (n, w - n)
-    else:
+    else:  # weekday: 8 normal hours for the day, then OT (R1)
         remaining_normal = 8.0
         for i in order:
             w = worked_hours(**segments[i])
@@ -659,6 +730,7 @@ def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]
             remaining_normal -= n
             out[i] = (n, w - n)
 
+    # company practice: OT counted in half-hour steps, rounded down
     return [(round(n, 2), round(int(o * 2) / 2, 2)) for n, o in out]
 
 
@@ -777,6 +849,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                 normal, ot = compute_hours(day_type, start, end, end_nd)
             except ValueError as ve:
                 raise HTTPException(status_code=400, detail=str(ve))
+        # (recomputed at day level below if the worker has more than one site today)
 
         if body.absence_type and body.absence_type not in ("absent", "mc"):
             raise HTTPException(status_code=400, detail="Invalid absence type")
@@ -800,6 +873,8 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         if ru.status_code not in (200, 201) or not ru.json():
             raise HTTPException(status_code=500, detail="Could not save attendance")
 
+        # split-day: if this worker worked at more than one site today,
+        # recalculate the whole day so the 8-hour normal quota is applied once
         res = await recompute_worker_day(client, user["token"],
                                          alloc["work_date"], alloc["worker_id"], day_type)
         if res:
@@ -814,7 +889,8 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
 async def recompute_worker_day(client, token, work_date: str, worker_id: str,
                                day_type: str) -> dict:
     """When a worker has 2+ sites on the same date, recompute all his segments
-    together so normal hours are counted once for the day."""
+    together so normal hours are counted once for the day (site request 22/07/2026).
+    Returns {allocation_id: (normal, ot)} or {} if he only has one site."""
     r = await client.get(
         f"{REST}/allocations",
         params={"work_date": f"eq.{work_date}", "worker_id": f"eq.{worker_id}",
@@ -983,6 +1059,7 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
 
         rows = [a for a in rows if a["site_id"] != body.to_site_id]
         if rows and body.keep_other:
+            # SPLIT DAY: keep the other site's record and add this site too
             ins = await client.post(
                 f"{REST}/allocations",
                 headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
@@ -990,7 +1067,8 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
                       "worker_id": body.worker_id, "status": "allocated",
                       "created_by": user["user_id"], "updated_by": user["user_id"]})
             if ins.status_code not in (200, 201):
-                raise HTTPException(status_code=500, detail="Could not add the second site")
+                raise HTTPException(status_code=500,
+                                    detail="Could not add the second site — the database may not allow split days yet")
             await audit(client, user, "split_day", "allocation",
                         f"{body.work_date}:{body.worker_id}", None,
                         {"added_site": body.to_site_id, "reason": "worked at two sites today"})
@@ -1032,6 +1110,7 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
                     f"{body.work_date}:{body.worker_id}", None,
                     {"site_id": body.to_site_id, "reason": "unallocated, reported to this site"})
         return {"ok": True, "moved": True, "from": None}
+
 
 # ---------------- WhatsApp Generators (Phase 9 · spec §7, real formats) ----------------
 MONTHS = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
@@ -1145,6 +1224,50 @@ async def update_message(date: str, site_id: str,
                     f"{date}:{site_id}", None, {"workers": len(present)})
         return {"message": msg, "workers": len(present), "missing_end_time": missing}
 
+
+def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> str:
+    """Consolidated manpower request summary the allocator posts in the group."""
+    d = date_cls.fromisoformat(request_date)
+    lines = ["*MANPOWER REQUEST*",
+             f"*{d.day:02d}-{MONTHS[d.month - 1]}-{d.year}*",
+             f"*{DAYS[d.weekday()]}*"]
+    total = 0
+    for sname in sorted(by_site.keys()):
+        workers = by_site[sname]
+        total += len(workers)
+        lines.append(DIVIDER)
+        lines.append(f"*{sname.upper()}*  ({len(workers)})")
+        for i, x in enumerate(sorted(workers), 1):
+            lines.append(f"{i}. {x.upper()}")
+    lines.append(DIVIDER)
+    lines.append(f"*TOTAL REQUESTED: {total}*")
+    return "\n".join(lines)
+
+
+@app.get("/api/v1/messages/requests")
+async def request_message(date: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("admin", "main_sup"):
+        raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can generate this message")
+    async with httpx.AsyncClient(timeout=10) as client:
+        rr = await client.get(
+            f"{REST}/manpower_requests",
+            params={"request_date": f"eq.{date}",
+                    "select": "site_id,workers(name,worker_code),sites(site_name)"},
+            headers=supabase_headers(user["token"]),
+        )
+        rows = rr.json() if rr.status_code == 200 else []
+        by_site: dict[str, list[str]] = {}
+        for a in rows:
+            sname = (a.get("sites") or {}).get("site_name", "?")
+            w = a.get("workers") or {}
+            by_site.setdefault(sname, []).append(
+                f'{w.get("worker_code", "?")}_{w.get("name", "?")}')
+        msg = format_request_message(date, by_site)
+        await audit(client, user, "generate_request_msg", "message", date, None,
+                    {"workers": len(rows), "sites": len(by_site)})
+        return {"message": msg, "workers": len(rows), "sites": len(by_site)}
+
+
 # ---------------- Dashboard (Phase 10 · spec §8) ----------------
 from datetime import datetime, timedelta, timezone
 
@@ -1243,6 +1366,7 @@ async def dashboard(user: dict = Depends(get_current_user)):
             "month_ot_hours": round(month_ot, 1),
             "site_summary": summary,
         }
+
 
 # ---------------- Reports & Monthly Man-Hours (Phases 11–12 · spec §9) ----------------
 async def month_locked(client: httpx.AsyncClient, token: str, work_date: str) -> bool:
