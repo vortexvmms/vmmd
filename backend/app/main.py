@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.16.1")  # + manpower requests (site_sup → admin)
+app = FastAPI(title="VMMS API", version="0.16.2")  # + manpower requests (site_sup → admin) + copy last request
 
 app.add_middleware(
     CORSMiddleware,
@@ -591,6 +591,27 @@ async def list_requests(date: str, user: dict = Depends(get_current_user)):
             "worker_code": (a.get("workers") or {}).get("worker_code", ""),
             "worker_status": (a.get("workers") or {}).get("status", ""),
         } for a in r.json()]
+
+
+@app.get("/api/v1/requests/last")
+async def last_request(site_id: str, before: str, user: dict = Depends(get_current_user)):
+    """Most recent request for this site strictly BEFORE `before` (YYYY-MM-DD).
+    Used by the 'Copy last request' button. RLS scopes site_sup to their site."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/manpower_requests",
+            params={"site_id": f"eq.{site_id}", "request_date": f"lt.{before}",
+                    "select": "request_date,worker_id", "order": "request_date.desc"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not read previous requests")
+        rows = r.json()
+        if not rows:
+            return {"found": False, "request_date": None, "worker_ids": []}
+        last_date = rows[0]["request_date"]
+        ids = [x["worker_id"] for x in rows if x["request_date"] == last_date]
+        return {"found": True, "request_date": last_date, "worker_ids": ids}
 
 
 @app.post("/api/v1/requests/bulk")
