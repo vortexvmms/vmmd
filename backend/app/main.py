@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.16.2")  # + manpower requests (site_sup → admin) + copy last request
+app = FastAPI(title="VMMS API", version="0.17.0")  # + manpower requests, copy last request, dashboard any-date
 
 app.add_middleware(
     CORSMiddleware,
@@ -1299,8 +1299,9 @@ def sgt_today() -> str:
 
 
 @app.get("/api/v1/dashboard")
-async def dashboard(user: dict = Depends(get_current_user)):
-    today = sgt_today()
+async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
+    # `date` lets the user view any day; defaults to today (SGT).
+    today = date or sgt_today()
     month_start = today[:8] + "01"
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -1323,10 +1324,11 @@ async def dashboard(user: dict = Depends(get_current_user)):
             mine = {x["site_id"] for x in (rl.json() if rl.status_code == 200 else [])}
             sites = [s for s in sites if s["id"] in mine]
 
-        # everything this month up to today, incl. today's detail
+        # everything in the selected date's month, up to and including that date
         rm = await client.get(
             f"{REST}/allocations",
-            params={"work_date": f"gte.{month_start}", "status": "eq.allocated",
+            params={"and": f"(work_date.gte.{month_start},work_date.lte.{today})",
+                    "status": "eq.allocated",
                     "select": "work_date,site_id,sites(site_name),"
                               "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)"},
             headers=supabase_headers(user["token"]))
