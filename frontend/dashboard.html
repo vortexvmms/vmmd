@@ -13,15 +13,20 @@
   <style>
     .print-only { display: none; }
     @media print {
-      @page { size: A4 portrait; margin: 14mm; }
+      @page { size: A4 portrait; margin: 10mm; }
       body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
       .print-only { display: block !important; }
-      main { max-width: none !important; padding: 0 !important; }
+      /* tighten so the whole dashboard lands on one page */
+      main { max-width: none !important; padding: 0 !important; font-size: 11px; }
+      main .p-4 { padding: 0.4rem !important; }
+      main .p-5 { padding: 0.5rem !important; }
+      main .gap-3 { gap: 0.4rem !important; }
+      main .mt-6, main .mt-4 { margin-top: 0.5rem !important; }
       .card { box-shadow: none !important; }
       table { page-break-inside: auto; }
       tr, .card { page-break-inside: avoid; }
-      h2 { page-break-after: avoid; }
+      h2 { page-break-after: avoid; margin: 0.35rem 0 !important; }
     }
   </style>
 </head>
@@ -215,7 +220,7 @@
     function setToday() { document.getElementById("date").value = todayIso(); load(); }
     function downloadPdf() {
       const d = document.getElementById("date").value || "";
-      vmmsDownloadPdf("body", `VMMS_Dashboard_${d}`, { landscape: false });
+      vmmsDownloadPdf("body", `VMMS_Dashboard_${d}`, { landscape: false, onePage: true });
     }
 
     async function boot() {
