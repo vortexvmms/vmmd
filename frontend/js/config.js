@@ -35,6 +35,56 @@ if (window.tailwind) {
   document.head.appendChild(s);
 })();
 
+// ---- Download-as-PDF helper (works on iPhone, where window.print() is blocked) ----
+// Lazy-loads html2pdf.js on first use, then renders one DOM element to an A4 PDF.
+// Usage: vmmsDownloadPdf("sheet", "VMMS_Timesheet_July_2026", { landscape: true })
+(function () {
+  // When capturing a whole page we mirror the print CSS: hide .no-print, show .print-only.
+  var s = document.createElement("style");
+  s.textContent = "body.vmms-pdf .no-print{display:none!important}" +
+                  "body.vmms-pdf .print-only{display:block!important}" +
+                  ".pdfing{box-shadow:none!important;border:none!important}";
+  (document.head || document.documentElement).appendChild(s);
+})();
+window.vmmsDownloadPdf = function (elementId, filename, opts) {
+  opts = opts || {};
+  // elementId may be an id, or "body"/null for a full-page capture
+  var full = !elementId || elementId === "body";
+  var el = full ? document.body : document.getElementById(elementId);
+  if (!el) { alert("Nothing to export yet."); return; }
+
+  function run() {
+    var prevBtn = document.activeElement;
+    if (prevBtn && prevBtn.tagName === "BUTTON") { prevBtn.dataset._t = prevBtn.textContent; prevBtn.textContent = "Preparing PDF…"; prevBtn.disabled = true; }
+    if (full) document.body.classList.add("vmms-pdf");
+    el.classList.add("pdfing");
+    function done() {
+      el.classList.remove("pdfing");
+      document.body.classList.remove("vmms-pdf");
+      if (prevBtn && prevBtn.dataset._t) { prevBtn.textContent = prevBtn.dataset._t; prevBtn.disabled = false; }
+    }
+    window.html2pdf().set({
+      margin: opts.landscape ? 6 : 8,
+      filename: (filename || "VMMS_export") + ".pdf",
+      image: { type: "jpeg", quality: 0.96 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff",
+                     windowWidth: Math.max(el.scrollWidth, document.documentElement.clientWidth) },
+      jsPDF: { unit: "mm", format: "a4", orientation: opts.landscape ? "landscape" : "portrait" },
+      pagebreak: { mode: ["css", "legacy"] }
+    }).from(el).save().then(done).catch(function () {
+      done();
+      alert("Could not build the PDF. Please try Print / PDF instead.");
+    });
+  }
+
+  if (window.html2pdf) { run(); return; }
+  var s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+  s.onload = run;
+  s.onerror = function () { alert("Could not load the PDF tool (no internet?). Please try Print / PDF."); };
+  document.head.appendChild(s);
+};
+
 // ---- Global floating "Home" button (every page except home / login) ----
 // The small back arrow in the header is hard to tap on a phone, so we add a
 // big, thumb-friendly circular Home button fixed at the bottom-right corner.
