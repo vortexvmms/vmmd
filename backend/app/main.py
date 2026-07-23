@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.18.1")  # main_sup may submit attendance (no allocation)
+app = FastAPI(title="VMMS API", version="0.19.0")  # + all-sites end-time WhatsApp message
 
 app.add_middleware(
     CORSMiddleware,
@@ -1296,6 +1296,44 @@ async def update_message(date: str, site_id: str,
         await audit(client, user, "generate_update_msg", "message",
                     f"{date}:{site_id}", None, {"workers": len(present)})
         return {"message": msg, "workers": len(present), "missing_end_time": missing}
+
+
+@app.get("/api/v1/messages/update_all")
+async def update_all_message(date: str, user: dict = Depends(get_current_user)):
+    """One combined end-time message for ALL sites (co-ordinator posts once)."""
+    if user["role"] not in ("admin", "main_sup"):
+        raise HTTPException(status_code=403, detail="Only the Co-ordinator or Administrator can generate the all-sites update")
+    async with httpx.AsyncClient(timeout=10) as client:
+        rows = await _load_day(client, user["token"], date, None)
+        by_site: dict[str, list[dict]] = {}
+        missing = 0
+        for a in rows:
+            att = a.get("attendance")
+            sname = (a.get("sites") or {}).get("site_name", "?")
+            if not att or not att["present"]:
+                continue
+            if not att["end_time"]:
+                missing += 1
+                continue
+            by_site.setdefault(sname, []).append({
+                "name": (a.get("workers") or {}).get("name", "?"),
+                "code": (a.get("workers") or {}).get("worker_code", "?"),
+                "start": att["start_time"][:5] if att["start_time"] else "08:00",
+                "end": att["end_time"][:5],
+            })
+        d = date_cls.fromisoformat(date)
+        lines = ["*END TIME UPDATE*", f"*{d.day:02d}/{d.month:02d}/{d.year}*"]
+        total = 0
+        for sname in sorted(by_site):
+            lines.append(DIVIDER)
+            lines.append(f"*{sname.upper()}*")
+            for i, r in enumerate(sorted(by_site[sname], key=lambda x: x["name"]), 1):
+                t = r["end"] if r["start"] == "08:00" else f'{r["start"]}-{r["end"]}'
+                lines.append(f'{i}.{r["code"]}_{r["name"].upper()}_{t}')
+                total += 1
+        msg = "\n".join(lines)
+        await audit(client, user, "generate_update_all_msg", "message", date, None, {"workers": total})
+        return {"message": msg, "workers": total, "missing_end_time": missing, "sites": len(by_site)}
 
 
 def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> str:
