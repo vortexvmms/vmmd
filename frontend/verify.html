@@ -65,16 +65,17 @@
   <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
     <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
       <table class="w-full text-sm">
-        <thead class="bg-gray-200 text-gray-600 text-xs">
-          <tr>
-            <th class="text-left p-3">Worker</th>
-            <th class="text-left p-3">Site</th>
-            <th class="text-left p-3">Status</th>
-            <th class="text-right p-3">Start</th>
-            <th class="text-right p-3">End time</th>
-            <th class="text-right p-3">Normal h</th>
-            <th class="text-right p-3">OT h</th>
-            <th class="text-center p-3">Submitted</th>
+        <thead class="bg-gray-200 text-gray-600 text-xs select-none">
+          <tr id="hrow">
+            <th data-k="code" class="text-left p-3 cursor-pointer">Worker ID</th>
+            <th data-k="name" class="text-left p-3 cursor-pointer">Name</th>
+            <th data-k="site" class="text-left p-3 cursor-pointer">Site</th>
+            <th data-k="status" class="text-left p-3 cursor-pointer">Status</th>
+            <th data-k="start" class="text-right p-3 cursor-pointer">Start</th>
+            <th data-k="end" class="text-right p-3 cursor-pointer">End time</th>
+            <th data-k="normal" class="text-right p-3 cursor-pointer">Normal h</th>
+            <th data-k="ot" class="text-right p-3 cursor-pointer">OT h</th>
+            <th data-k="submitted" class="text-center p-3 cursor-pointer">Submitted</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
@@ -87,6 +88,25 @@
   <script>
     requireLogin();
     let ME = null, ALL = [];
+    const HLABELS = { code:"Worker ID", name:"Name", site:"Site", status:"Status",
+      start:"Start", end:"End time", normal:"Normal h", ot:"OT h", submitted:"Submitted" };
+    let SORT = { key: "site", dir: 1 };
+
+    function sval(x, k) {
+      switch (k) {
+        case "code": return x.worker_code || "";
+        case "name": return x.worker_name || "";
+        case "site": return x.site_name || "";
+        case "status": return x.present ? 0 : (x.absence_type === "mc" ? 1 : 2);
+        case "start": return x.present ? (x.start_time || "") : "";
+        case "end": return x.end_time || "";
+        case "normal": return x.present ? x.normal_hours : -1;
+        case "ot": return x.present ? x.ot_hours : -1;
+        case "submitted": return x.submitted ? 1 : 0;
+      }
+      return "";
+    }
+    function sortBy(k) { if (SORT.key === k) SORT.dir *= -1; else { SORT.key = k; SORT.dir = 1; } render(); }
 
     function fmtDMY(iso) { const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
     function todayIso(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
@@ -125,7 +145,18 @@
         (!missing || (x.present && !x.end_time)) &&
         (!present || x.present) &&
         (!otOnly || x.ot_hours > 0)
-      ).sort((a,b) => (a.site_name+a.worker_name).localeCompare(b.site_name+b.worker_name));
+      ).sort((a, b) => {
+        const va = sval(a, SORT.key), vb = sval(b, SORT.key);
+        let c = (typeof va === "number") ? (va - vb) : String(va).localeCompare(String(vb));
+        if (c === 0) c = (a.worker_name || "").localeCompare(b.worker_name || "");
+        return c * SORT.dir;
+      });
+
+      // header sort arrows
+      document.querySelectorAll("#hrow th").forEach(th => {
+        const k = th.dataset.k;
+        th.textContent = HLABELS[k] + (SORT.key === k ? (SORT.dir > 0 ? " ▲" : " ▼") : "");
+      });
 
       const date = document.getElementById("date").value;
       document.getElementById("summary").textContent =
@@ -143,7 +174,8 @@
         const end = x.present ? (x.end_time || `<span class="text-red-600 font-bold">missing</span>`) : "—";
         const sub = x.submitted ? `<span class="text-green-700 font-bold">✓</span>` : `<span class="text-gray-400">pending</span>`;
         return `<tr class="border-t border-gray-200">
-          <td class="p-3 text-gray-800">${x.worker_code} ${x.worker_name}</td>
+          <td class="p-3 text-gray-500">${x.worker_code}</td>
+          <td class="p-3 text-gray-800 font-medium">${x.worker_name}</td>
           <td class="p-3 text-gray-700">${x.site_name}</td>
           <td class="p-3">${st}</td>
           <td class="p-3 text-right">${x.present ? x.start_time : "—"}</td>
@@ -157,7 +189,7 @@
       const nh = rows.reduce((a,x)=>a+(x.present?x.normal_hours:0),0);
       const ot = rows.reduce((a,x)=>a+(x.present?x.ot_hours:0),0);
       document.getElementById("foot").innerHTML =
-        `<tr><td class="p-3" colspan="5">TOTAL (${rows.filter(x=>x.present).length} present)</td>
+        `<tr><td class="p-3" colspan="6">TOTAL (${rows.filter(x=>x.present).length} present)</td>
              <td class="p-3 text-right">${Math.round(nh*10)/10}</td>
              <td class="p-3 text-right">${Math.round(ot*10)/10}</td><td></td></tr>`;
     }
@@ -166,6 +198,8 @@
     ["site","search","f-missing","f-present","f-ot"].forEach(id =>
       document.getElementById(id).addEventListener("input", render));
     document.getElementById("site").addEventListener("change", render);
+    document.querySelectorAll("#hrow th").forEach(th =>
+      th.addEventListener("click", () => sortBy(th.dataset.k)));
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
