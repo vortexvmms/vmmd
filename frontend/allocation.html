@@ -55,6 +55,11 @@
         <input id="only-un" type="checkbox" class="accent-red-700">
         <span id="only-un-label">Show unassigned workers only</span>
       </label>
+
+      <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 md:mb-0 whitespace-nowrap">
+        <input id="only-multi" type="checkbox" class="accent-red-700">
+        Requested by 2+ sites
+      </label>
     </div>
 
     <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
@@ -235,6 +240,8 @@
       const siteId = document.getElementById("site").value;
       const q = document.getElementById("search").value.trim().toLowerCase();
       const onlyUn = document.getElementById("only-un").checked;
+      const onlyMulti = document.getElementById("only-multi").checked;
+      const multiReq = w => (REQANY[w.id] && REQANY[w.id].length > 1);
 
       const elsewhere = {};
       ALLOC.forEach(a => { if (a.site_id !== siteId) elsewhere[a.worker_id] = a.site_name; });
@@ -254,7 +261,8 @@
 
       const rows = active.filter(w =>
         (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
-        (!onlyUn || (!elsewhere[w.id] && !SELECTED.has(w.id)))
+        (!onlyUn || (!elsewhere[w.id] && !SELECTED.has(w.id))) &&
+        (!onlyMulti || multiReq(w))
       );
 
       const list = document.getElementById("list");
@@ -295,6 +303,8 @@
     function renderWorker() {
       const q = document.getElementById("search").value.trim().toLowerCase();
       const onlyUn = document.getElementById("only-un").checked;
+      const onlyMulti = document.getElementById("only-multi").checked;
+      const multiReq = w => (REQANY[w.id] && REQANY[w.id].length > 1);
 
       const active = WORKERS.filter(w => w.status === "active");
       const onLeave = WORKERS.filter(w => w.status === "on_leave");
@@ -310,7 +320,8 @@
 
       const rows = active.filter(w =>
         (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
-        (!onlyUn || !ASSIGN[w.id])
+        (!onlyUn || !ASSIGN[w.id]) &&
+        (!onlyMulti || multiReq(w))
       );
 
       const opts = (cur) =>
@@ -460,6 +471,7 @@
     });
     document.getElementById("search").addEventListener("input", render);
     document.getElementById("only-un").addEventListener("change", render);
+    document.getElementById("only-multi").addEventListener("change", render);
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
