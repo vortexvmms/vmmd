@@ -13,12 +13,22 @@
   <style>
     .print-only { display: none; }
     @media print {
-      @page { size: A4 portrait; margin: 12mm; }
-      body { background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      @page { size: A4 landscape; margin: 9mm; }
+      html, body {
+        background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+        font-family:"Arial Narrow","Helvetica Neue Condensed","Liberation Sans Narrow",Arial,sans-serif;
+        color:#111;
+      }
       .no-print { display:none !important; }
       .print-only { display:block !important; }
       main { max-width:none !important; padding:0 !important; }
-      table { page-break-inside:auto; } tr { page-break-inside:avoid; }
+      .sheet { border:none !important; box-shadow:none !important; background:#fff !important; border-radius:0 !important; overflow:visible !important; }
+      table { width:100%; border-collapse:collapse; font-size:8.5pt; }
+      thead { display:table-header-group; }          /* repeat header on each page */
+      tr { page-break-inside:avoid; }
+      th, td { padding:2px 7px !important; border-bottom:0.4pt solid #cfd4da !important; }
+      thead th { background:#e8eaed !important; border-bottom:0.8pt solid #999 !important; font-weight:bold; }
+      tfoot td { border-top:0.8pt solid #888 !important; font-weight:bold; }
     }
   </style>
 </head>
@@ -55,15 +65,15 @@
         </div>
       </div>
       <div style="font-size:10px; color:#595959; text-align:right; line-height:1.5;">
-        <div><b>Date:</b> <span id="p-date">—</span></div>
+        <div><b>Date:</b> <span id="p-date">—</span> &nbsp; <b>Site:</b> <span id="p-site">All sites</span></div>
         <div><b>Generated:</b> <span id="p-gen">—</span></div>
-        <div><b>Checked by:</b> <span id="p-user">—</span></div>
+        <div><b>Checked by:</b> <span id="p-user">—</span> &nbsp; <b>Present:</b> <span id="p-count">—</span></div>
       </div>
     </div>
   </div>
 
   <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+    <div class="sheet bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
       <table class="w-full text-sm">
         <thead class="bg-gray-200 text-gray-600 text-xs select-none">
           <tr id="hrow">
@@ -162,6 +172,8 @@
       document.getElementById("summary").textContent =
         `${fmtDMY(date)} · ${rows.length} shown · ${rows.filter(x=>x.present&&!x.end_time).length} missing end time`;
       document.getElementById("p-date").textContent = fmtDMY(date);
+      document.getElementById("p-site").textContent = site || "All sites";
+      document.getElementById("p-count").textContent = rows.filter(x => x.present).length;
       const now = new Date();
       document.getElementById("p-gen").textContent = fmtDMY(todayIso())+" "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0")+" SGT";
       document.getElementById("p-user").textContent = ME ? ME.name : "—";
