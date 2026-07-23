@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — End-Time Verification</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    .print-only { display: none; }
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      body { background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .no-print { display:none !important; }
+      .print-only { display:block !important; }
+      main { max-width:none !important; padding:0 !important; }
+      table { page-break-inside:auto; } tr { page-break-inside:avoid; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+  <header class="no-print bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold">End-Time Verification</h1>
+        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+      </div>
+      <button onclick="window.print()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Print / PDF</button>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3 max-w-6xl mx-auto w-full">
+      <input id="date" type="date" class="rounded-lg p-2 text-gray-800 text-base">
+      <select id="site" class="rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+      <input id="search" type="search" placeholder="Search worker…" class="flex-1 min-w-[140px] rounded-lg p-2 text-gray-800 text-base">
+    </div>
+    <div class="flex flex-wrap gap-4 mt-2 max-w-6xl mx-auto w-full text-sm">
+      <label class="flex items-center gap-2"><input id="f-missing" type="checkbox" class="accent-white"> Missing end time only</label>
+      <label class="flex items-center gap-2"><input id="f-present" type="checkbox" class="accent-white"> Present only</label>
+      <label class="flex items-center gap-2"><input id="f-ot" type="checkbox" class="accent-white"> Has OT only</label>
+    </div>
+  </header>
+
+  <div class="print-only" style="border-bottom:3px solid #C00000; padding-bottom:8px; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex" style="height:32px;" onerror="this.style.display='none'">
+        <div>
+          <div style="font-size:15px; font-weight:bold; color:#C00000;">VORTEX MANPOWER MANAGEMENT SYSTEM</div>
+          <div style="font-size:11px; color:#595959;">End-Time Verification (submitted end times vs face-scan)</div>
+        </div>
+      </div>
+      <div style="font-size:10px; color:#595959; text-align:right; line-height:1.5;">
+        <div><b>Date:</b> <span id="p-date">—</span></div>
+        <div><b>Generated:</b> <span id="p-gen">—</span></div>
+        <div><b>Checked by:</b> <span id="p-user">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
+    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-200 text-gray-600 text-xs">
+          <tr>
+            <th class="text-left p-3">Worker</th>
+            <th class="text-left p-3">Site</th>
+            <th class="text-left p-3">Status</th>
+            <th class="text-right p-3">Start</th>
+            <th class="text-right p-3">End time</th>
+            <th class="text-right p-3">Normal h</th>
+            <th class="text-right p-3">OT h</th>
+            <th class="text-center p-3">Submitted</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot id="foot" class="border-t-2 border-gray-400 font-bold text-gray-800"></tfoot>
+      </table>
+    </div>
+    <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers for this date.</p>
+  </main>
+
+  <script>
+    requireLogin();
+    let ME = null, ALL = [];
+
+    function fmtDMY(iso) { const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
+    function todayIso(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      document.getElementById("date").value = todayIso();
+      await load();
+    }
+
+    async function load() {
+      const date = document.getElementById("date").value || todayIso();
+      const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
+      ALL = r.ok ? await r.json() : [];
+      // site dropdown
+      const names = [...new Set(ALL.map(x => x.site_name))].sort();
+      const sel = document.getElementById("site");
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">All sites</option>` + names.map(n => `<option>${n}</option>`).join("");
+      if (prev) sel.value = prev;
+      render();
+    }
+
+    function render() {
+      const site = document.getElementById("site").value;
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const missing = document.getElementById("f-missing").checked;
+      const present = document.getElementById("f-present").checked;
+      const otOnly = document.getElementById("f-ot").checked;
+
+      let rows = ALL.filter(x =>
+        (!site || x.site_name === site) &&
+        (!q || x.worker_name.toLowerCase().includes(q) || x.worker_code.toLowerCase().includes(q)) &&
+        (!missing || (x.present && !x.end_time)) &&
+        (!present || x.present) &&
+        (!otOnly || x.ot_hours > 0)
+      ).sort((a,b) => (a.site_name+a.worker_name).localeCompare(b.site_name+b.worker_name));
+
+      const date = document.getElementById("date").value;
+      document.getElementById("summary").textContent =
+        `${fmtDMY(date)} · ${rows.length} shown · ${rows.filter(x=>x.present&&!x.end_time).length} missing end time`;
+      document.getElementById("p-date").textContent = fmtDMY(date);
+      const now = new Date();
+      document.getElementById("p-gen").textContent = fmtDMY(todayIso())+" "+String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0")+" SGT";
+      document.getElementById("p-user").textContent = ME ? ME.name : "—";
+
+      document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
+      document.getElementById("rows").innerHTML = rows.map(x => {
+        const st = x.present
+          ? `<span class="text-green-700 font-medium">Present</span>`
+          : `<span class="text-${x.absence_type==="mc"?"yellow":"gray"}-600 font-medium">${x.absence_type==="mc"?"MC":"Absent"}</span>`;
+        const end = x.present ? (x.end_time || `<span class="text-red-600 font-bold">missing</span>`) : "—";
+        const sub = x.submitted ? `<span class="text-green-700 font-bold">✓</span>` : `<span class="text-gray-400">pending</span>`;
+        return `<tr class="border-t border-gray-200">
+          <td class="p-3 text-gray-800">${x.worker_code} ${x.worker_name}</td>
+          <td class="p-3 text-gray-700">${x.site_name}</td>
+          <td class="p-3">${st}</td>
+          <td class="p-3 text-right">${x.present ? x.start_time : "—"}</td>
+          <td class="p-3 text-right">${end}</td>
+          <td class="p-3 text-right">${x.present ? x.normal_hours : "—"}</td>
+          <td class="p-3 text-right ${x.ot_hours>0?"text-red-700 font-bold":""}">${x.present ? x.ot_hours : "—"}</td>
+          <td class="p-3 text-center">${sub}</td>
+        </tr>`;
+      }).join("");
+
+      const nh = rows.reduce((a,x)=>a+(x.present?x.normal_hours:0),0);
+      const ot = rows.reduce((a,x)=>a+(x.present?x.ot_hours:0),0);
+      document.getElementById("foot").innerHTML =
+        `<tr><td class="p-3" colspan="5">TOTAL (${rows.filter(x=>x.present).length} present)</td>
+             <td class="p-3 text-right">${Math.round(nh*10)/10}</td>
+             <td class="p-3 text-right">${Math.round(ot*10)/10}</td><td></td></tr>`;
+    }
+
+    document.getElementById("date").addEventListener("change", load);
+    ["site","search","f-missing","f-present","f-ot"].forEach(id =>
+      document.getElementById(id).addEventListener("input", render));
+    document.getElementById("site").addEventListener("change", render);
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
