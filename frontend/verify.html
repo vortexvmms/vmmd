@@ -41,7 +41,8 @@
         <h1 class="text-lg font-bold">End-Time Verification</h1>
         <p class="text-red-100 text-xs" id="summary">Loading…</p>
       </div>
-      <button onclick="window.print()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Print / PDF</button>
+      <button onclick="downloadPdf()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Download PDF</button>
+      <button onclick="window.print()" class="bg-red-900 text-white text-sm font-bold px-4 py-2 rounded-lg">Print</button>
     </div>
     <div class="flex flex-wrap gap-2 mt-3 max-w-6xl mx-auto w-full">
       <input id="date" type="date" class="rounded-lg p-2 text-gray-800 text-base">
@@ -97,6 +98,10 @@
 
   <script>
     requireLogin();
+    function downloadPdf() {
+      const d = document.getElementById("date").value || "";
+      vmmsDownloadPdf("body", `VMMS_EndTime_Verification_${d}`, { landscape: true });
+    }
     let ME = null, ALL = [];
     const HLABELS = { code:"Worker ID", name:"Name", site:"Site", status:"Status",
       start:"Start", end:"End time", normal:"Normal h", ot:"OT h", submitted:"Submitted" };

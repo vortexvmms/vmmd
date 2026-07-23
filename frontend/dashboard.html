@@ -40,7 +40,8 @@
      <input id="date" type="date" class="rounded-lg p-2 text-gray-800 text-base">
      <button onclick="setToday()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-3 py-2 rounded-lg">Today</button>
      <div class="flex-1"></div>
-     <button onclick="window.print()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Print / PDF</button>
+     <button onclick="downloadPdf()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Download PDF</button>
+     <button onclick="window.print()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg">Print</button>
    </div>
   </header>
 
@@ -212,6 +213,10 @@
     }
 
     function setToday() { document.getElementById("date").value = todayIso(); load(); }
+    function downloadPdf() {
+      const d = document.getElementById("date").value || "";
+      vmmsDownloadPdf("body", `VMMS_Dashboard_${d}`, { landscape: false });
+    }
 
     async function boot() {
       const r = await vmmsApi("/api/v1/me");

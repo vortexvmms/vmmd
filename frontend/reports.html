@@ -59,7 +59,8 @@
 
     <div id="actions" class="hidden flex gap-3 mb-3">
       <button onclick="exportXlsx()" class="flex-1 border-2 border-green-700 text-green-700 font-bold py-2 rounded-lg text-sm">Export Excel</button>
-      <button onclick="window.print()" class="flex-1 border-2 border-gray-500 text-gray-600 font-bold py-2 rounded-lg text-sm">Print / PDF</button>
+      <button onclick="downloadPdf()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-sm">Download PDF</button>
+      <button onclick="window.print()" class="flex-1 border-2 border-gray-500 text-gray-600 font-bold py-2 rounded-lg text-sm">Print</button>
     </div>
 
     <div id="tablebox" class="bg-white rounded-xl shadow overflow-x-auto">
@@ -134,6 +135,11 @@
         HEADERS.map(h => `<th class="text-left p-2">${h}</th>`).join("") + "</tr></thead><tbody>" +
         ROWS.map(r => "<tr class='border-t border-gray-100'>" +
           r.map(c => `<td class="p-2">${c}</td>`).join("") + "</tr>").join("") + "</tbody>";
+    }
+
+    function downloadPdf() {
+      if (!ROWS.length) { alert("Run a report first."); return; }
+      vmmsDownloadPdf("tablebox", "VMMS_Report", { landscape: HEADERS.length > 6 });
     }
 
     function exportXlsx() {
