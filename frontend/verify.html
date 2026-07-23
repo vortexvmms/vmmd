@@ -107,7 +107,7 @@
         case "code": return x.worker_code || "";
         case "name": return x.worker_name || "";
         case "site": return x.site_name || "";
-        case "status": return x.present ? 0 : (x.absence_type === "mc" ? 1 : 2);
+        case "status": return x.present ? 0 : ({ mc:1, al:2, ul:3, absent:4 }[x.absence_type] || 4);
         case "start": return x.present ? (x.start_time || "") : "";
         case "end": return x.end_time || "";
         case "normal": return x.present ? x.normal_hours : -1;
@@ -180,9 +180,11 @@
 
       document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
       document.getElementById("rows").innerHTML = rows.map(x => {
+        const ALBL = { mc:"MC", ul:"UL", al:"AL", absent:"Absent" };
+        const ACLR = { mc:"text-yellow-600", ul:"text-orange-600", al:"text-blue-600", absent:"text-gray-600" };
         const st = x.present
           ? `<span class="text-green-700 font-medium">Present</span>`
-          : `<span class="text-${x.absence_type==="mc"?"yellow":"gray"}-600 font-medium">${x.absence_type==="mc"?"MC":"Absent"}</span>`;
+          : `<span class="${ACLR[x.absence_type] || "text-gray-600"} font-medium">${ALBL[x.absence_type] || "Absent"}</span>`;
         const end = x.present ? (x.end_time || `<span class="text-red-600 font-bold">missing</span>`) : "—";
         const sub = x.submitted ? `<span class="text-green-700 font-bold">✓</span>` : `<span class="text-gray-400">pending</span>`;
         return `<tr class="border-t border-gray-200">

@@ -89,6 +89,9 @@
 
     const PRESETS = [["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
                      ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
+    // Absence reasons: value, label, highlight colour
+    const REASONS = [["absent", "Absent", "bg-gray-700"], ["mc", "MC", "bg-yellow-500"],
+                     ["ul", "UL", "bg-orange-600"], ["al", "AL", "bg-blue-600"]];
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -182,10 +185,10 @@
               Present
             </label>
           </div>
-          <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1">
+          <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1 flex-wrap">
             <span class="text-xs text-gray-500">Reason:</span>
-            <button class="abs-chip text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type !== "mc" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}">Absent</button>
-            <button class="mc-chip text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === "mc" ? "bg-yellow-500 text-white" : "bg-gray-100 text-gray-600"}">MC</button>
+            ${REASONS.map(([v, l, c]) =>
+              `<button class="rsn text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === v ? c + " text-white" : "bg-gray-100 text-gray-600"}" data-r="${v}">${l}</button>`).join("")}
           </div>
           <div class="${x.present ? "" : "hidden"}">
             <div class="flex items-center flex-wrap gap-1">
@@ -202,8 +205,8 @@
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
-        div.querySelector(".abs-chip").addEventListener("click", () => mark(x, { present: false, absence_type: "absent" }, div));
-        div.querySelector(".mc-chip").addEventListener("click", () => mark(x, { present: false, absence_type: "mc" }, div));
+        div.querySelectorAll(".rsn").forEach(b =>
+          b.addEventListener("click", () => mark(x, { present: false, absence_type: b.dataset.r }, div)));
         div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
         div.querySelector(".tcustom").addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
         ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value }, div); });
