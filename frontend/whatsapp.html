@@ -111,7 +111,10 @@
       const map = {};
       all.forEach(x => map[x.site_id] = x.site_name);
       const sel = document.getElementById("site");
-      sel.innerHTML = Object.entries(map).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+      // Co-ordinator/admin can generate one combined message for every site
+      const allOpt = (ME && (ME.role === "admin" || ME.role === "main_sup"))
+        ? `<option value="__all__">All sites (combined)</option>` : "";
+      sel.innerHTML = allOpt + Object.entries(map).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
     }
 
     async function generate() {
@@ -127,7 +130,9 @@
         } else {
           const sid = document.getElementById("site").value;
           if (!sid) throw new Error("No site available for this date");
-          url = `/api/v1/messages/update?date=${date}&site_id=${sid}`;
+          url = sid === "__all__"
+            ? `/api/v1/messages/update_all?date=${date}`
+            : `/api/v1/messages/update?date=${date}&site_id=${sid}`;
         }
         const r = await vmmsApi(url);
         const data = await r.json();
