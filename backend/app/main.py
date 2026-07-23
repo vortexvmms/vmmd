@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.19.1")  # + absence types UL / AL
+app = FastAPI(title="VMMS API", version="0.20.0")  # + dashboard AL/UL counts
 
 app.add_middleware(
     CORSMiddleware,
@@ -1427,7 +1427,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         month_rows = rm.json() if rm.status_code == 200 else []
 
         month_nh = month_ot = 0.0
-        today_mc = 0
+        today_mc = today_al = today_ul = 0
         today_by_site: dict[str, dict] = {}
         site_month: dict[str, dict] = {}
 
@@ -1450,8 +1450,11 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                     t["with_att"] += 1
                     if att["submitted_at"]:
                         t["submitted"] += 1
-                    if not att["present"] and att.get("absence_type") == "mc":
-                        today_mc += 1
+                    if not att["present"]:
+                        at = att.get("absence_type")
+                        if at == "mc": today_mc += 1
+                        elif at == "al": today_al += 1
+                        elif at == "ul": today_ul += 1
 
         pending, completed = [], []
         for sname, t in today_by_site.items():
@@ -1475,6 +1478,8 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             "total_sites": len(sites),
             "today_allocated": sum(t["allocated"] for t in today_by_site.values()),
             "today_mc": today_mc,
+            "today_al": today_al,
+            "today_ul": today_ul,
             "pending_updates": sorted(pending),
             "completed_updates": sorted(completed),
             "month_normal_hours": round(month_nh, 1),
