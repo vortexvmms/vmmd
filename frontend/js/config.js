@@ -63,18 +63,40 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
       document.body.classList.remove("vmms-pdf");
       if (prevBtn && prevBtn.dataset._t) { prevBtn.textContent = prevBtn.dataset._t; prevBtn.disabled = false; }
     }
+    function fail() { done(); alert("Could not build the PDF. Please try Print / PDF instead."); }
+    var margin = opts.landscape ? 6 : 8;
+    var orient = opts.landscape ? "landscape" : "portrait";
+
+    // "Fit to one page": capture once, then scale the whole image onto a single A4 page.
+    if (opts.onePage && window.html2canvas && window.jspdf) {
+      // let the browser paint the print-only header before capture
+      setTimeout(function () {
+        window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff",
+          windowWidth: Math.max(el.scrollWidth, document.documentElement.clientWidth) })
+        .then(function (canvas) {
+          var jsPDF = window.jspdf.jsPDF;
+          var pdf = new jsPDF({ unit: "mm", format: "a4", orientation: orient });
+          var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+          var availW = pw - 2 * margin, availH = ph - 2 * margin;
+          var ratio = Math.min(availW / canvas.width, availH / canvas.height);
+          var w = canvas.width * ratio, h = canvas.height * ratio;
+          pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", (pw - w) / 2, margin, w, h);
+          pdf.save((filename || "VMMS_export") + ".pdf");
+          done();
+        }).catch(fail);
+      }, 60);
+      return;
+    }
+
     window.html2pdf().set({
-      margin: opts.landscape ? 6 : 8,
+      margin: margin,
       filename: (filename || "VMMS_export") + ".pdf",
       image: { type: "jpeg", quality: 0.96 },
       html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff",
                      windowWidth: Math.max(el.scrollWidth, document.documentElement.clientWidth) },
-      jsPDF: { unit: "mm", format: "a4", orientation: opts.landscape ? "landscape" : "portrait" },
+      jsPDF: { unit: "mm", format: "a4", orientation: orient },
       pagebreak: { mode: ["css", "legacy"] }
-    }).from(el).save().then(done).catch(function () {
-      done();
-      alert("Could not build the PDF. Please try Print / PDF instead.");
-    });
+    }).from(el).save().then(done).catch(fail);
   }
 
   if (window.html2pdf) { run(); return; }
