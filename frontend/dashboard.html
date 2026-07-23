@@ -102,10 +102,26 @@
     </p>
   </main>
 
+  <!-- Tile detail (opens like a next page) -->
+  <div id="detail" class="hidden fixed inset-0 bg-gray-50 z-30 flex flex-col">
+    <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3">
+      <button onclick="closeDetail()" class="text-2xl font-bold leading-none">‹</button>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold" id="d-title">Details</h1>
+        <p class="text-red-100 text-xs" id="d-sub">—</p>
+      </div>
+    </header>
+    <div class="flex-1 overflow-y-auto p-4 max-w-3xl mx-auto w-full">
+      <div id="d-list" class="space-y-2"></div>
+      <p id="d-empty" class="hidden text-center text-gray-400 mt-10">Nothing to show.</p>
+    </div>
+  </div>
+
   <script>
     requireLogin();
 
     let ME = null, SUPMAP = {}, PEND = [], PEND_DATE = "";
+    let DASH = null, WCACHE = null, SCACHE = null;
     const RDAYS = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
     const RMON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
@@ -133,10 +149,66 @@
     function fmtDMY(iso) { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
     function todayIso() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
 
-    function card(label, value, accent) {
-      return `<div class="card bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-        <p class="text-2xl font-bold ${accent || "text-gray-800"}">${value}</p>
-        <p class="text-xs text-gray-500 mt-1">${label}</p></div>`;
+    /* ---- Tile drill-down: tap a tile → detail list ---- */
+    const D_TITLES = { workers:"Active workers", leave:"On leave", sites:"Active sites",
+      allocated:"Allocated this day", mc:"On MC this day",
+      month_nh:"Month normal hours by site", month_ot:"Month OT hours by site" };
+    function dRow(main, sub, right) {
+      return `<div class="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+        <div><p class="font-medium text-gray-800">${main}</p>${sub ? `<p class="text-xs text-gray-500">${sub}</p>` : ""}</div>
+        ${right ? `<span class="text-sm font-bold text-gray-700">${right}</span>` : ""}</div>`;
+    }
+    function closeDetail() { document.getElementById("detail").classList.add("hidden"); }
+
+    async function openDetail(kind) {
+      const date = document.getElementById("date").value;
+      document.getElementById("d-title").textContent = D_TITLES[kind] || "Details";
+      document.getElementById("d-sub").textContent =
+        (kind === "month_nh" || kind === "month_ot") ? "Month to " + fmtDMY(date) : fmtDMY(date);
+      const list = document.getElementById("d-list");
+      list.innerHTML = '<p class="text-gray-400 text-sm">Loading…</p>';
+      document.getElementById("d-empty").classList.add("hidden");
+      document.getElementById("detail").classList.remove("hidden");
+
+      let items = [];
+      try {
+        if (kind === "workers" || kind === "leave") {
+          if (!WCACHE) { const r = await vmmsApi("/api/v1/workers"); WCACHE = r.ok ? await r.json() : []; }
+          const st = kind === "workers" ? "active" : "on_leave";
+          items = WCACHE.filter(w => w.status === st).sort((a,b)=>a.name.localeCompare(b.name))
+                        .map(w => dRow(w.name, w.worker_code));
+        } else if (kind === "sites") {
+          if (!SCACHE) { const r = await vmmsApi("/api/v1/sites"); SCACHE = r.ok ? await r.json() : []; }
+          items = SCACHE.filter(s => s.status === "active").sort((a,b)=>a.site_name.localeCompare(b.site_name))
+                        .map(s => dRow(s.site_name, "Supervisor: " + ((s.supervisors||[]).map(x=>x.name).join(", ") || "—")));
+        } else if (kind === "allocated") {
+          const r = await vmmsApi(`/api/v1/allocations?date=${date}`); const a = r.ok ? await r.json() : [];
+          items = a.filter(x => (x.site_name||"").toUpperCase() !== "HOME LEAVE")
+                   .sort((x,y)=>(x.site_name+x.worker_name).localeCompare(y.site_name+y.worker_name))
+                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name));
+        } else if (kind === "mc") {
+          const r = await vmmsApi(`/api/v1/attendance?date=${date}`); const a = r.ok ? await r.json() : [];
+          items = a.filter(x => !x.present && x.absence_type === "mc").sort((x,y)=>x.worker_name.localeCompare(y.worker_name))
+                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name, "MC"));
+        } else if (kind === "month_nh" || kind === "month_ot") {
+          const key = kind === "month_nh" ? "month_nh" : "month_ot";
+          const ss = (DASH && DASH.site_summary ? DASH.site_summary : []).slice()
+                        .filter(s => s[key] > 0).sort((a,b)=>b[key]-a[key]);
+          items = ss.map(s => dRow(s.site_name, "", s[key] + " h"));
+        }
+      } catch (ex) { items = []; }
+
+      if (items.length) { list.innerHTML = items.join(""); }
+      else { list.innerHTML = ""; document.getElementById("d-empty").classList.remove("hidden"); }
+    }
+
+    function card(label, value, opts = {}) {
+      const kindAttr = opts.kind ? ` data-kind="${opts.kind}"` : "";
+      const clickCls = opts.kind ? " cursor-pointer active:opacity-80 hover:shadow-md" : "";
+      const hint = opts.kind ? `<p class="text-[10px] text-gray-400 mt-1 no-print">tap for details ›</p>` : "";
+      return `<div class="card ${opts.bg || "bg-white"} border ${opts.border || "border-gray-200"} rounded-xl shadow-sm p-4${clickCls}"${kindAttr}>
+        <p class="text-2xl font-bold ${opts.accent || "text-gray-800"}">${value}</p>
+        <p class="text-xs text-gray-500 mt-1">${label}</p>${hint}</div>`;
     }
 
     function setToday() { document.getElementById("date").value = todayIso(); load(); }
@@ -158,6 +230,7 @@
       const r = await vmmsApi(`/api/v1/dashboard?date=${date}`);
       if (!r.ok) { if (r.status === 401) vmmsLogout(); return; }
       const d = await r.json();
+      DASH = d;
 
       document.getElementById("asof").textContent = `As of ${fmtDMY(d.date)}`;
 
@@ -168,19 +241,28 @@
         fmtDMY(todayIso()) + " " + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + " SGT";
       document.getElementById("p-user").textContent = ME ? ME.name : "—";
 
+      const C = {
+        workers:  { bg:"bg-blue-50",    border:"border-blue-200",    kind:"workers" },
+        leave:    { bg:"bg-amber-50",   border:"border-amber-200",   accent:"text-amber-600", kind:"leave" },
+        sites:    { bg:"bg-indigo-50",  border:"border-indigo-200",  kind:"sites" },
+        alloc:    { bg:"bg-red-50",     border:"border-red-200",     accent:"text-red-700",   kind:"allocated" },
+        mc:       { bg:"bg-yellow-50",  border:"border-yellow-200",  accent:"text-yellow-600",kind:"mc" },
+        nh:       { bg:"bg-emerald-50", border:"border-emerald-200", kind:"month_nh" },
+        ot:       { bg:"bg-rose-50",    border:"border-rose-200",    accent:"text-red-700",   kind:"month_ot" },
+      };
       document.getElementById("cards").innerHTML = d.scoped
-        ? card("My sites", d.total_sites) +
-          card("Allocated this day", d.today_allocated, "text-red-700") +
-          card("MC this day", d.today_mc ?? 0, "text-yellow-600") +
-          card("Month normal hours", d.month_normal_hours) +
-          card("Month OT hours", d.month_ot_hours, "text-red-700")
-        : card("Active workers", d.total_workers) +
-          card("On leave", d.on_leave, "text-yellow-600") +
-          card("Active sites", d.total_sites) +
-          card("Allocated this day", d.today_allocated, "text-red-700") +
-          card("MC this day", d.today_mc ?? 0, "text-yellow-600") +
-          card("Month normal hours", d.month_normal_hours) +
-          card("Month OT hours", d.month_ot_hours, "text-red-700");
+        ? card("My sites", d.total_sites, C.sites) +
+          card("Allocated this day", d.today_allocated, C.alloc) +
+          card("MC this day", d.today_mc ?? 0, C.mc) +
+          card("Month normal hours", d.month_normal_hours, C.nh) +
+          card("Month OT hours", d.month_ot_hours, C.ot)
+        : card("Active workers", d.total_workers, C.workers) +
+          card("On leave", d.on_leave, C.leave) +
+          card("Active sites", d.total_sites, C.sites) +
+          card("Allocated this day", d.today_allocated, C.alloc) +
+          card("MC this day", d.today_mc ?? 0, C.mc) +
+          card("Month normal hours", d.month_normal_hours, C.nh) +
+          card("Month OT hours", d.month_ot_hours, C.ot);
 
       // Hide the "HOME LEAVE" pseudo-entry from the updates list (site request)
       const notLeave = x => x.toUpperCase() !== "HOME LEAVE";
@@ -214,7 +296,11 @@
              <td class="p-3 text-right">${Math.round(tOt * 10) / 10}</td></tr>`;
     }
 
-    document.getElementById("date").addEventListener("change", load);
+    document.getElementById("date").addEventListener("change", () => { WCACHE = SCACHE = null; load(); });
+    document.getElementById("cards").addEventListener("click", e => {
+      const c = e.target.closest("[data-kind]");
+      if (c) openDetail(c.dataset.kind);
+    });
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
