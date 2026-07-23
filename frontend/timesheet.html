@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Monthly Timesheet</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <style>
+    /* ---- Screen ---- */
+    #grid { border-collapse: collapse; }
+    #grid th, #grid td { border: 1px solid #d1d5db; text-align: center; }
+    #grid td.name, #grid th.name { text-align: left; white-space: nowrap; }
+    .ot { color: #C00000; font-weight: 700; }
+    .code-mc { color: #B45309; font-weight: 700; }   /* amber */
+    .code-al { color: #1D4ED8; font-weight: 700; }   /* blue  */
+    .code-ul { color: #C2410C; font-weight: 700; }   /* orange*/
+    .code-ph { color: #6D28D9; font-weight: 700; }   /* violet */
+    .wknd { background: #F3F4F6; }                    /* Sun shading */
+
+    /* ---- Print: A4 landscape, Arial Narrow, compact (Section 8 standard) ---- */
+    @media print {
+      @page { size: A4 landscape; margin: 8mm; }
+      html, body { background: #fff; }
+      header, #controls, #actions { display: none !important; }
+      #sheet { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
+      body, #sheet { font-family: "Arial Narrow", Arial, sans-serif; }
+      #grid { font-size: 7.4pt; width: 100%; }
+      #grid th, #grid td { padding: 1px 2px; }
+      thead { display: table-header-group; }
+      tr, td, th { page-break-inside: avoid; }
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+    }
+    .print-only { display: none; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Monthly Timesheet</h1>
+      <p class="text-red-100 text-xs" id="count">Pick a month and site, then Generate</p>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
+    <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4">
+      <div class="flex flex-wrap gap-2">
+        <div class="flex-1 min-w-[140px]">
+          <label class="text-xs text-gray-500">Month</label>
+          <input id="month" type="month" class="w-full border border-gray-300 rounded-lg p-2">
+        </div>
+        <div class="flex-1 min-w-[160px]">
+          <label class="text-xs text-gray-500">Site</label>
+          <select id="site" class="w-full border border-gray-300 rounded-lg p-2 bg-white">
+            <option value="">All sites</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button onclick="run()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-2 rounded-lg">Generate</button>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Cell = normal hours worked, with OT in <span class="ot">red</span>.
+        Codes: <span class="code-mc">MC</span> · <span class="code-al">AL</span> · <span class="code-ul">UL</span> · <span class="code-ph">PH</span> (public holiday). Blank = not scheduled / rest day.</p>
+    </div>
+
+    <div id="actions" class="hidden flex gap-3 mb-3">
+      <button onclick="exportXlsx()" class="flex-1 border-2 border-green-700 text-green-700 font-bold py-2 rounded-lg text-sm">Export Excel</button>
+      <button onclick="window.print()" class="flex-1 border-2 border-gray-500 text-gray-600 font-bold py-2 rounded-lg text-sm">Print / PDF</button>
+    </div>
+
+    <div id="sheet" class="bg-white rounded-xl shadow p-4 overflow-x-auto">
+      <!-- Document control / header block (Section 8) -->
+      <div id="dochdr" class="hidden text-xs text-gray-800 mb-3">
+        <div class="flex justify-between items-start gap-4 border-b-2 border-red-700 pb-2 mb-2">
+          <div>
+            <div class="text-base font-bold text-red-700">VORTEX ENGINEERING PTE LTD</div>
+            <div class="font-bold text-sm">MONTHLY EMPLOYEE TIMESHEET</div>
+          </div>
+          <div class="text-right leading-tight">
+            <div><span class="text-gray-500">Site:</span> <b id="h-site">—</b></div>
+            <div><span class="text-gray-500">Month:</span> <b id="h-month">—</b></div>
+            <div><span class="text-gray-500">Generated:</span> <span id="h-gen">—</span></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-6 gap-x-3 gap-y-0.5 text-[11px]">
+          <div><span class="text-gray-500">Doc No.:</span> <b>VEPL-TS</b></div>
+          <div><span class="text-gray-500">Rev:</span> <b>0</b></div>
+          <div><span class="text-gray-500">Date:</span> <span id="h-date">—</span></div>
+          <div><span class="text-gray-500">Prepared by:</span> ____________</div>
+          <div><span class="text-gray-500">Checked by:</span> ____________</div>
+          <div><span class="text-gray-500">Approved by:</span> ____________</div>
+        </div>
+      </div>
+
+      <table id="grid" class="text-[11px] w-full"></table>
+
+      <!-- SG record-keeping / review note -->
+      <p id="footnote" class="hidden text-[10px] text-gray-500 mt-3 leading-snug">
+        Employee time record maintained in support of the employer's record-keeping obligations under the
+        Employment Act and the Employment (Employment Records, Key Employment Terms and Pay Slips) Regulations.
+        Verify against the current edition. Hours are as submitted in VMMS — this is a working draft for the
+        site manager's review and reconciliation against the face-scan record before payroll use.
+      </p>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+    let DATA = [], DAYS = 0, MONTH = "", SITE_NAME = "", GRID_AOA = [];
+
+    const MONTHS = ["January","February","March","April","May","June",
+                    "July","August","September","October","November","December"];
+    function fmtD(iso){ const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
+
+    async function boot() {
+      const me = await vmmsApi("/api/v1/me");
+      if (!me.ok) { vmmsLogout(); return; }
+      document.getElementById("month").value = new Date().toISOString().slice(0,7);
+      const rs = await vmmsApi("/api/v1/sites");
+      if (rs.ok) {
+        const sites = (await rs.json()).filter(s => s.status === "active");
+        document.getElementById("site").innerHTML =
+          '<option value="">All sites</option>' +
+          sites.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+      }
+    }
+
+    async function run() {
+      const mv = document.getElementById("month").value;      // YYYY-MM
+      if (!mv) { alert("Pick a month"); return; }
+      const sid = document.getElementById("site").value;
+      const y = +mv.slice(0,4), m = +mv.slice(5,7);
+      DAYS = new Date(y, m, 0).getDate();
+      const dfrom = `${mv}-01`, dto = `${mv}-${String(DAYS).padStart(2,"0")}`;
+      MONTH = `${MONTHS[m-1]} ${y}`;
+      SITE_NAME = sid ? document.getElementById("site").selectedOptions[0].text : "All sites";
+
+      const r = await vmmsApi(`/api/v1/reports/attendance?dfrom=${dfrom}&dto=${dto}${sid?"&site_id="+sid:""}`);
+      if (!r.ok) { const e = await r.json(); alert(e.detail || "Failed to load"); return; }
+      DATA = await r.json();
+      render(y, m);
+    }
+
+    function codeCell(x) {
+      // returns {html, xlsx, cls} for a day cell
+      if (x.present) {
+        const nh = x.nh || 0, ot = x.ot || 0;
+        const ph = (x.day_type || "").toLowerCase().includes("ph") ||
+                   (x.day_type || "").toLowerCase().includes("holiday");
+        const main = nh ? String(nh).replace(/\.0$/,"") : "";
+        const otTxt = ot ? `<sup class="ot">+${String(ot).replace(/\.0$/,"")}</sup>` : "";
+        return { html: (ph?'<span class="code-ph">PH</span> ':'') + main + otTxt,
+                 xlsx: (ph?"PH ":"") + (nh||0) + (ot?`+${ot}`:""), cls: ph?"":"" };
+      }
+      const a = (x.absence || "").toLowerCase();
+      if (a === "mc") return { html: '<span class="code-mc">MC</span>', xlsx: "MC" };
+      if (a === "al") return { html: '<span class="code-al">AL</span>', xlsx: "AL" };
+      if (a === "ul") return { html: '<span class="code-ul">UL</span>', xlsx: "UL" };
+      if (a)          return { html: '<span class="text-gray-400">A</span>', xlsx: "A" };
+      return { html: "", xlsx: "" };
+    }
+
+    function render(y, m) {
+      // Build per-worker map: code -> {name, days:{1..N: rowObj}, totals}
+      const W = {};
+      DATA.forEach(x => {
+        const w = (W[x.worker_code] ??= { name: x.worker, code: x.worker_code, days: {},
+                                          d:0, nh:0, ot:0, mc:0, al:0, ul:0 });
+        const day = +x.date.slice(8,10);
+        w.days[day] = x;
+        if (x.present) { w.d++; w.nh += x.nh; w.ot += x.ot; }
+        else {
+          const a = (x.absence||"").toLowerCase();
+          if (a==="mc") w.mc++; else if (a==="al") w.al++; else if (a==="ul") w.ul++;
+        }
+      });
+      const workers = Object.values(W).sort((a,b)=>a.name.localeCompare(b.name));
+
+      // Sundays for shading
+      const isSun = d => new Date(y, m-1, d).getDay() === 0;
+
+      // ---- Header row ----
+      let thead = '<thead><tr class="bg-gray-100 text-gray-600">' +
+        '<th class="name px-1">#</th><th class="name px-1">ID</th><th class="name px-1">Name</th>';
+      for (let d=1; d<=DAYS; d++)
+        thead += `<th class="${isSun(d)?'wknd':''} px-0.5" style="min-width:16px">${d}</th>`;
+      thead += '<th class="px-1 bg-red-50">Days</th><th class="px-1 bg-red-50">Norm</th>' +
+               '<th class="px-1 bg-red-50">OT</th><th class="px-1">MC</th><th class="px-1">AL</th><th class="px-1">UL</th></tr></thead>';
+
+      // ---- Body ----
+      let tb = "<tbody>";
+      const aoa = [["#","ID","Name", ...Array.from({length:DAYS},(_,i)=>i+1),
+                    "Days","Normal h","OT h","MC","AL","UL"]];
+      let gN=0, gOT=0, gDays=0;
+      workers.forEach((w, i) => {
+        let tr = `<tr><td class="px-1 text-gray-400">${i+1}</td>` +
+                 `<td class="name px-1 text-gray-500">${w.code}</td>` +
+                 `<td class="name px-1 font-medium">${w.name}</td>`;
+        const row = [i+1, w.code, w.name];
+        for (let d=1; d<=DAYS; d++) {
+          const x = w.days[d];
+          if (x) { const c = codeCell(x); tr += `<td class="${isSun(d)?'wknd':''}">${c.html}</td>`; row.push(c.xlsx); }
+          else  { tr += `<td class="${isSun(d)?'wknd':''}"></td>`; row.push(""); }
+        }
+        tr += `<td class="px-1 bg-red-50 font-bold">${w.d}</td>` +
+              `<td class="px-1 bg-red-50">${w.nh.toFixed(1)}</td>` +
+              `<td class="px-1 bg-red-50 ot">${w.ot.toFixed(1)}</td>` +
+              `<td class="px-1">${w.mc||""}</td><td class="px-1">${w.al||""}</td><td class="px-1">${w.ul||""}</td></tr>`;
+        row.push(w.d, +w.nh.toFixed(1), +w.ot.toFixed(1), w.mc, w.al, w.ul);
+        aoa.push(row);
+        tb += tr; gN += w.nh; gOT += w.ot; gDays += w.d;
+      });
+      // grand total row
+      tb += `<tr class="bg-gray-100 font-bold"><td colspan="${3+DAYS}" class="name px-1 text-right">TOTAL</td>` +
+            `<td class="px-1">${gDays}</td><td class="px-1">${gN.toFixed(1)}</td>` +
+            `<td class="px-1 ot">${gOT.toFixed(1)}</td><td colspan="3"></td></tr></tbody>`;
+      aoa.push(["","","TOTAL", ...Array(DAYS).fill(""), gDays, +gN.toFixed(1), +gOT.toFixed(1), "", "", ""]);
+      GRID_AOA = aoa;
+
+      document.getElementById("grid").innerHTML = thead + tb;
+
+      // header/footer blocks
+      const now = new Date();
+      document.getElementById("h-site").textContent = SITE_NAME;
+      document.getElementById("h-month").textContent = MONTH;
+      document.getElementById("h-gen").textContent = now.toLocaleString("en-SG");
+      document.getElementById("h-date").textContent = now.toLocaleDateString("en-SG");
+      document.getElementById("dochdr").classList.remove("hidden");
+      document.getElementById("footnote").classList.remove("hidden");
+      document.getElementById("actions").classList.remove("hidden");
+      document.getElementById("count").textContent = `${workers.length} worker(s) · ${MONTH}`;
+    }
+
+    function exportXlsx() {
+      if (!GRID_AOA.length) return;
+      const head = [
+        ["VORTEX ENGINEERING PTE LTD — Monthly Employee Timesheet"],
+        ["Site:", SITE_NAME, "", "Month:", MONTH, "", "Generated:", new Date().toLocaleString("en-SG")],
+        [],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet([...head, ...GRID_AOA]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Timesheet");
+      XLSX.writeFile(wb, `VMMS_Timesheet_${MONTH.replace(" ","_")}.xlsx`);
+    }
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
