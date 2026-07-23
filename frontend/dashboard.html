@@ -75,6 +75,10 @@
         <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
         <p class="text-sm text-gray-700 flex-1" id="completed">—</p>
       </div>
+      <div id="endremind" class="hidden flex gap-2 mt-3 no-print">
+        <button onclick="copyEndReminder()" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy end-time reminder</button>
+        <button onclick="shareEndReminder()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
+      </div>
     </div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (MONTH TO SELECTED DATE)</h2>
@@ -101,7 +105,30 @@
   <script>
     requireLogin();
 
-    let ME = null;
+    let ME = null, SUPMAP = {}, PEND = [], PEND_DATE = "";
+    const RDAYS = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+    const RMON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+
+    function endReminderText() {
+      const [y, m, d] = PEND_DATE.split("-");
+      const dow = RDAYS[new Date(PEND_DATE + "T00:00:00").getDay()];
+      const lines = ["*END TIME REMINDER*", `*${d}-${RMON[+m - 1]}-${y}*`, `*${dow}*`, "",
+        "These sites have NOT submitted today's attendance / end times. Please submit:"];
+      PEND.forEach((s, i) => {
+        const sup = (SUPMAP[s] || []).join(", ");
+        lines.push(`${i + 1}. ${s}${sup ? " — " + sup : ""}`);
+      });
+      return lines.join("\n");
+    }
+    function copyEndReminder() {
+      const t = endReminderText();
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
+        .then(() => alert("Reminder copied — paste it in the group"))
+        .catch(() => window.prompt("Copy this reminder:", t));
+    }
+    function shareEndReminder() {
+      window.open("https://wa.me/?text=" + encodeURIComponent(endReminderText()), "_blank");
+    }
 
     function fmtDMY(iso) { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
     function todayIso() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
@@ -117,6 +144,11 @@
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
       if (r.ok) { ME = await r.json(); }
+      // site → supervisor names, for the end-time reminder message
+      const rs = await vmmsApi("/api/v1/sites");
+      if (rs.ok) (await rs.json()).forEach(s => {
+        SUPMAP[s.site_name] = (s.supervisors || []).map(x => x.name);
+      });
       document.getElementById("date").value = todayIso();
       await load();
     }
@@ -150,10 +182,19 @@
           card("Month normal hours", d.month_normal_hours) +
           card("Month OT hours", d.month_ot_hours, "text-red-700");
 
+      // Hide the "HOME LEAVE" pseudo-entry from the updates list (site request)
+      const notLeave = x => x.toUpperCase() !== "HOME LEAVE";
+      const pend = (d.pending_updates || []).filter(notLeave);
+      const done = (d.completed_updates || []).filter(notLeave);
       document.getElementById("pending").textContent =
-        d.pending_updates.length ? d.pending_updates.join(", ") : "None — all sites submitted ✓";
+        pend.length ? pend.join(", ") : "None — all sites submitted ✓";
       document.getElementById("completed").textContent =
-        d.completed_updates.length ? d.completed_updates.join(", ") : "None yet";
+        done.length ? done.join(", ") : "None yet";
+
+      // End-time reminder for the co-ordinator (admin / main supervisor)
+      PEND = pend; PEND_DATE = d.date;
+      const canRemind = ME && (ME.role === "admin" || ME.role === "main_sup") && pend.length > 0;
+      document.getElementById("endremind").classList.toggle("hidden", !canRemind);
 
       document.getElementById("sites").innerHTML = d.site_summary.map(s =>
         `<tr class="border-t border-gray-200">
