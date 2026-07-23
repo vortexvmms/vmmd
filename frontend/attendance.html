@@ -32,7 +32,7 @@
 
     <!-- Morning (toolbox) helper -->
     <div id="morningbar" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mb-3">
-      <p class="text-sm text-gray-600 mb-2">Morning toolbox check — tick who is present, mark the rest Absent / MC:</p>
+      <p class="text-sm text-gray-600 mb-2">Morning toolbox check — tick who is present, mark the rest with a reason (MC / UL / AL):</p>
       <button onclick="presentAll()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">Mark all present</button>
       <span class="text-xs text-gray-400 ml-2">then untick anyone absent</span>
     </div>
@@ -90,7 +90,8 @@
     const PRESETS = [["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
                      ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
     // Absence reasons: value, label, highlight colour
-    const REASONS = [["absent", "Absent", "bg-gray-700"], ["mc", "MC", "bg-yellow-500"],
+    // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
+    const REASONS = [["mc", "MC", "bg-yellow-500"],
                      ["ul", "UL", "bg-orange-600"], ["al", "AL", "bg-blue-600"]];
 
     function toast(msg, long = false) {
@@ -111,7 +112,9 @@
     async function loadDay() {
       const date = document.getElementById("date").value;
       const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
-      const all = r.ok ? await r.json() : [];
+      let all = r.ok ? await r.json() : [];
+      // HOME LEAVE workers are on leave — no end time to set, so hide that site here
+      all = all.filter(x => (x.site_name || "").trim().toUpperCase() !== "HOME LEAVE");
       const siteMap = {};
       all.forEach(x => siteMap[x.site_id] = x.site_name);
       SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
@@ -155,7 +158,7 @@
         banner.classList.remove("hidden");
       } else if (total) {
         banner.className = "rounded-xl p-3 mb-3 text-sm font-medium text-center bg-yellow-50 border border-yellow-300 text-yellow-800";
-        banner.textContent = notMarked + " worker(s) not yet verified. Tick who is present, mark the rest Absent / MC, then Submit Morning.";
+        banner.textContent = notMarked + " worker(s) not yet verified. Tick who is present, mark the rest with a reason (MC / UL / AL), then Submit Morning.";
         banner.classList.remove("hidden");
       } else banner.classList.add("hidden");
 

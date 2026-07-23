@@ -151,7 +151,7 @@
 
     /* ---- Tile drill-down: tap a tile → detail list ---- */
     const D_TITLES = { workers:"Active workers", leave:"On leave", sites:"Active sites",
-      allocated:"Allocated this day", mc:"On MC this day",
+      allocated:"Allocated this day", mc:"On MC this day", al:"On AL this day", ul:"On UL this day",
       month_nh:"Month normal hours by site", month_ot:"Month OT hours by site" };
     function dRow(main, sub, right) {
       return `<div class="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
@@ -186,10 +186,10 @@
           items = a.filter(x => (x.site_name||"").toUpperCase() !== "HOME LEAVE")
                    .sort((x,y)=>(x.site_name+x.worker_name).localeCompare(y.site_name+y.worker_name))
                    .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name));
-        } else if (kind === "mc") {
+        } else if (kind === "mc" || kind === "al" || kind === "ul") {
           const r = await vmmsApi(`/api/v1/attendance?date=${date}`); const a = r.ok ? await r.json() : [];
-          items = a.filter(x => !x.present && x.absence_type === "mc").sort((x,y)=>x.worker_name.localeCompare(y.worker_name))
-                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name, "MC"));
+          items = a.filter(x => !x.present && x.absence_type === kind).sort((x,y)=>x.worker_name.localeCompare(y.worker_name))
+                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name, kind.toUpperCase()));
         } else if (kind === "month_nh" || kind === "month_ot") {
           const key = kind === "month_nh" ? "month_nh" : "month_ot";
           const ss = (DASH && DASH.site_summary ? DASH.site_summary : []).slice()
@@ -242,18 +242,22 @@
       document.getElementById("p-user").textContent = ME ? ME.name : "—";
 
       const C = {
-        workers:  { bg:"bg-blue-50",    border:"border-blue-200",    kind:"workers" },
-        leave:    { bg:"bg-amber-50",   border:"border-amber-200",   accent:"text-amber-600", kind:"leave" },
-        sites:    { bg:"bg-indigo-50",  border:"border-indigo-200",  kind:"sites" },
-        alloc:    { bg:"bg-red-50",     border:"border-red-200",     accent:"text-red-700",   kind:"allocated" },
-        mc:       { bg:"bg-yellow-50",  border:"border-yellow-200",  accent:"text-yellow-600",kind:"mc" },
-        nh:       { bg:"bg-emerald-50", border:"border-emerald-200", kind:"month_nh" },
-        ot:       { bg:"bg-rose-50",    border:"border-rose-200",    accent:"text-red-700",   kind:"month_ot" },
+        workers:  { bg:"bg-blue-100",    border:"border-blue-300",    kind:"workers" },
+        leave:    { bg:"bg-amber-100",   border:"border-amber-300",   accent:"text-amber-700", kind:"leave" },
+        sites:    { bg:"bg-indigo-100",  border:"border-indigo-300",  kind:"sites" },
+        alloc:    { bg:"bg-red-100",     border:"border-red-300",     accent:"text-red-700",   kind:"allocated" },
+        mc:       { bg:"bg-yellow-100",  border:"border-yellow-300",  accent:"text-yellow-700",kind:"mc" },
+        al:       { bg:"bg-sky-100",     border:"border-sky-300",     accent:"text-sky-700",   kind:"al" },
+        ul:       { bg:"bg-orange-100",  border:"border-orange-300",  accent:"text-orange-700",kind:"ul" },
+        nh:       { bg:"bg-emerald-100", border:"border-emerald-300", kind:"month_nh" },
+        ot:       { bg:"bg-rose-100",    border:"border-rose-300",    accent:"text-red-700",   kind:"month_ot" },
       };
       document.getElementById("cards").innerHTML = d.scoped
         ? card("My sites", d.total_sites, C.sites) +
           card("Allocated this day", d.today_allocated, C.alloc) +
           card("MC this day", d.today_mc ?? 0, C.mc) +
+          card("AL this day", d.today_al ?? 0, C.al) +
+          card("UL this day", d.today_ul ?? 0, C.ul) +
           card("Month normal hours", d.month_normal_hours, C.nh) +
           card("Month OT hours", d.month_ot_hours, C.ot)
         : card("Active workers", d.total_workers, C.workers) +
@@ -261,6 +265,8 @@
           card("Active sites", d.total_sites, C.sites) +
           card("Allocated this day", d.today_allocated, C.alloc) +
           card("MC this day", d.today_mc ?? 0, C.mc) +
+          card("AL this day", d.today_al ?? 0, C.al) +
+          card("UL this day", d.today_ul ?? 0, C.ul) +
           card("Month normal hours", d.month_normal_hours, C.nh) +
           card("Month OT hours", d.month_ot_hours, C.ot);
 
