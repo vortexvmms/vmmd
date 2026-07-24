@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.27.0")  # safety-card feature removed
+app = FastAPI(title="VMMS API", version="0.28.0")  # role editor + per-user menu sections
 
 app.add_middleware(
     CORSMiddleware,
@@ -105,6 +105,7 @@ async def get_current_user(request: Request) -> dict:
         "user_id": profile["id"],
         "name": profile["name"],
         "role": profile["role"],
+        "menu": profile.get("menu"),
     }
 
 
@@ -149,7 +150,7 @@ async def health():
 @app.get("/api/v1/me")
 async def me(user: dict = Depends(get_current_user)):
     return {"name": user["name"], "role": user["role"], "email": user["email"],
-            "user_id": user["user_id"]}
+            "user_id": user["user_id"], "menu": user.get("menu")}
 
 
 # ---------------- Worker Master (Phase 4) ----------------
@@ -423,7 +424,9 @@ class UserCreate(BaseModel):
 
 
 class UserStatus(BaseModel):
-    status: str          # "active" | "inactive"
+    status: str | None = None       # "active" | "inactive"
+    role: str | None = None         # change the user's role
+    menu: list[str] | None = None   # per-user menu allow-list; null = role default
 
 
 class PwReset(BaseModel):
@@ -473,23 +476,46 @@ async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
 
 
 @app.patch("/api/v1/users/{user_id}")
-async def update_user_status(user_id: str, body: UserStatus, user: dict = Depends(get_current_user)):
-    """Activate / deactivate a user. Deactivated users are blocked at login."""
+async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_current_user)):
+    """Change a user's status (active/inactive), role, and/or menu allow-list.
+    Full-access tier only. Send only the field(s) you want to change; for `menu`,
+    a list restricts the visible sections, and null resets it to the role default."""
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only management can change users")
-    if body.status not in ("active", "inactive"):
-        raise HTTPException(status_code=400, detail="Invalid status")
-    if user_id == user["user_id"] and body.status == "inactive":
-        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+
+    fields = body.model_fields_set
+    updates: dict = {}
+
+    if "status" in fields:
+        if body.status not in ("active", "inactive"):
+            raise HTTPException(status_code=400, detail="Invalid status")
+        if user_id == user["user_id"] and body.status == "inactive":
+            raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+        updates["status"] = body.status
+
+    if "role" in fields:
+        if body.role not in ROLES:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        if user_id == user["user_id"]:
+            raise HTTPException(status_code=400, detail="You cannot change your own role")
+        updates["role"] = body.role
+        updates["menu"] = None          # role changed → sections reset to the new role's default
+
+    if "menu" in fields:
+        updates["menu"] = body.menu     # explicit menu wins over the role-change reset
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.patch(
             f"{REST}/users", params={"id": f"eq.{user_id}"},
             headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
-            json={"status": body.status})
+            json=updates)
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not update the user")
-        await audit(client, user, "set_user_status", "user", user_id, None, {"status": body.status})
-        return {"ok": True, "status": body.status}
+        await audit(client, user, "update_user", "user", user_id, None, updates)
+        return {"ok": True, **updates}
 
 
 @app.post("/api/v1/users/{user_id}/reset_password")
