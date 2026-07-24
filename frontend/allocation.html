@@ -133,7 +133,8 @@
       document.getElementById("save").classList.remove("hidden");
       document.getElementById("only-un-label").textContent =
         MODE === "site" ? "Show unallocated workers only" : "Show unassigned workers only";
-      document.getElementById("save").textContent = MODE === "site" ? "Save Allocation" : "Save All";
+      // NOTE: the Save button label is owned entirely by updateStatus()
+      // (Pending / Save Changes / Allocation Done ✓) — don't set it here.
     }
 
     function setMode(m) {
