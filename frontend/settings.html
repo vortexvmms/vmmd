@@ -10,8 +10,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
@@ -22,18 +23,18 @@
 
     <h2 class="text-sm font-bold text-gray-500 mb-2">PUBLIC HOLIDAYS (Singapore)</h2>
     <p class="text-xs text-gray-400 mb-2">Full-day OT applies on these dates. Keep this list matched to the official MOM gazetted holidays each year.</p>
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 mb-3" id="hol-form">
+    <div class="bg-white rounded-xl shadow p-4 mb-3" id="hol-form">
       <div class="flex gap-2">
         <input id="h-date" type="date" class="flex-1 border border-gray-300 rounded-lg p-2">
         <input id="h-desc" placeholder="Holiday name" class="flex-1 border border-gray-300 rounded-lg p-2">
         <button onclick="addHol()" class="bg-red-700 text-white font-bold px-4 rounded-lg">Add</button>
       </div>
     </div>
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm divide-y divide-gray-100 mb-8" id="hol-list"></div>
+    <div class="bg-white rounded-xl shadow divide-y divide-gray-100 mb-8" id="hol-list"></div>
 
     <h2 class="text-sm font-bold text-gray-500 mb-2">OT RULE PARAMETERS (read-only)</h2>
     <p class="text-xs text-gray-400 mb-2">These are the rules confirmed in the specification (Rev 5 §6). Changing them is a controlled change — contact the developer so the calculation engine and this record stay in step.</p>
-    <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm divide-y divide-gray-100" id="set-list"></div>
+    <div class="bg-white rounded-xl shadow divide-y divide-gray-100" id="set-list"></div>
   </main>
 
   <div id="toast" class="hidden fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow"></div>
@@ -54,8 +55,8 @@
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
-      if (ME.role !== "admin") {
-        document.body.innerHTML = '<p class="p-8 text-center text-gray-500">Settings are administrator-only.</p>';
+      if (!isCoordinator(ME.role)) {
+        document.body.innerHTML = '<p class="p-8 text-center text-gray-500">Settings are for management only.</p>';
         return;
       }
       await Promise.all([loadHol(), loadSet()]);

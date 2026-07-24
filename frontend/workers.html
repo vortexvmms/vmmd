@@ -10,7 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
@@ -109,7 +109,7 @@
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
-      if (ME.role === "admin") {
+      if (isFull(ME.role)) {
         document.getElementById("fab").classList.remove("hidden");
         document.getElementById("fab-bulk").classList.remove("hidden");
       }
@@ -142,7 +142,7 @@
           `<div><p class="font-medium text-gray-800">${esc(w.name)}</p>
            <p class="text-xs text-gray-400">${esc(w.worker_code)}</p></div>
            <span class="text-xs font-bold px-3 py-1 rounded-full ${cls}">${label}</span>`;
-        if (ME.role === "admin" || ME.role === "main_sup") {
+        if (isFull(ME.role)) {
           div.classList.add("cursor-pointer", "active:bg-gray-50");
           div.onclick = () => openForm(w);
         }
@@ -156,7 +156,7 @@
       document.getElementById("m-code").value = w ? w.worker_code : "";
       document.getElementById("m-code").disabled = !!w;   // Worker ID immutable (spec FR-2)
       document.getElementById("m-name").value = w ? w.name : "";
-      document.getElementById("m-name").disabled = !!w && ME.role === "main_sup";
+      document.getElementById("m-name").disabled = false;   // full-access tier edits everything
       document.getElementById("m-status-wrap").classList.toggle("hidden", !w);
       if (w) document.getElementById("m-status").value = w.status;
       document.getElementById("m-error").classList.add("hidden");
