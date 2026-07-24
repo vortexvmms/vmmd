@@ -1,0 +1,33 @@
+name: Nightly report email
+
+# Builds the End-Time Verification (today) and Monthly Attendance Sheet
+# (month-to-date) as PDF + Excel and e-mails them to your Gmail.
+# Runs every night at 23:30 Singapore time (15:30 UTC).
+on:
+  schedule:
+    - cron: '30 15 * * *'
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests openpyxl fpdf2
+
+      - name: Build reports and send e-mail
+        env:
+          BOT_EMAIL:          ${{ secrets.BOT_EMAIL }}
+          BOT_PASSWORD:       ${{ secrets.BOT_PASSWORD }}
+          GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO:          ${{ secrets.REPORT_TO }}
+        run: python reports/report_email.py
