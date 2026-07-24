@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.20.0")  # + dashboard AL/UL counts
+app = FastAPI(title="VMMS API", version="0.21.0")  # copy-day no longer needs on_conflict
 
 app.add_middleware(
     CORSMiddleware,
@@ -534,30 +534,42 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
         if not rows:
             raise HTTPException(status_code=404, detail=f"No allocation found on {body.from_date}")
 
-        # copy only workers still active; skip anyone already allocated on the target date
+        # who is already allocated on the target date (skip them — never double-book)
+        tgt = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{body.to_date}", "status": "eq.allocated",
+                    "select": "worker_id"},
+            headers=supabase_headers(user["token"]),
+        )
+        if tgt.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not read the target day")
+        already = {a["worker_id"] for a in tgt.json()}
+
+        # copy only workers still active AND not already placed on the target date
+        active_rows = [a for a in rows if (a.get("workers") or {}).get("status") == "active"]
+        skipped_leave = len(rows) - len(active_rows)
         payload = [{"work_date": body.to_date, "site_id": a["site_id"],
                     "worker_id": a["worker_id"], "status": "allocated",
                     "created_by": user["user_id"], "updated_by": user["user_id"]}
-                   for a in rows if (a.get("workers") or {}).get("status") == "active"]
-        skipped_leave = len(rows) - len(payload)
+                   for a in active_rows if a["worker_id"] not in already]
 
-        i = await client.post(
-            f"{REST}/allocations",
-            params={"on_conflict": "work_date,worker_id"},
-            headers={**supabase_headers(user["token"]),
-                     "Prefer": "return=representation,resolution=ignore-duplicates"},
-            json=payload,
-        )
-        if i.status_code not in (200, 201):
-            raise HTTPException(status_code=500, detail="Could not copy the day")
-        copied = len(i.json())
+        copied = 0
+        if payload:
+            i = await client.post(
+                f"{REST}/allocations",
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                json=payload,
+            )
+            if i.status_code not in (200, 201):
+                raise HTTPException(status_code=500, detail="Could not copy the day")
+            copied = len(payload)
 
         await audit(client, user, "copy_day", "allocation",
                     f"{body.from_date}->{body.to_date}", None,
                     {"copied": copied, "skipped_on_leave": skipped_leave})
         return {"ok": True, "copied": copied,
                 "skipped_on_leave": skipped_leave,
-                "skipped_already_allocated": len(payload) - copied}
+                "skipped_already_allocated": len(active_rows) - len(payload)}
 
 
 # ---------------- Manpower Requests (site supervisor → admin) ----------------
