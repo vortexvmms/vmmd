@@ -47,6 +47,13 @@ def log(*a):
     print(*a, flush=True)
 
 
+def envv(name, default=None):
+    """Read an env var and strip stray spaces / newlines (secrets often
+    get pasted with a trailing line break, which breaks e-mail headers)."""
+    v = os.environ.get(name, default)
+    return v.strip() if isinstance(v, str) else v
+
+
 def latin(x):
     """fpdf core fonts are latin-1; make any text safe."""
     return str("" if x is None else x).encode("latin-1", "replace").decode("latin-1")
@@ -57,7 +64,7 @@ def get_token():
     r = requests.post(
         f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
         headers={"apikey": SUPABASE_PUBLISHABLE, "Content-Type": "application/json"},
-        json={"email": os.environ["BOT_EMAIL"], "password": os.environ["BOT_PASSWORD"]},
+        json={"email": envv("BOT_EMAIL"), "password": envv("BOT_PASSWORD")},
         timeout=30,
     )
     if r.status_code != 200:
@@ -349,9 +356,9 @@ def build_pdf_monthly(rows, days, today, path):
 # ---------------------------------------------------------------- email
 def send_email(subject, body, attachments):
     msg = EmailMessage()
-    msg["From"] = os.environ["GMAIL_USER"]
-    msg["To"] = os.environ["REPORT_TO"]
-    msg["Subject"] = subject
+    msg["From"] = envv("GMAIL_USER")
+    msg["To"] = envv("REPORT_TO")
+    msg["Subject"] = subject.replace("\n", " ").replace("\r", " ")
     msg.set_content(body)
     for path in attachments:
         with open(path, "rb") as f:
@@ -362,9 +369,9 @@ def send_email(subject, body, attachments):
         msg.add_attachment(data, maintype=maintype, subtype=sub,
                            filename=os.path.basename(path))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
-        s.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+        s.login(envv("GMAIL_USER"), envv("GMAIL_APP_PASSWORD").replace(" ", ""))
         s.send_message(msg)
-    log("email sent to", os.environ["REPORT_TO"])
+    log("email sent to", envv("REPORT_TO"))
 
 
 # ----------------------------------------------------------------- main
