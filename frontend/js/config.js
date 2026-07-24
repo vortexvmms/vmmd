@@ -35,6 +35,75 @@ if (window.tailwind) {
   document.head.appendChild(s);
 })();
 
+// ---- Modern Soft UI theme + subtle motion (applies app-wide) ----
+// Everything is wrapped in @media screen so PRINT / PDF output is never
+// touched (verification, timesheet & dashboard print layouts stay exact).
+(function () {
+  var css = `
+  @media screen {
+    :root{
+      --vmms-red:#C00000; --vmms-page:#eef0f3; --vmms-card:#ffffff; --vmms-line:#e7e9ee;
+      --vmms-radius:16px;
+      --vmms-shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 20px -12px rgba(16,24,40,.22);
+      --vmms-shadow-lg:0 16px 34px -14px rgba(16,24,40,.28);
+      --vmms-ease:cubic-bezier(.22,.61,.36,1);
+    }
+    body{ background:var(--vmms-page) !important; }
+    main{ animation:vmms-fade-up .55s var(--vmms-ease) both; }
+
+    header.bg-red-700{
+      background:linear-gradient(135deg,#C00000 0%,#9c0000 55%,#8a0000 100%) !important;
+      box-shadow:0 8px 22px -12px rgba(138,0,0,.65); border-bottom:none;
+    }
+
+    .rounded-xl.shadow-sm{
+      border-radius:var(--vmms-radius); box-shadow:var(--vmms-shadow) !important;
+      transition:transform .28s var(--vmms-ease), box-shadow .28s var(--vmms-ease),
+                 background-color .28s ease, border-color .28s ease;
+    }
+    .bg-gray-100.rounded-xl{ background:var(--vmms-card); border-color:var(--vmms-line); }
+
+    @media (hover:hover){
+      a.rounded-xl.shadow-sm:hover, label.rounded-xl.shadow-sm:hover{
+        transform:translateY(-2px); box-shadow:var(--vmms-shadow-lg) !important; }
+    }
+    a.rounded-xl.shadow-sm:active, label.rounded-xl.shadow-sm:active{ transform:scale(.985); }
+
+    button{ transition:transform .2s var(--vmms-ease), box-shadow .24s var(--vmms-ease),
+                         background-color .24s ease, opacity .24s ease; }
+    button:not(:disabled):active{ transform:scale(.955); }
+    button.bg-red-700{ box-shadow:0 8px 18px -10px rgba(192,0,0,.7); }
+
+    input:focus,select:focus,textarea:focus{
+      outline:none; border-color:var(--vmms-red) !important; box-shadow:0 0 0 3px rgba(192,0,0,.16); }
+
+    /* tab buttons / pill toggles get a smooth colour swap */
+    [id^="tab-"], [id^="t-"]{ transition:background-color .28s ease, color .28s ease, transform .18s var(--vmms-ease); }
+
+    /* staggered entrance for the Home menu only (lists re-render on every
+       keystroke, so we don't animate #list — it would replay and feel janky) */
+    #menu > *{ animation:vmms-fade-up .55s var(--vmms-ease) both; }
+    #menu > *:nth-child(1){animation-delay:.04s} #menu > *:nth-child(2){animation-delay:.08s}
+    #menu > *:nth-child(3){animation-delay:.12s} #menu > *:nth-child(4){animation-delay:.16s}
+    #menu > *:nth-child(5){animation-delay:.20s} #menu > *:nth-child(6){animation-delay:.24s}
+    #menu > *:nth-child(7){animation-delay:.28s} #menu > *:nth-child(8){animation-delay:.32s}
+    #menu > *:nth-child(9){animation-delay:.36s} #menu > *:nth-child(10){animation-delay:.40s}
+    #menu > *:nth-child(11){animation-delay:.44s} #menu > *:nth-child(12){animation-delay:.48s}
+
+    #vmms-home-fab{ transition:transform .2s var(--vmms-ease), box-shadow .24s ease;
+                    animation:vmms-pop .42s var(--vmms-ease) both .12s; }
+    #vmms-home-fab:active{ transform:scale(.9); }
+  }
+  @keyframes vmms-fade-up{ from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none} }
+  @keyframes vmms-pop{ from{opacity:0; transform:scale(.8)} to{opacity:1; transform:scale(1)} }
+  @media (prefers-reduced-motion: reduce){ *,*::before,*::after{ animation:none !important; transition:none !important; } }
+  `;
+  var s = document.createElement("style");
+  s.id = "vmms-theme";
+  s.textContent = css;
+  (document.head || document.documentElement).appendChild(s);
+})();
+
 // ---- Download-as-PDF helper (works on iPhone, where window.print() is blocked) ----
 // Lazy-loads html2pdf.js on first use, then renders one DOM element to an A4 PDF.
 // Usage: vmmsDownloadPdf("sheet", "VMMS_Timesheet_July_2026", { landscape: true })
