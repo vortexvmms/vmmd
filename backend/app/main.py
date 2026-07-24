@@ -499,10 +499,9 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
         if user_id == user["user_id"]:
             raise HTTPException(status_code=400, detail="You cannot change your own role")
         updates["role"] = body.role
-        updates["menu"] = None          # role changed → sections reset to the new role's default
 
     if "menu" in fields:
-        updates["menu"] = body.menu     # explicit menu wins over the role-change reset
+        updates["menu"] = body.menu     # only sent once the section chooser is enabled
 
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
