@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     /* ---- Screen ---- */
     #grid { border-collapse: collapse; }
@@ -130,7 +131,7 @@
         const sites = (await rs.json()).filter(s => s.status === "active");
         document.getElementById("site").innerHTML =
           '<option value="">All sites</option>' +
-          sites.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+          sites.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       }
     }
 
@@ -203,8 +204,8 @@
       let gN=0, gOT=0, gDays=0;
       workers.forEach((w, i) => {
         let tr = `<tr><td class="px-1 text-gray-400">${i+1}</td>` +
-                 `<td class="name px-1 text-gray-500">${w.code}</td>` +
-                 `<td class="name px-1 font-medium">${w.name}</td>`;
+                 `<td class="name px-1 text-gray-500">${esc(w.code)}</td>` +
+                 `<td class="name px-1 font-medium">${esc(w.name)}</td>`;
         const row = [i+1, w.code, w.name];
         for (let d=1; d<=DAYS; d++) {
           const x = w.days[d];

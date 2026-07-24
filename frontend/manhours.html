@@ -11,11 +11,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     @media print { header, #controls { display: none !important; } body { background: white; } }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
@@ -25,8 +26,8 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-2xl xl:max-w-6xl mx-auto w-full pb-10">
-    <div id="controls" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 mb-4 flex gap-2 items-end flex-wrap">
+  <main class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
+    <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 flex gap-2 items-end flex-wrap">
       <div class="flex-1 min-w-[140px]">
         <label class="text-xs text-gray-500">Month</label>
         <input id="month" type="month" class="w-full border border-gray-300 rounded-lg p-2">
@@ -37,21 +38,16 @@
       <button id="lockbtn" onclick="toggleLock()" class="hidden bg-gray-800 text-white font-bold px-3 py-2 rounded-lg text-sm">Close Month</button>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="totals"></div>
+    <div class="grid grid-cols-2 gap-3 mb-4" id="totals"></div>
 
-    <div class="xl:grid xl:grid-cols-2 xl:gap-6">
-      <div>
-        <h2 class="text-sm font-bold text-gray-500 mb-2">PER SITE (spec §9.1)</h2>
-        <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-x-auto mb-6">
-          <table class="w-full text-xs" id="sitetbl"></table>
-        </div>
-      </div>
-      <div>
-        <h2 class="text-sm font-bold text-gray-500 mb-2">PER WORKER</h2>
-        <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-x-auto">
-          <table class="w-full text-xs" id="wtbl"></table>
-        </div>
-      </div>
+    <h2 class="text-sm font-bold text-gray-500 mb-2">PER SITE (spec §9.1)</h2>
+    <div class="bg-white rounded-xl shadow overflow-x-auto mb-6">
+      <table class="w-full text-xs" id="sitetbl"></table>
+    </div>
+
+    <h2 class="text-sm font-bold text-gray-500 mb-2">PER WORKER</h2>
+    <div class="bg-white rounded-xl shadow overflow-x-auto">
+      <table class="w-full text-xs" id="wtbl"></table>
     </div>
   </main>
 
@@ -88,8 +84,8 @@
       }
 
       document.getElementById("totals").innerHTML =
-        `<div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4"><p class="text-2xl font-bold">${D.totals.nh}</p><p class="text-xs text-gray-500">Total normal hours</p></div>` +
-        `<div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4"><p class="text-2xl font-bold text-red-700">${D.totals.ot}</p><p class="text-xs text-gray-500">Total OT hours</p></div>`;
+        `<div class="bg-white rounded-xl shadow p-4"><p class="text-2xl font-bold">${D.totals.nh}</p><p class="text-xs text-gray-500">Total normal hours</p></div>` +
+        `<div class="bg-white rounded-xl shadow p-4"><p class="text-2xl font-bold text-red-700">${D.totals.ot}</p><p class="text-xs text-gray-500">Total OT hours</p></div>`;
 
       document.getElementById("sitetbl").innerHTML =
         "<thead class='bg-gray-50 text-gray-500'><tr><th class='text-left p-2'>Site</th><th class='text-right p-2'>Attendance days</th><th class='text-right p-2'>Workers</th><th class='text-right p-2'>Normal h</th><th class='text-right p-2'>OT h</th></tr></thead><tbody>" +
@@ -98,7 +94,7 @@
 
       document.getElementById("wtbl").innerHTML =
         "<thead class='bg-gray-50 text-gray-500'><tr><th class='text-left p-2'>ID</th><th class='text-left p-2'>Worker</th><th class='text-right p-2'>Days</th><th class='text-right p-2'>Normal h</th><th class='text-right p-2'>OT h</th></tr></thead><tbody>" +
-        D.workers.map(w => `<tr class="border-t border-gray-100"><td class="p-2">${w.worker_code}</td><td class="p-2 font-medium">${w.name}</td><td class="p-2 text-right">${w.days}</td><td class="p-2 text-right">${w.nh}</td><td class="p-2 text-right ${w.ot > 0 ? "text-red-700 font-bold" : ""}">${w.ot}</td></tr>`).join("") +
+        D.workers.map(w => `<tr class="border-t border-gray-100"><td class="p-2">${esc(w.worker_code)}</td><td class="p-2 font-medium">${esc(w.name)}</td><td class="p-2 text-right">${w.days}</td><td class="p-2 text-right">${w.nh}</td><td class="p-2 text-right ${w.ot > 0 ? "text-red-700 font-bold" : ""}">${w.ot}</td></tr>`).join("") +
         "</tbody>";
     }
 

@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -191,7 +192,7 @@
       if (it.ex)
         return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-2 my-2 text-gray-700"><span class="font-bold">Example: </span>${it.ex}</div>`;
       if (it.note)
-        return `<div class="border-l-4 border-red-600 bg-gray-50 rounded-r-lg p-2 my-2 italic text-gray-700">${it.note}</div>`;
+        return `<div class="border-l-4 border-red-600 bg-gray-50 rounded-r-lg p-2 my-2 italic text-gray-700">${esc(it.note)}</div>`;
       return "";
     }
 
