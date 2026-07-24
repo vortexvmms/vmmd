@@ -80,15 +80,8 @@ if (window.tailwind) {
     /* tab buttons / pill toggles get a smooth colour swap */
     [id^="tab-"], [id^="t-"]{ transition:background-color .28s ease, color .28s ease, transform .18s var(--vmms-ease); }
 
-    /* staggered entrance for the Home menu only (lists re-render on every
-       keystroke, so we don't animate #list — it would replay and feel janky) */
-    #menu > *{ animation:vmms-fade-up .55s var(--vmms-ease) both; }
-    #menu > *:nth-child(1){animation-delay:.04s} #menu > *:nth-child(2){animation-delay:.08s}
-    #menu > *:nth-child(3){animation-delay:.12s} #menu > *:nth-child(4){animation-delay:.16s}
-    #menu > *:nth-child(5){animation-delay:.20s} #menu > *:nth-child(6){animation-delay:.24s}
-    #menu > *:nth-child(7){animation-delay:.28s} #menu > *:nth-child(8){animation-delay:.32s}
-    #menu > *:nth-child(9){animation-delay:.36s} #menu > *:nth-child(10){animation-delay:.40s}
-    #menu > *:nth-child(11){animation-delay:.44s} #menu > *:nth-child(12){animation-delay:.48s}
+    /* staggered tile entrance — applied by JS (vmms-reveal) to every card
+       grid / list on every page, once per render batch (see config.js) */
 
     #vmms-home-fab{ transition:transform .2s var(--vmms-ease), box-shadow .24s ease;
                     animation:vmms-pop .42s var(--vmms-ease) both .12s; }
@@ -102,6 +95,56 @@ if (window.tailwind) {
   s.id = "vmms-theme";
   s.textContent = css;
   (document.head || document.documentElement).appendChild(s);
+})();
+
+// ---- Staggered tile entrance on EVERY page (home-menu style) ----
+// Animates the card tiles in any grid/list whenever they are rendered:
+// on page load, tab switch, date change, dashboard tiles, etc.
+// Throttled per-container so rapid re-renders (typing in a search box,
+// ticking attendance) don't machine-gun the animation.
+(function () {
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var THROTTLE = 600;                 // ms — min gap between animating the same container
+  var last = new WeakMap();
+
+  function looksCard(el) {
+    return el && el.nodeType === 1 &&
+      (el.classList.contains("rounded-xl") || el.classList.contains("card") || el.tagName === "TR");
+  }
+  function reveal(container) {
+    if (!container || container.nodeType !== 1) return;
+    var now = Date.now();
+    if (last.get(container) && now - last.get(container) < THROTTLE) return;   // throttle bursts
+    var kids = container.children, any = false;
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el.nodeType !== 1) continue;
+      any = true;
+      el.style.animation = "vmms-fade-up .45s var(--vmms-ease) both";
+      el.style.animationDelay = (Math.min(i, 12) * 0.04) + "s";
+    }
+    if (any) last.set(container, now);
+  }
+
+  function init() {
+    // catch anything already on the page
+    ["menu", "list", "cards", "sites", "rows"].forEach(function (id) {
+      var c = document.getElementById(id); if (c && c.children.length) reveal(c);
+    });
+    // …and everything rendered later
+    var mo = new MutationObserver(function (muts) {
+      var seen = [];
+      for (var j = 0; j < muts.length; j++) {
+        var m = muts[j], added = m.addedNodes;
+        if (!added || !added.length) continue;
+        for (var k = 0; k < added.length; k++) {
+          if (looksCard(added[k]) && seen.indexOf(m.target) === -1) { seen.push(m.target); reveal(m.target); break; }
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.body) init(); else document.addEventListener("DOMContentLoaded", init);
 })();
 
 // ---- Download-as-PDF helper (works on iPhone, where window.print() is blocked) ----
