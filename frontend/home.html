@@ -10,7 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -42,8 +42,16 @@
         <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
         <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
           <option value="admin">Administrator</option>
-          <option value="main_sup">Main Supervisor</option>
+          <option value="general_manager">General Manager</option>
+          <option value="operation_manager">Operation Manager</option>
+          <option value="hr_assistant">HR Assistant</option>
+          <option value="main_sup">Site Manager</option>
+          <option value="wshc_lead">WSHC Lead</option>
           <option value="site_sup">Site Supervisor</option>
+          <option value="safety_sup">Safety Supervisor</option>
+          <option value="wshc">WSHC</option>
+          <option value="logistics_sup">Logistics Supervisor</option>
+          <option value="payroll">Payroll</option>
         </select>
       </div>
 
@@ -68,25 +76,34 @@
     requireLogin();
 
     const ROLE_LABELS = {
-      admin:    "Administrator",
-      main_sup: "Main Supervisor",
-      site_sup: "Site Supervisor",
-      payroll:  "Payroll",
+      admin:"Administrator", general_manager:"General Manager", operation_manager:"Operation Manager",
+      hr_assistant:"HR Assistant", main_sup:"Site Manager", wshc_lead:"WSHC Lead",
+      site_sup:"Site Supervisor", safety_sup:"Safety Supervisor", wshc:"WSHC",
+      logistics_sup:"Logistics Supervisor", payroll:"Payroll",
     };
 
-    // Menu per role: [label, phase, page]. Phases not yet built are shown locked.
-    const MENUS = {
-      admin:    [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      main_sup: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Workers (leave status)", 4, "workers.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["How to Use", 1, "help.html"]],
-      site_sup: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["How to Use", 1, "help.html"]],
-      payroll:  [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
+    // Every role maps to one of four access tiers.
+    const ROLE_TIER = {
+      admin:"full", general_manager:"full", operation_manager:"full", hr_assistant:"full",
+      main_sup:"manager", wshc_lead:"manager",
+      site_sup:"supervisor", safety_sup:"supervisor", wshc:"supervisor", logistics_sup:"supervisor",
+      payroll:"payroll",
     };
+
+    // Menu per tier: [label, phase, page].
+    const TIER_MENU = {
+      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["How to Use", 1, "help.html"]],
+      payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
+    };
+    function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
     const DONE_PHASE = 12; // raise this as phases complete
 
     function renderMenu(role) {
       const menu = document.getElementById("menu");
       menu.innerHTML = "";
-      (MENUS[role] || []).forEach(([label, phase, page]) => {
+      menuFor(role).forEach(([label, phase, page]) => {
         const unlocked = phase <= DONE_PHASE;
         const el = document.createElement(unlocked ? "a" : "div");
         if (unlocked) el.href = page;
