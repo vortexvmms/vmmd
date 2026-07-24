@@ -52,19 +52,15 @@
     <!-- Status: allocation done / unsaved changes (pending state uses the copybar above) -->
     <div id="statusbar" class="hidden rounded-lg shadow-sm p-3 mb-3 text-sm font-bold text-center"></div>
 
-    <div id="filterbar" class="md:flex md:items-center md:gap-4 md:mb-3">
+    <div id="filterbar" class="flex flex-wrap items-center gap-2 mb-3">
       <input id="search" type="search" placeholder="Search worker…"
-             class="w-full md:flex-1 border border-gray-300 rounded-lg p-3 text-base mb-3 md:mb-0 focus:outline-none focus:ring-2 focus:ring-red-600">
-
-      <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 md:mb-0 whitespace-nowrap">
-        <input id="only-un" type="checkbox" class="accent-red-700">
-        <span id="only-un-label">Show unassigned workers only</span>
-      </label>
-
-      <label class="flex items-center gap-2 text-sm text-gray-600 mb-3 md:mb-0 whitespace-nowrap">
-        <input id="only-multi" type="checkbox" class="accent-red-700">
-        Requested by 2+ sites
-      </label>
+             class="w-full md:flex-1 md:min-w-[200px] border border-gray-300 rounded-lg p-3 text-base focus:outline-none focus:ring-2 focus:ring-red-600">
+      <button id="f-unalloc" type="button" onclick="toggleFilter('unalloc')"
+              class="filt border border-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap">Unallocated only</button>
+      <button id="f-multi" type="button" onclick="toggleFilter('multi')"
+              class="filt border border-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap">Requested by 2+ sites</button>
+      <button id="f-allochere" type="button" onclick="toggleFilter('allochere')"
+              class="filt hidden border border-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap">Allocated to this site</button>
     </div>
 
     <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
@@ -91,6 +87,18 @@
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
     let REQBYSITE = {}, REQANY = {};   // requests: site_id -> Set(worker_id) ; worker_id -> [site_name]
     let REQROWS = [], ALLOCMAP = {};   // raw request rows ; worker_id -> {site_id, site_name} (where allocated)
+
+    // ---- Filter pill toggles (By Worker + By Site) ----
+    const FILTER = { unalloc: false, multi: false, allochere: false };
+    function toggleFilter(k) { FILTER[k] = !FILTER[k]; paintFilters(); render(); }
+    function paintFilters() {
+      [["f-unalloc", "unalloc"], ["f-multi", "multi"], ["f-allochere", "allochere"]].forEach(([id, k]) => {
+        const b = document.getElementById(id); if (!b) return;
+        const on = FILTER[k] ? "bg-red-700 text-white border-red-700" : "border-gray-300 text-gray-700";
+        b.className = "filt border text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap " + on +
+          (id === "f-allochere" && MODE !== "site" ? " hidden" : "");
+      });
+    }
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -132,8 +140,8 @@
       document.getElementById("filterbar").classList.toggle("hidden", MODE === "requests");
       // Save stays visible everywhere — in Requests it saves the multi-site decisions
       document.getElementById("save").classList.remove("hidden");
-      document.getElementById("only-un-label").textContent =
-        MODE === "site" ? "Show unallocated workers only" : "Show unassigned workers only";
+      if (MODE !== "site") FILTER.allochere = false;   // that filter only applies to By Site
+      paintFilters();
       // NOTE: the Save button label is owned entirely by updateStatus()
       // (Pending / Save Changes / Allocation Done ✓) — don't set it here.
     }
@@ -141,12 +149,7 @@
     function setMode(m) {
       MODE = m;
       applyModeChrome();
-      if (m === "site") {
-        const siteId = document.getElementById("site").value;
-        SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
-      } else if (m === "worker" || m === "requests") {
-        snapshotAssign();
-      }
+      snapshotAssign();          // all edit modes now share the ASSIGN model
       render();
     }
 
@@ -173,12 +176,7 @@
         (REQANY[x.worker_id] = REQANY[x.worker_id] || []).push(x.site_name);
       });
       document.getElementById("copybar").classList.toggle("hidden", ALLOC.length > 0);
-      if (MODE === "site") {
-        const siteId = document.getElementById("site").value;
-        SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
-      } else {
-        snapshotAssign();
-      }
+      snapshotAssign();
       render();
     }
 
@@ -189,16 +187,10 @@
       updateStatus();
     }
 
-    /* Is the current view different from what's saved in the database? */
+    /* Is the current view different from what's saved in the database?
+       (All edit modes now share the ASSIGN model.) */
     function dayHasChanges() {
-      if (MODE === "site") {
-        const sid = document.getElementById("site").value;
-        const base = new Set(ALLOC.filter(a => a.site_id === sid).map(a => a.worker_id));
-        if (SELECTED.size !== base.size) return true;
-        for (const w of SELECTED) if (!base.has(w)) return true;
-        return false;
-      }
-      return changeCount() > 0;          // By Worker + Requests both edit ASSIGN
+      return changeCount() > 0;
     }
 
     /* One place that decides the status banner + Save-button wording/colour */
@@ -214,7 +206,7 @@
         bar.textContent = "● Unsaved changes — press Save to apply them.";
         bar.classList.remove("hidden");
         save.disabled = false;
-        save.textContent = MODE === "site" ? "Save Allocation" : "Save Changes";
+        save.textContent = "Save Changes";
         save.className = btn("bg-red-700 hover:bg-red-800 text-white");
       } else if (done) {
         bar.className = "rounded-lg shadow-sm p-3 mb-3 text-sm font-bold text-center bg-green-50 border border-green-300 text-green-700";
@@ -226,7 +218,7 @@
       } else {
         // pending: the amber copybar already shows the message
         bar.classList.add("hidden");
-        save.disabled = MODE !== "site";   // site mode can save a first allocation
+        save.disabled = true;              // nothing changed yet
         save.textContent = "Save Allocation";
         save.className = btn("bg-red-700 hover:bg-red-800 text-white");
       }
@@ -387,34 +379,36 @@
                         : "All requests allocated ✓");
     }
 
-    /* ---------------- BY SITE (tick workers for one site) ---------------- */
+    function changeCount() {
+      return Object.keys(ASSIGN).filter(w => ASSIGN[w] !== ORIG[w]).length;
+    }
+
+    /* Shared site dropdown */
+    function siteOptions(cur) {
+      return `<option value="">— Not working —</option>` +
+        SITES.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${esc(s.site_name)}</option>`).join("");
+    }
+
+    /* ---------------- BY SITE (context site + per-worker dropdown) ---------------- */
     function renderSite() {
       const siteId = document.getElementById("site").value;
+      const siteNm = siteName(siteId);
       const q = document.getElementById("search").value.trim().toLowerCase();
-      const onlyUn = document.getElementById("only-un").checked;
-      const onlyMulti = document.getElementById("only-multi").checked;
       const multiReq = w => (REQANY[w.id] && REQANY[w.id].length > 1);
-
-      const elsewhere = {};
-      ALLOC.forEach(a => { if (a.site_id !== siteId) elsewhere[a.worker_id] = a.site_name; });
+      const reqSet = REQBYSITE[siteId] || new Set();
 
       const active = WORKERS.filter(w => w.status === "active");
       const onLeave = WORKERS.filter(w => w.status === "on_leave");
-      const unallocCount = active.filter(w => !elsewhere[w.id] && !SELECTED.has(w.id)).length;
-      const reqSet = REQBYSITE[siteId] || new Set();
+      const hereCount = active.filter(w => ASSIGN[w.id] === siteId).length;
 
       document.getElementById("summary").textContent =
-        `${ALLOC.length} allocated · ${unallocCount} unallocated · ${onLeave.length} on leave`;
-      document.getElementById("selcount").textContent =
-        reqSet.size
-          ? `Requested here: ${reqSet.size} · Allocated: ${SELECTED.size}`
-          : `${SELECTED.size} selected for this site`;
-      document.getElementById("save").disabled = false;
+        `${hereCount} on ${siteNm} · ${reqSet.size} requested here · ${onLeave.length} on leave`;
 
       const rows = active.filter(w =>
         (!q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q)) &&
-        (!onlyUn || (!elsewhere[w.id] && !SELECTED.has(w.id))) &&
-        (!onlyMulti || multiReq(w))
+        (!FILTER.unalloc  || !ASSIGN[w.id]) &&
+        (!FILTER.multi    || multiReq(w)) &&
+        (!FILTER.allochere || ASSIGN[w.id] === siteId)
       );
 
       const list = document.getElementById("list");
@@ -423,40 +417,35 @@
       document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
 
       rows.forEach(w => {
-        const other = elsewhere[w.id];
+        const changed = ASSIGN[w.id] !== ORIG[w.id];
         const reqHere = reqSet.has(w.id);
-        const div = document.createElement("label");
-        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 flex items-center gap-3 " +
-                        (reqHere && !other ? "border-red-400 " : "border-gray-300 ") +
-                        (other ? "opacity-50" : "cursor-pointer active:bg-gray-50");
+        const here = ASSIGN[w.id] === siteId;
+        const div = document.createElement("div");
+        div.className = "rounded-xl shadow-sm p-3 flex items-center gap-3 border " +
+          (changed ? "bg-yellow-50 border-yellow-400"
+                   : here ? "bg-green-50 border-green-300"
+                   : reqHere ? "bg-gray-100 border-red-300" : "bg-gray-100 border-gray-300");
+        const reqTag = reqHere ? ' <span class="ml-1 text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5 align-middle">REQ here</span>' : "";
+        const cur = ASSIGN[w.id];
+        const whereNote = cur ? (here ? "" : " · at " + siteName(cur)) : " · not working";
         div.innerHTML =
-          `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""} ${other ? "disabled" : ""}>
-           <div class="flex-1">
-             <p class="font-medium text-gray-800">${esc(w.name)}${reqHere ? ' <span class="ml-1 text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5 align-middle">REQUESTED</span>' : ""}</p>
-             <p class="text-xs text-gray-400">${esc(w.worker_code)}${other ? " · already at " + other : ""}</p>
-           </div>`;
-        if (!other) {
-          div.querySelector("input").addEventListener("change", (e) => {
-            e.target.checked ? SELECTED.add(w.id) : SELECTED.delete(w.id);
-            document.getElementById("selcount").textContent = `${SELECTED.size} selected for this site`;
-            updateStatus();   // reflect done / unsaved-changes on the button + banner
-          });
-        }
+          `<div class="flex-1 min-w-0">
+             <p class="font-medium text-gray-800 truncate">${esc(w.name)}${reqTag}</p>
+             <p class="text-xs text-gray-400">${esc(w.worker_code)}${whereNote}</p>
+           </div>
+           <select class="w-36 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${siteOptions(cur)}</select>`;
+        div.querySelector("select").addEventListener("change", (e) => { ASSIGN[w.id] = e.target.value; render(); });
         list.appendChild(div);
       });
 
-      appendLeave(list, onLeave, q, onlyUn);
+      appendLeave(list, onLeave, q, FILTER.unalloc || FILTER.allochere);
     }
 
     /* ---------------- BY WORKER (one row per worker, pick site) ---------------- */
-    function changeCount() {
-      return Object.keys(ASSIGN).filter(w => ASSIGN[w] !== ORIG[w]).length;
-    }
-
     function renderWorker() {
       const q = document.getElementById("search").value.trim().toLowerCase();
-      const onlyUn = document.getElementById("only-un").checked;
-      const onlyMulti = document.getElementById("only-multi").checked;
+      const onlyUn = FILTER.unalloc;
+      const onlyMulti = FILTER.multi;
       const multiReq = w => (REQANY[w.id] && REQANY[w.id].length > 1);
 
       const active = WORKERS.filter(w => w.status === "active");
@@ -528,7 +517,9 @@
     }
 
     /* ---------------- Saving ---------------- */
-    function save() { MODE === "site" ? saveSite() : saveAll(); }
+    // All edit modes (By Site / By Worker / Requests) now edit ASSIGN, so a single
+    // two-pass save handles everything.
+    function save() { saveAll(); }
 
     async function callBulk(siteId, workerIds) {
       const r = await vmmsApi("/api/v1/allocations/bulk", {
@@ -544,19 +535,6 @@
       return data;
     }
 
-    async function saveSite() {
-      const btn = document.getElementById("save");
-      btn.disabled = true; btn.textContent = "Saving…";
-      try {
-        const data = await callBulk(document.getElementById("site").value, [...SELECTED]);
-        toast(`Saved — ${data.added} added, ${data.removed} removed`);
-        await loadDay();
-      } catch (ex) {
-        toast(ex.message, true);
-      } finally {
-        btn.disabled = false; btn.textContent = "Save Allocation";
-      }
-    }
 
     // Worker mode: apply the whole day in one click.
     // Two passes so the backend's "already on another site" guard never trips:
@@ -617,14 +595,8 @@
     }
 
     document.getElementById("date").addEventListener("change", loadDay);
-    document.getElementById("site").addEventListener("change", () => {
-      const siteId = document.getElementById("site").value;
-      SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
-      render();
-    });
+    document.getElementById("site").addEventListener("change", render);   // re-filter for the new context site
     document.getElementById("search").addEventListener("input", render);
-    document.getElementById("only-un").addEventListener("change", render);
-    document.getElementById("only-multi").addEventListener("change", render);
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
