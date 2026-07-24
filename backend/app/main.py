@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.22.0")  # guard: never delete an allocation that has attendance
+app = FastAPI(title="VMMS API", version="0.23.0")  # dashboard: split morning/evening update status
 
 app.add_middleware(
     CORSMiddleware,
@@ -1486,12 +1486,17 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                         elif at == "al": today_al += 1
                         elif at == "ul": today_ul += 1
 
-        pending, completed = [], []
+        # Split the day into MORNING (attendance marked) and EVENING (end times submitted)
+        morning_pending, morning_completed = [], []
+        evening_pending, evening_completed = [], []
         for sname, t in today_by_site.items():
-            if t["allocated"] > 0 and t["submitted"] >= t["allocated"] and t["allocated"] == t["with_att"]:
-                completed.append(sname)
-            else:
-                pending.append(sname)
+            if t["allocated"] <= 0:
+                continue
+            (morning_completed if t["with_att"] >= t["allocated"] else morning_pending).append(sname)
+            (evening_completed if t["submitted"] >= t["allocated"] else evening_pending).append(sname)
+
+        # Backward-compatible fields = the evening (end-time) view
+        pending, completed = evening_pending, evening_completed
 
         summary = [{"site_name": s["site_name"],
                     "today": today_by_site.get(s["site_name"], {}).get("allocated", 0),
@@ -1512,6 +1517,10 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             "today_ul": today_ul,
             "pending_updates": sorted(pending),
             "completed_updates": sorted(completed),
+            "morning_pending": sorted(morning_pending),
+            "morning_completed": sorted(morning_completed),
+            "evening_pending": sorted(evening_pending),
+            "evening_completed": sorted(evening_completed),
             "month_normal_hours": round(month_nh, 1),
             "month_ot_hours": round(month_ot, 1),
             "site_summary": summary,
