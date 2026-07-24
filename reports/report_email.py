@@ -19,6 +19,7 @@ Optional:
 """
 
 import os
+import re
 import sys
 import smtplib
 import datetime as dt
@@ -52,6 +53,14 @@ def envv(name, default=None):
     get pasted with a trailing line break, which breaks e-mail headers)."""
     v = os.environ.get(name, default)
     return v.strip() if isinstance(v, str) else v
+
+
+def addrs(name):
+    """Turn a secret into a clean recipient list — tolerates stray spaces,
+    line breaks, commas or semicolons anywhere in the pasted value."""
+    raw = os.environ.get(name, "") or ""
+    parts = [p for p in re.split(r"[\s,;]+", raw) if p]
+    return ", ".join(parts)
 
 
 def latin(x):
@@ -356,8 +365,8 @@ def build_pdf_monthly(rows, days, today, path):
 # ---------------------------------------------------------------- email
 def send_email(subject, body, attachments):
     msg = EmailMessage()
-    msg["From"] = envv("GMAIL_USER")
-    msg["To"] = envv("REPORT_TO")
+    msg["From"] = addrs("GMAIL_USER")
+    msg["To"] = addrs("REPORT_TO")
     msg["Subject"] = subject.replace("\n", " ").replace("\r", " ")
     msg.set_content(body)
     for path in attachments:
@@ -369,9 +378,9 @@ def send_email(subject, body, attachments):
         msg.add_attachment(data, maintype=maintype, subtype=sub,
                            filename=os.path.basename(path))
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
-        s.login(envv("GMAIL_USER"), envv("GMAIL_APP_PASSWORD").replace(" ", ""))
+        s.login(addrs("GMAIL_USER"), envv("GMAIL_APP_PASSWORD").replace(" ", ""))
         s.send_message(msg)
-    log("email sent to", envv("REPORT_TO"))
+    log("email sent to", addrs("REPORT_TO"))
 
 
 # ----------------------------------------------------------------- main
