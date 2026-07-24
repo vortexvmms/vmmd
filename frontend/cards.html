@@ -119,7 +119,8 @@
         body: JSON.stringify({ expiresIn: 3600 }) });
       if(!r.ok) return null;
       const d = await r.json();
-      return VMMS_CONFIG.SUPABASE_URL + (d.signedURL || d.signedUrl || "");
+      // Supabase returns signedURL relative to the storage API root (/storage/v1)
+      return VMMS_CONFIG.SUPABASE_URL + "/storage/v1" + (d.signedURL || d.signedUrl || "");
     }
     async function toDataURL(url){
       try{ const r=await fetch(url); const b=await r.blob();
