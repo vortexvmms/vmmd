@@ -175,7 +175,11 @@ if (window.tailwind) {
   var s = document.createElement("style");
   s.textContent = "body.vmms-pdf .no-print{display:none!important}" +
                   "body.vmms-pdf .print-only{display:block!important}" +
-                  ".pdfing{box-shadow:none!important;border:none!important}";
+                  ".pdfing{box-shadow:none!important;border:none!important}" +
+                  // During capture, kill entrance animations — html2canvas clones the
+                  // page and restarts them from their invisible (opacity 0) start frame,
+                  // which made animated tiles / rows come out blank in the PDF.
+                  "body.vmms-pdf *,.pdfing,.pdfing *{animation:none!important;opacity:1!important;transform:none!important}";
   (document.head || document.documentElement).appendChild(s);
 })();
 window.vmmsDownloadPdf = function (elementId, filename, opts) {
