@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.28.0")  # role editor + per-user menu sections
+app = FastAPI(title="VMMS API", version="0.29.0")  # per-user menu sections live
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,9 +88,15 @@ async def get_current_user(request: Request) -> dict:
 
         r2 = await client.get(
             f"{REST}/users",
-            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status"},
+            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu"},
             headers=supabase_headers(token),
         )
+        if r2.status_code != 200:   # tolerate the 'menu' column not existing yet
+            r2 = await client.get(
+                f"{REST}/users",
+                params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status"},
+                headers=supabase_headers(token),
+            )
         rows = r2.json() if r2.status_code == 200 else []
         if not rows:
             raise HTTPException(status_code=403, detail="No VMMS profile/role linked — ask the administrator")
@@ -401,12 +407,16 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
 async def list_users(role: str = "", user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,name,role,status", "order": "name.asc"}
+    params = {"select": "id,name,role,status,menu", "order": "name.asc"}
     if role:
         params["role"] = f"eq.{role}"
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{REST}/users", params=params,
                              headers=supabase_headers(user["token"]))
+        if r.status_code != 200:   # tolerate the 'menu' column not existing yet
+            params["select"] = "id,name,role,status"
+            r = await client.get(f"{REST}/users", params=params,
+                                 headers=supabase_headers(user["token"]))
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load users")
         return r.json()
