@@ -24,12 +24,12 @@
 
     <!-- View toggle -->
     <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
+      <button id="tab-requests" onclick="setMode('requests')"
+              class="flex-1 rounded-lg py-2 text-sm font-bold">Requests</button>
       <button id="tab-worker" onclick="setMode('worker')"
               class="flex-1 rounded-lg py-2 text-sm font-bold">By Worker</button>
       <button id="tab-site" onclick="setMode('site')"
               class="flex-1 rounded-lg py-2 text-sm font-bold">By Site</button>
-      <button id="tab-requests" onclick="setMode('requests')"
-              class="flex-1 rounded-lg py-2 text-sm font-bold">Requests</button>
     </div>
 
     <div class="flex gap-2 mt-2 max-w-6xl mx-auto w-full">
@@ -81,7 +81,7 @@
     requireLogin();
 
     let ME = null, SITES = [], WORKERS = [], ALLOC = [];
-    let MODE = "worker";               // "worker" (default) or "site"
+    let MODE = "requests";             // "requests" (default) · "worker" · "site"
     let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
     let REQBYSITE = {}, REQANY = {};   // requests: site_id -> Set(worker_id) ; worker_id -> [site_name]
@@ -125,7 +125,8 @@
       document.getElementById("tab-requests").className = cls("requests");
       document.getElementById("site").classList.toggle("hidden", MODE !== "site");
       document.getElementById("filterbar").classList.toggle("hidden", MODE === "requests");
-      document.getElementById("save").classList.toggle("hidden", MODE === "requests");
+      // Save stays visible everywhere — in Requests it saves the multi-site decisions
+      document.getElementById("save").classList.remove("hidden");
       document.getElementById("only-un-label").textContent =
         MODE === "site" ? "Show unallocated workers only" : "Show unassigned workers only";
       document.getElementById("save").textContent = MODE === "site" ? "Save Allocation" : "Save All";
@@ -137,7 +138,7 @@
       if (m === "site") {
         const siteId = document.getElementById("site").value;
         SELECTED = new Set(ALLOC.filter(a => a.site_id === siteId).map(a => a.worker_id));
-      } else if (m === "worker") {
+      } else if (m === "worker" || m === "requests") {
         snapshotAssign();
       }
       render();
@@ -240,6 +241,47 @@
       }
       list.appendChild(panel);
 
+      // ---- Workers requested by 2+ sites → dropdown so admin decides here ----
+      const multi = {};
+      REQROWS.forEach(x => {
+        const m = multi[x.worker_id] = multi[x.worker_id] ||
+          { name: x.worker_name, code: x.worker_code, sites: [] };
+        if (!m.sites.some(s => s.id === x.site_id)) m.sites.push({ id: x.site_id, name: x.site_name });
+      });
+      const multiIds = Object.keys(multi).filter(id => multi[id].sites.length > 1)
+        .sort((a, b) => multi[a].name.localeCompare(multi[b].name));
+
+      if (multiIds.length) {
+        const mp = document.createElement("div");
+        mp.className = "bg-red-50 border border-red-300 rounded-xl shadow-sm p-4";
+        mp.innerHTML =
+          `<p class="font-bold text-gray-800 mb-1">${multiIds.length} worker(s) requested by 2+ sites</p>
+           <p class="text-xs text-gray-500 mb-3">Pick where each one goes, then press <b>Save All</b>.</p>`;
+        multiIds.forEach(wid => {
+          const w = multi[wid];
+          const cur = ASSIGN[wid] || "";
+          const opts = `<option value="">— Not working —</option>` +
+            w.sites.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${s.name}</option>`).join("") +
+            // allow choosing a site that didn't request, if needed
+            (cur && !w.sites.some(s => s.id === cur)
+              ? `<option value="${cur}" selected>${siteName(cur)} (current)</option>` : "");
+          const row = document.createElement("div");
+          row.className = "flex items-center gap-3 py-1.5 border-t border-red-200";
+          row.innerHTML =
+            `<div class="flex-1 min-w-0">
+               <p class="text-sm font-medium text-gray-800 truncate">${w.code}_${w.name}</p>
+               <p class="text-[11px] text-gray-500">requested by: ${w.sites.map(s => s.name).join(", ")}</p>
+             </div>
+             <select class="w-40 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
+          row.querySelector("select").addEventListener("change", (e) => {
+            ASSIGN[wid] = e.target.value;
+            renderRequests();   // refresh chips + save state
+          });
+          mp.appendChild(row);
+        });
+        list.appendChild(mp);
+      }
+
       const siteIds = Object.keys(bySite).sort((a, b) => bySite[a].name.localeCompare(bySite[b].name));
       siteIds.forEach(sid => {
         const grp = bySite[sid];
@@ -272,9 +314,14 @@
       document.getElementById("summary").textContent =
         totalReq ? `${totalGot}/${totalReq} requested workers allocated · ${totalPend} pending`
                  : "No requests for this date";
+
+      const ch = changeCount();
+      const save = document.getElementById("save");
+      save.disabled = ch === 0;
       document.getElementById("selcount").textContent =
-        totalPend ? `${totalPend} requested worker(s) still to allocate — switch to By Site or By Worker to fix.`
-                  : "All requests allocated ✓";
+        ch ? `${ch} change${ch > 1 ? "s" : ""} not saved — press Save All`
+           : (totalPend ? `${totalPend} requested worker(s) still to allocate`
+                        : "All requests allocated ✓");
     }
 
     /* ---------------- BY SITE (tick workers for one site) ---------------- */
