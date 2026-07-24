@@ -99,11 +99,13 @@
     };
     function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
     const DONE_PHASE = 12; // raise this as phases complete
+    let ALLOWED = null;    // per-user section allow-list (null = show all for the role)
 
     function renderMenu(role) {
       const menu = document.getElementById("menu");
       menu.innerHTML = "";
       menuFor(role).forEach(([label, phase, page]) => {
+        if (ALLOWED && page !== "help.html" && ALLOWED.indexOf(page) === -1) return;
         const unlocked = phase <= DONE_PHASE;
         const el = document.createElement(unlocked ? "a" : "div");
         if (unlocked) el.href = page;

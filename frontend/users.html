@@ -126,6 +126,51 @@
       }catch(ex){ toast(ex.message, true); sel.value = prev; sel.disabled = false; }
     }
 
+    // ---- Per-user section (menu) chooser ----
+    const ROLE_TIER = {
+      admin:"full", general_manager:"full", operation_manager:"full", hr_assistant:"full",
+      main_sup:"manager", wshc_lead:"manager",
+      site_sup:"supervisor", safety_sup:"supervisor", wshc:"supervisor", logistics_sup:"supervisor",
+      payroll:"payroll" };
+    const TIER_MENU = {
+      full:[["Workers","workers.html"],["Sites","sites.html"],["Daily Allocation","allocation.html"],["Attendance","attendance.html"],["End-Time Verification","verify.html"],["WhatsApp Messages","whatsapp.html"],["Dashboard","dashboard.html"],["Reports","reports.html"],["Monthly Timesheet","timesheet.html"],["Users & Access","users.html"],["Settings","settings.html"],["How to Use","help.html"]],
+      manager:[["Request Manpower","request.html"],["Attendance","attendance.html"],["End-Time Verification","verify.html"],["WhatsApp (Site Update)","whatsapp.html"],["Dashboard","dashboard.html"],["Reports","reports.html"],["Monthly Timesheet","timesheet.html"],["Settings","settings.html"],["How to Use","help.html"]],
+      supervisor:[["Request Manpower","request.html"],["My Site — Attendance","attendance.html"],["WhatsApp Update","whatsapp.html"],["Dashboard","dashboard.html"],["Reports","reports.html"],["How to Use","help.html"]],
+      payroll:[["End-Time Verification","verify.html"],["Reports","reports.html"],["Monthly Timesheet","timesheet.html"],["Monthly Man-Hours","manhours.html"],["How to Use","help.html"]],
+    };
+    function tierMenu(role){ return TIER_MENU[ROLE_TIER[role]||"supervisor"] || []; }
+
+    function renderSections(u){
+      const items = tierMenu(u.role);
+      const allowed = Array.isArray(u.menu) ? u.menu : null;   // null = all visible
+      const boxes = items.map(([label,page]) => {
+        const forced = (page === "help.html");                 // always keep How-to-Use
+        const checked = forced || !allowed || allowed.indexOf(page) !== -1;
+        return `<label class="flex items-center gap-2 text-sm py-0.5">
+          <input type="checkbox" value="${page}" ${checked?'checked':''} ${forced?'disabled':''} class="sec-cb">
+          <span>${esc(label)}</span></label>`;
+      }).join("");
+      return `<p class="text-[11px] text-gray-500 mb-1">Tick the sections this user sees on their home menu (limited to what their role allows).</p>
+        <div class="grid grid-cols-2 gap-x-3">${boxes}</div>
+        <button onclick="saveSections('${u.id}', this)" class="mt-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Save sections</button>`;
+    }
+    function toggleSections(id){ document.getElementById("sec-"+id).classList.toggle("hidden"); }
+
+    async function saveSections(id, btn){
+      const div = document.getElementById("sec-"+id);
+      const cbs = [...div.querySelectorAll(".sec-cb")];
+      const checked = cbs.filter(c => c.checked).map(c => c.value);
+      const menu = (checked.length === cbs.length) ? null : checked;   // all ticked = role default
+      btn.disabled = true; const t = btn.textContent; btn.textContent = "…";
+      try{
+        const r = await vmmsApi(`/api/v1/users/${id}`, {method:"PATCH", body:JSON.stringify({menu})});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not save sections");
+        toast(menu ? "Sections saved" : "Sections reset to role default");
+        await loadUsers();
+      }catch(ex){ toast(ex.message, true); btn.disabled=false; btn.textContent=t; }
+    }
+
     async function boot(){
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok){ vmmsLogout(); return; }
@@ -178,6 +223,9 @@
                   : `<button onclick="setStatus('${u.id}','inactive',this)" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Deactivate</button>`}
             </div>
           </div>
+          ${isSelf ? '' : `
+          <button onclick="toggleSections('${u.id}')" class="mt-2 text-xs font-bold text-red-700">▸ Sections${Array.isArray(u.menu)?' (custom)':''}</button>
+          <div id="sec-${u.id}" class="hidden mt-1 border-t border-gray-200 pt-2">${renderSections(u)}</div>`}
         </div>`;
       }).join("");
     }
