@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.25.0")  # Rev 6 role tiers (11 roles)
+app = FastAPI(title="VMMS API", version="0.26.0")  # worker safety-card register
 
 app.add_middleware(
     CORSMiddleware,
@@ -514,6 +514,73 @@ async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_c
         if u.status_code not in (200, 201):
             raise HTTPException(status_code=400, detail="Could not reset the password")
         await audit(client, user, "reset_password", "user", user_id, None, None)
+        return {"ok": True}
+
+
+# ---------------- Worker safety/course cards (Rev 6) ----------------
+CARD_MANAGE_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # everyone except payroll
+
+
+class CardCreate(BaseModel):
+    worker_id: str
+    label: str = ""
+    front_path: str | None = None
+    back_path: str | None = None
+
+
+@app.get("/api/v1/worker_cards")
+async def list_cards(worker_id: str = "", worker_ids: str = "",
+                     user: dict = Depends(get_current_user)):
+    """Card records. Pass worker_id for one worker, or worker_ids=a,b,c for print."""
+    params = {"select": "id,worker_id,label,front_path,back_path,workers(name,worker_code)",
+              "order": "label.asc"}
+    if worker_id:
+        params["worker_id"] = f"eq.{worker_id}"
+    elif worker_ids:
+        ids = ",".join(x for x in worker_ids.split(",") if x)
+        if ids:
+            params["worker_id"] = f"in.({ids})"
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{REST}/worker_cards", params=params,
+                             headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load cards")
+        return [{
+            "id": c["id"], "worker_id": c["worker_id"], "label": c.get("label", ""),
+            "front_path": c.get("front_path"), "back_path": c.get("back_path"),
+            "worker_name": (c.get("workers") or {}).get("name", "?"),
+            "worker_code": (c.get("workers") or {}).get("worker_code", ""),
+        } for c in r.json()]
+
+
+@app.post("/api/v1/worker_cards", status_code=201)
+async def create_card(body: CardCreate, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_MANAGE_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.post(
+            f"{REST}/worker_cards",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"worker_id": body.worker_id, "label": body.label.strip(),
+                  "front_path": body.front_path, "back_path": body.back_path,
+                  "created_by": user["user_id"]})
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not save the card")
+        await audit(client, user, "add_card", "worker_card", body.worker_id, None,
+                    {"label": body.label})
+        return r.json()[0]
+
+
+@app.delete("/api/v1/worker_cards/{card_id}")
+async def delete_card(card_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_MANAGE_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with httpx.AsyncClient(timeout=10) as client:
+        d = await client.delete(f"{REST}/worker_cards", params={"id": f"eq.{card_id}"},
+                                headers=supabase_headers(user["token"]))
+        if d.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete the card")
+        await audit(client, user, "delete_card", "worker_card", card_id, None, None)
         return {"ok": True}
 
 
