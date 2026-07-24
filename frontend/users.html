@@ -100,6 +100,32 @@
 
     function toast(msg, long=false){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"), long?6000:2800); }
 
+    const ROLE_GROUPS = [
+      ["Full access", [["admin","Administrator"],["general_manager","General Manager"],["operation_manager","Operation Manager"],["hr_assistant","HR Assistant"]]],
+      ["Site Manager level", [["main_sup","Site Manager"],["wshc_lead","WSHC Lead"]]],
+      ["Supervisor level", [["site_sup","Site Supervisor"],["safety_sup","Safety Supervisor"],["wshc","WSHC"],["logistics_sup","Logistics Supervisor"]]],
+      ["Other", [["payroll","Payroll"]]],
+    ];
+    function roleOptions(cur){
+      return ROLE_GROUPS.map(([g,opts]) =>
+        `<optgroup label="${g}">` +
+        opts.map(([v,l]) => `<option value="${v}"${v===cur?' selected':''}>${esc(l)}</option>`).join("") +
+        `</optgroup>`).join("");
+    }
+    async function changeRole(id, role, sel){
+      const prev = sel.getAttribute("data-cur");
+      if(role === prev) return;
+      if(!confirm(`Change this user's role to "${ROLE_LABEL[role]||role}"?\n\nThis changes what they can access.`)){ sel.value = prev; return; }
+      sel.disabled = true;
+      try{
+        const r = await vmmsApi(`/api/v1/users/${id}`, {method:"PATCH", body:JSON.stringify({role})});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not change role");
+        toast("Role updated");
+        await loadUsers();
+      }catch(ex){ toast(ex.message, true); sel.value = prev; sel.disabled = false; }
+    }
+
     async function boot(){
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok){ vmmsLogout(); return; }
@@ -134,11 +160,15 @@
           ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">DEACTIVATED</span>`
           : `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>`;
         const isSelf = u.id === ME.user_id;
+        const roleControl = isSelf
+          ? roleChip
+          : `<select onchange="changeRole('${u.id}', this.value, this)" data-cur="${u.role}"
+                     class="text-xs font-medium border border-gray-300 rounded-lg px-2 py-1 bg-white">${roleOptions(u.role)}</select>`;
         return `<div class="bg-gray-100 border ${inactive?'border-gray-300 opacity-70':'border-gray-300'} rounded-xl shadow-sm p-4">
           <div class="flex items-center justify-between gap-2 flex-wrap">
             <div class="min-w-0">
               <p class="font-medium text-gray-800 truncate">${esc(u.name)}${isSelf?' <span class="text-[10px] text-gray-400">(you)</span>':''}</p>
-              <div class="flex gap-1.5 mt-1">${roleChip}${statChip}</div>
+              <div class="flex items-center gap-1.5 mt-1 flex-wrap">${roleControl}${statChip}</div>
             </div>
             <div class="flex gap-2">
               <button onclick="resetPw('${u.id}', this)" class="border-2 border-gray-500 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Reset password</button>
