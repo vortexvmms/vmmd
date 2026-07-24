@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -120,7 +121,7 @@
       SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
       const sel = document.getElementById("site");
       const prev = sel.value;
-      sel.innerHTML = SITES.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+      sel.innerHTML = SITES.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
       if (prev && siteMap[prev]) sel.value = prev;
       ROWS = all.filter(x => x.site_id === sel.value);
       render();
@@ -179,9 +180,9 @@
         div.innerHTML = `
           <div class="flex items-center justify-between mb-2">
             <div>
-              <p class="font-medium text-gray-800">${x.worker_name}
+              <p class="font-medium text-gray-800">${esc(x.worker_name)}
                 ${!x.marked ? '<span class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 rounded px-1.5 py-0.5 align-middle">NOT MARKED</span>' : ''}</p>
-              <p class="text-xs text-gray-400">${x.worker_code} · start ${x.start_time}</p>
+              <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${x.start_time}</p>
             </div>
             <label class="flex items-center gap-1 text-sm">
               <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""}>
@@ -295,8 +296,8 @@
       const rows = TRANSFERABLE.filter(w => !q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q));
       document.getElementById("tr-list").innerHTML = rows.length ? rows.map(w =>
         `<button class="tr-pick w-full text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-3" data-id="${w.worker_id}" data-site="${w.current_site || ''}">
-           <p class="font-medium text-gray-800 text-sm">${w.name}</p>
-           <p class="text-xs text-gray-400">${w.worker_code} · ${w.current_site ? "allocated to " + w.current_site : "not allocated today"}</p>
+           <p class="font-medium text-gray-800 text-sm">${esc(w.name)}</p>
+           <p class="text-xs text-gray-400">${esc(w.worker_code)} · ${w.current_site ? "allocated to " + w.current_site : "not allocated today"}</p>
          </button>`).join("")
         : '<p class="text-sm text-gray-400 p-3">No workers found.</p>';
       document.querySelectorAll(".tr-pick").forEach(b => b.addEventListener("click", () => doTransfer(b.dataset.id, b.dataset.site || null)));

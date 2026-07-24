@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     .print-only { display: none; }
     @media print {
@@ -161,8 +162,8 @@
       month_nh:"Month normal hours by site", month_ot:"Month OT hours by site" };
     function dRow(main, sub, right) {
       return `<div class="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
-        <div><p class="font-medium text-gray-800">${main}</p>${sub ? `<p class="text-xs text-gray-500">${sub}</p>` : ""}</div>
-        ${right ? `<span class="text-sm font-bold text-gray-700">${right}</span>` : ""}</div>`;
+        <div><p class="font-medium text-gray-800">${esc(main)}</p>${sub ? `<p class="text-xs text-gray-500">${esc(sub)}</p>` : ""}</div>
+        ${right ? `<span class="text-sm font-bold text-gray-700">${esc(right)}</span>` : ""}</div>`;
     }
     function closeDetail() { document.getElementById("detail").classList.add("hidden"); }
 
@@ -296,7 +297,7 @@
 
       document.getElementById("sites").innerHTML = d.site_summary.map(s =>
         `<tr class="border-t border-gray-200">
-           <td class="p-3 font-medium text-gray-800">${s.site_name}</td>
+           <td class="p-3 font-medium text-gray-800">${esc(s.site_name)}</td>
            <td class="p-3 text-right">${s.today}</td>
            <td class="p-3 text-right">${s.month_nh}</td>
            <td class="p-3 text-right ${s.month_ot > 0 ? "text-red-700 font-bold" : ""}">${s.month_ot}</td>

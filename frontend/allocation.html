@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -116,7 +117,7 @@
       SITES = (await rs.json()).filter(s => s.status === "active");
       WORKERS = (await rw.json()).filter(w => w.status !== "inactive");
       document.getElementById("site").innerHTML =
-        SITES.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+        SITES.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       await loadDay();          // fetches the day, then renders in the current MODE
       applyModeChrome();        // set toggle button styles + labels
     }
@@ -287,7 +288,7 @@
                <button onclick="shareReminder()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
              </div>
            </div>` +
-          notReq.map(s => `<div class="text-sm text-gray-700 py-0.5">• ${s.site_name} — ${(s.supervisors || []).map(x => x.name).join(", ") || "(no supervisor)"}</div>`).join("");
+          notReq.map(s => `<div class="text-sm text-gray-700 py-0.5">• ${esc(s.site_name)} — ${esc((s.supervisors || []).map(x => x.name).join(", ") || "(no supervisor)")}</div>`).join("");
       }
       list.appendChild(panel);
 
@@ -319,7 +320,7 @@
           const cur = ASSIGN[wid] || "";
           const inReq = w.sites.some(s => s.id === cur);
           const opts = `<option value="">— Not working —</option>` +
-            w.sites.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${s.name}</option>`).join("") +
+            w.sites.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${esc(s.name)}</option>`).join("") +
             // if he's currently at a site that didn't request him, keep that as an option
             (cur && !inReq ? `<option value="${cur}" selected>${siteName(cur)} (current)</option>` : "");
           const where = cur ? (inReq ? "" : " · now at " + siteName(cur)) : " · not allocated";
@@ -327,7 +328,7 @@
           row.className = "flex items-center gap-3 py-1.5 border-t border-red-200";
           row.innerHTML =
             `<div class="flex-1 min-w-0">
-               <p class="text-sm font-medium text-gray-800 truncate">${w.code}_${w.name}</p>
+               <p class="text-sm font-medium text-gray-800 truncate">${esc(w.code)}_${esc(w.name)}</p>
                <p class="text-[11px] text-gray-500">requested by: ${w.sites.map(s => s.name).join(", ")}${where}</p>
              </div>
              <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
@@ -353,7 +354,7 @@
             else if (al) { pend++; chip = `<span class="text-[11px] font-bold text-white bg-yellow-500 rounded px-2 py-0.5">AT ${al.site_name.toUpperCase()}</span>`; }
             else { pend++; chip = `<span class="text-[11px] font-bold text-white bg-red-600 rounded px-2 py-0.5">NOT ALLOCATED</span>`; }
             return `<div class="flex items-center justify-between py-1.5 border-t border-gray-200">
-                      <span class="text-sm text-gray-800">${x.worker_code}_${x.worker_name}</span>${chip}
+                      <span class="text-sm text-gray-800">${esc(x.worker_code)}_${esc(x.worker_name)}</span>${chip}
                     </div>`;
           }).join("");
         totalReq += grp.rows.length; totalGot += got; totalPend += pend;
@@ -362,7 +363,7 @@
         card.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4";
         card.innerHTML =
           `<div class="flex items-center justify-between mb-1">
-             <p class="font-bold text-gray-800">${grp.name}</p>
+             <p class="font-bold text-gray-800">${esc(grp.name)}</p>
              <p class="text-xs ${pend ? "text-red-700 font-bold" : "text-green-700 font-bold"}">
                ${got}/${grp.rows.length} allocated${pend ? " · " + pend + " pending" : " ✓"}</p>
            </div>${rowsHTML}`;
@@ -427,8 +428,8 @@
         div.innerHTML =
           `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""} ${other ? "disabled" : ""}>
            <div class="flex-1">
-             <p class="font-medium text-gray-800">${w.name}${reqHere ? ' <span class="ml-1 text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5 align-middle">REQUESTED</span>' : ""}</p>
-             <p class="text-xs text-gray-400">${w.worker_code}${other ? " · already at " + other : ""}</p>
+             <p class="font-medium text-gray-800">${esc(w.name)}${reqHere ? ' <span class="ml-1 text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5 align-middle">REQUESTED</span>' : ""}</p>
+             <p class="text-xs text-gray-400">${esc(w.worker_code)}${other ? " · already at " + other : ""}</p>
            </div>`;
         if (!other) {
           div.querySelector("input").addEventListener("change", (e) => {
@@ -474,7 +475,7 @@
 
       const opts = (cur) =>
         `<option value="">— Not working —</option>` +
-        SITES.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${s.site_name}</option>`).join("");
+        SITES.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${esc(s.site_name)}</option>`).join("");
 
       const list = document.getElementById("list");
       list.className = "space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2";
@@ -492,8 +493,8 @@
         const reqNote = reqBy ? ` <span class="text-[10px] font-bold text-white bg-red-600 rounded px-1.5 py-0.5">REQ: ${reqBy.join(", ")}</span>` : "";
         div.innerHTML =
           `<div class="flex-1 min-w-0">
-             <p class="font-medium text-gray-800 truncate">${w.name}</p>
-             <p class="text-xs text-gray-400">${w.worker_code}${wasNote}${reqNote}</p>
+             <p class="font-medium text-gray-800 truncate">${esc(w.name)}</p>
+             <p class="text-xs text-gray-400">${esc(w.worker_code)}${wasNote}${reqNote}</p>
            </div>
            <select class="w-36 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts(ASSIGN[w.id])}</select>`;
         div.querySelector("select").addEventListener("change", (e) => {
@@ -515,8 +516,8 @@
         onLeave.forEach(w => {
           const div = document.createElement("div");
           div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 opacity-50";
-          div.innerHTML = `<p class="font-medium text-gray-800">${w.name}</p>
-                           <p class="text-xs text-gray-400">${w.worker_code} · on leave</p>`;
+          div.innerHTML = `<p class="font-medium text-gray-800">${esc(w.name)}</p>
+                           <p class="text-xs text-gray-400">${esc(w.worker_code)} · on leave</p>`;
           list.appendChild(div);
         });
       }

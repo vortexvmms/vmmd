@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     .print-only { display: none; }
     @media print {
@@ -142,7 +143,7 @@
       const names = [...new Set(ALL.map(x => x.site_name))].sort();
       const sel = document.getElementById("site");
       const prev = sel.value;
-      sel.innerHTML = `<option value="">All sites</option>` + names.map(n => `<option>${n}</option>`).join("");
+      sel.innerHTML = `<option value="">All sites</option>` + names.map(n => `<option>${esc(n)}</option>`).join("");
       if (prev) sel.value = prev;
       render();
     }
@@ -193,9 +194,9 @@
         const end = x.present ? (x.end_time || `<span class="text-red-600 font-bold">missing</span>`) : "—";
         const sub = x.submitted ? `<span class="text-green-700 font-bold">✓</span>` : `<span class="text-gray-400">pending</span>`;
         return `<tr class="border-t border-gray-200">
-          <td class="p-3 text-gray-500">${x.worker_code}</td>
-          <td class="p-3 text-gray-800 font-medium">${x.worker_name}</td>
-          <td class="p-3 text-gray-700">${x.site_name}</td>
+          <td class="p-3 text-gray-500">${esc(x.worker_code)}</td>
+          <td class="p-3 text-gray-800 font-medium">${esc(x.worker_name)}</td>
+          <td class="p-3 text-gray-700">${esc(x.site_name)}</td>
           <td class="p-3">${st}</td>
           <td class="p-3 text-right">${x.present ? x.start_time : "—"}</td>
           <td class="p-3 text-right">${end}</td>
