@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -114,7 +115,7 @@
       // Co-ordinator/admin can generate one combined message for every site
       const allOpt = (ME && (ME.role === "admin" || ME.role === "main_sup"))
         ? `<option value="__all__">All sites (combined)</option>` : "";
-      sel.innerHTML = allOpt + Object.entries(map).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+      sel.innerHTML = allOpt + Object.entries(map).map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join("");
     }
 
     async function generate() {

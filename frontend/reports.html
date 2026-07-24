@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     @media print {
       header, #controls, #actions { display: none !important; }
@@ -85,7 +86,7 @@
         const sites = (await rs.json()).filter(s => s.status === "active");
         document.getElementById("site").innerHTML =
           '<option value="">All sites</option>' +
-          sites.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+          sites.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       }
     }
 
@@ -132,9 +133,9 @@
       document.getElementById("actions").classList.remove("hidden");
       document.getElementById("tbl").innerHTML =
         "<thead class='bg-gray-50 text-gray-500'><tr>" +
-        HEADERS.map(h => `<th class="text-left p-2">${h}</th>`).join("") + "</tr></thead><tbody>" +
+        HEADERS.map(h => `<th class="text-left p-2">${esc(h)}</th>`).join("") + "</tr></thead><tbody>" +
         ROWS.map(r => "<tr class='border-t border-gray-100'>" +
-          r.map(c => `<td class="p-2">${c}</td>`).join("") + "</tr>").join("") + "</tbody>";
+          r.map(c => `<td class="p-2">${esc(c)}</td>`).join("") + "</tr>").join("") + "</tbody>";
     }
 
     function downloadPdf() {

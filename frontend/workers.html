@@ -10,10 +10,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10 [&>*]:max-w-none">
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
     <div class="flex-1">
       <h1 class="text-lg font-bold">Workers</h1>
@@ -21,19 +22,19 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md md:max-w-5xl mx-auto w-full pb-24">
+  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-24">
 
     <input id="search" type="search" placeholder="Search name or worker ID…"
            class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
 
-    <div class="flex gap-2 mb-4 text-sm font-medium flex-wrap" id="chips">
+    <div class="flex gap-2 mb-4 text-sm font-medium" id="chips">
       <button data-f="" class="chip bg-red-700 text-white px-3 py-1.5 rounded-full">All</button>
       <button data-f="active" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">Active</button>
       <button data-f="on_leave" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">On Leave</button>
       <button data-f="inactive" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">Inactive</button>
     </div>
 
-    <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
+    <div id="list" class="space-y-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers found.</p>
   </main>
 
@@ -136,10 +137,10 @@
       rows.forEach(w => {
         const [label, cls] = STATUS_CHIP[w.status] || [w.status, "bg-gray-100"];
         const div = document.createElement("div");
-        div.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center justify-between";
+        div.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between";
         div.innerHTML =
-          `<div><p class="font-medium text-gray-800">${w.name}</p>
-           <p class="text-xs text-gray-400">${w.worker_code}</p></div>
+          `<div><p class="font-medium text-gray-800">${esc(w.name)}</p>
+           <p class="text-xs text-gray-400">${esc(w.worker_code)}</p></div>
            <span class="text-xs font-bold px-3 py-1 rounded-full ${cls}">${label}</span>`;
         if (ME.role === "admin" || ME.role === "main_sup") {
           div.classList.add("cursor-pointer", "active:bg-gray-50");

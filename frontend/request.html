@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -119,7 +120,7 @@
         return;
       }
       document.getElementById("site").innerHTML =
-        SITES.map(s => `<option value="${s.id}">${s.site_name}</option>`).join("");
+        SITES.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       await loadDay();
     }
 
@@ -211,8 +212,8 @@
         div.innerHTML =
           `<input type="checkbox" class="w-5 h-5 accent-red-700" ${SELECTED.has(w.id) ? "checked" : ""}>
            <div class="flex-1 min-w-0">
-             <p class="font-medium text-gray-800 truncate">${w.name}${badge}</p>
-             <p class="text-xs text-gray-400">${w.worker_code}${others ? ' · also asked by ' + others.join(", ") : ""}</p>
+             <p class="font-medium text-gray-800 truncate">${esc(w.name)}${badge}</p>
+             <p class="text-xs text-gray-400">${esc(w.worker_code)}${others ? ' · also asked by ' + others.join(", ") : ""}</p>
            </div>`;
         div.querySelector("input").addEventListener("change", (e) => {
           e.target.checked ? SELECTED.add(w.id) : SELECTED.delete(w.id);

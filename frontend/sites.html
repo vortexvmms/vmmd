@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
@@ -112,7 +113,7 @@
         div.className = "bg-white rounded-xl shadow p-4";
         div.innerHTML =
           `<div class="flex items-center justify-between">
-             <p class="font-medium text-gray-800">${s.site_name}</p>
+             <p class="font-medium text-gray-800">${esc(s.site_name)}</p>
              <span class="text-xs font-bold px-3 py-1 rounded-full ${s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}">${s.status === "active" ? "Active" : "Archived"}</span>
            </div>
            <p class="text-xs text-gray-400 mt-1">${s.site_code} · ${sups}</p>`;
@@ -144,7 +145,7 @@
           box.innerHTML = SUPS.map(u =>
             `<label class="flex items-center gap-2">
                <input type="checkbox" class="sup-cb accent-red-700" value="${u.id}" ${assigned.has(u.id) ? "checked" : ""}>
-               <span>${u.name}</span>
+               <span>${esc(u.name)}</span>
              </label>`).join("");
         }
       }
