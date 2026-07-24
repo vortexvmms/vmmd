@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.23.0")  # dashboard: split morning/evening update status
+app = FastAPI(title="VMMS API", version="0.24.0")  # user admin: add / deactivate / reset password
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +31,9 @@ app.add_middleware(
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+# Service-role key — SERVER-SIDE ONLY. Used exclusively for admin-guarded user
+# management (create login, reset password). Never sent to the frontend.
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 REST = f"{SUPABASE_URL}/rest/v1"
 
 
@@ -41,6 +44,21 @@ def supabase_headers(user_token: str | None = None) -> dict:
     elif SUPABASE_ANON_KEY.startswith("eyJ"):
         headers["Authorization"] = f"Bearer {SUPABASE_ANON_KEY}"
     return headers
+
+
+def service_headers() -> dict:
+    """Elevated headers for Supabase Auth admin operations (server-side only)."""
+    return {"apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Content-Type": "application/json"}
+
+
+def require_service():
+    if not SUPABASE_SERVICE_KEY:
+        raise HTTPException(
+            status_code=501,
+            detail="Admin key not set up on the server yet. Add SUPABASE_SERVICE_ROLE_KEY "
+                   "in the backend (Render) environment, then try again.")
 
 
 async def get_current_user(request: Request) -> dict:
@@ -383,6 +401,112 @@ async def list_users(role: str = "", user: dict = Depends(get_current_user)):
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load users")
         return r.json()
+
+
+# ---------------- User administration (admin only) ----------------
+ROLES = ("admin", "main_sup", "site_sup", "payroll")
+
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str
+
+
+class UserStatus(BaseModel):
+    status: str          # "active" | "inactive"
+
+
+class PwReset(BaseModel):
+    password: str
+
+
+@app.post("/api/v1/users", status_code=201)
+async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
+    """Create a login (Supabase Auth) + a VMMS profile row. Admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can add users")
+    if body.role not in ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    if len(body.password or "") < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    require_service()
+    async with httpx.AsyncClient(timeout=20) as client:
+        # 1) create the auth login (email pre-confirmed so they can log in right away)
+        a = await client.post(
+            f"{SUPABASE_URL}/auth/v1/admin/users",
+            headers=service_headers(),
+            json={"email": body.email.strip().lower(), "password": body.password,
+                  "email_confirm": True})
+        if a.status_code not in (200, 201):
+            msg = ""
+            try:
+                j = a.json(); msg = j.get("msg") or j.get("error_description") or j.get("error") or ""
+            except Exception:
+                pass
+            if "already" in msg.lower() or a.status_code == 422:
+                raise HTTPException(status_code=409, detail="That email already has a login")
+            raise HTTPException(status_code=400, detail="Could not create login" + (f": {msg}" if msg else ""))
+        auth_uid = a.json().get("id")
+
+        # 2) create the VMMS profile row (service key → bypass RLS reliably)
+        i = await client.post(
+            f"{REST}/users",
+            headers={**service_headers(), "Prefer": "return=representation"},
+            json={"auth_uid": auth_uid, "name": body.name.strip(),
+                  "role": body.role, "status": "active"})
+        if i.status_code not in (200, 201):
+            raise HTTPException(status_code=500,
+                                detail="Login created but profile could not be saved — check with the developer")
+        await audit(client, user, "create_user", "user", auth_uid or body.email, None,
+                    {"name": body.name, "role": body.role})
+        return {"ok": True}
+
+
+@app.patch("/api/v1/users/{user_id}")
+async def update_user_status(user_id: str, body: UserStatus, user: dict = Depends(get_current_user)):
+    """Activate / deactivate a user. Deactivated users are blocked at login."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can change users")
+    if body.status not in ("active", "inactive"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    if user_id == user["user_id"] and body.status == "inactive":
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.patch(
+            f"{REST}/users", params={"id": f"eq.{user_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"status": body.status})
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not update the user")
+        await audit(client, user, "set_user_status", "user", user_id, None, {"status": body.status})
+        return {"ok": True, "status": body.status}
+
+
+@app.post("/api/v1/users/{user_id}/reset_password")
+async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_current_user)):
+    """Set a new password for a user's login. Admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can reset passwords")
+    if len(body.password or "") < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    require_service()
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(f"{REST}/users",
+                             params={"id": f"eq.{user_id}", "select": "auth_uid,name"},
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+        if not rows or not rows[0].get("auth_uid"):
+            raise HTTPException(status_code=404, detail="That user has no linked login")
+        auth_uid = rows[0]["auth_uid"]
+        u = await client.put(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{auth_uid}",
+            headers=service_headers(), json={"password": body.password})
+        if u.status_code not in (200, 201):
+            raise HTTPException(status_code=400, detail="Could not reset the password")
+        await audit(client, user, "reset_password", "user", user_id, None, None)
+        return {"ok": True}
 
 
 @app.put("/api/v1/sites/{site_id}/supervisors")
