@@ -7,6 +7,17 @@ window.esc = function (v) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 };
 
+// ---- Role tiers (Rev 6) — shared by all pages ----
+window.VMMS_TIER = {
+  full: ["admin", "general_manager", "operation_manager", "hr_assistant"],
+  manager: ["main_sup", "wshc_lead"],
+  supervisor: ["site_sup", "safety_sup", "wshc", "logistics_sup"],
+};
+window.isFull = function (r) { return VMMS_TIER.full.indexOf(r) !== -1; };
+window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };
+window.isSupervisor = function (r) { return VMMS_TIER.supervisor.indexOf(r) !== -1; };
+window.isCoordinator = function (r) { return isFull(r) || isManager(r); };  // can broadcast messages
+
 // VMMS configuration
 window.VMMS_CONFIG = {
   BACKEND_URL: "https://vmms-backend-7j1v.onrender.com",
