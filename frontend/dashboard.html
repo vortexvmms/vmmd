@@ -73,19 +73,42 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="cards"></div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">UPDATES FOR THIS DAY</h2>
-    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
-      <div class="flex items-start gap-2 mb-2">
-        <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
-        <p class="text-sm text-gray-700 flex-1" id="pending">—</p>
+    <div class="md:grid md:grid-cols-2 md:gap-3 space-y-3 md:space-y-0">
+
+      <!-- MORNING: attendance marked -->
+      <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+        <p class="text-xs font-bold text-gray-600 mb-2">🌅 MORNING · attendance marked (present / absent)</p>
+        <div class="flex items-start gap-2 mb-2">
+          <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
+          <p class="text-sm text-gray-700 flex-1" id="m-pending">—</p>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
+          <p class="text-sm text-gray-700 flex-1" id="m-completed">—</p>
+        </div>
+        <div id="m-remind" class="hidden flex gap-2 mt-3 no-print">
+          <button onclick="copyReminder('morning')" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy reminder</button>
+          <button onclick="shareReminder('morning')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
+        </div>
       </div>
-      <div class="flex items-start gap-2">
-        <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
-        <p class="text-sm text-gray-700 flex-1" id="completed">—</p>
+
+      <!-- EVENING: end times submitted -->
+      <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+        <p class="text-xs font-bold text-gray-600 mb-2">🌙 EVENING · end times submitted</p>
+        <div class="flex items-start gap-2 mb-2">
+          <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
+          <p class="text-sm text-gray-700 flex-1" id="e-pending">—</p>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
+          <p class="text-sm text-gray-700 flex-1" id="e-completed">—</p>
+        </div>
+        <div id="e-remind" class="hidden flex gap-2 mt-3 no-print">
+          <button onclick="copyReminder('evening')" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy reminder</button>
+          <button onclick="shareReminder('evening')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
+        </div>
       </div>
-      <div id="endremind" class="hidden flex gap-2 mt-3 no-print">
-        <button onclick="copyEndReminder()" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy end-time reminder</button>
-        <button onclick="shareEndReminder()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
-      </div>
+
     </div>
 
     <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (MONTH TO SELECTED DATE)</h2>
@@ -127,30 +150,35 @@
   <script>
     requireLogin();
 
-    let ME = null, SUPMAP = {}, PEND = [], PEND_DATE = "";
+    let ME = null, SUPMAP = {}, MPEND = [], EPEND = [], RDATE = "";
     let DASH = null, WCACHE = null, SCACHE = null;
     const RDAYS = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
     const RMON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-    function endReminderText() {
-      const [y, m, d] = PEND_DATE.split("-");
-      const dow = RDAYS[new Date(PEND_DATE + "T00:00:00").getDay()];
-      const lines = ["*END TIME REMINDER*", `*${d}-${RMON[+m - 1]}-${y}*`, `*${dow}*`, "",
-        "These sites have NOT submitted today's attendance / end times. Please submit:"];
-      PEND.forEach((s, i) => {
+    // stage = "morning" (attendance marked) or "evening" (end times submitted)
+    function reminderText(stage) {
+      const arr = stage === "morning" ? MPEND : EPEND;
+      const [y, m, d] = RDATE.split("-");
+      const dow = RDAYS[new Date(RDATE + "T00:00:00").getDay()];
+      const head = stage === "morning" ? "*MORNING ATTENDANCE REMINDER*" : "*END TIME REMINDER*";
+      const ask = stage === "morning"
+        ? "These sites have NOT marked morning attendance. Please mark present / absent:"
+        : "These sites have NOT submitted end times. Please submit:";
+      const lines = [head, `*${d}-${RMON[+m - 1]}-${y}*`, `*${dow}*`, "", ask];
+      arr.forEach((s, i) => {
         const sup = (SUPMAP[s] || []).join(", ");
         lines.push(`${i + 1}. ${s}${sup ? " — " + sup : ""}`);
       });
       return lines.join("\n");
     }
-    function copyEndReminder() {
-      const t = endReminderText();
+    function copyReminder(stage) {
+      const t = reminderText(stage);
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
         .then(() => alert("Reminder copied — paste it in the group"))
         .catch(() => window.prompt("Copy this reminder:", t));
     }
-    function shareEndReminder() {
-      window.open("https://wa.me/?text=" + encodeURIComponent(endReminderText()), "_blank");
+    function shareReminder(stage) {
+      window.open("https://wa.me/?text=" + encodeURIComponent(reminderText(stage)), "_blank");
     }
 
     function fmtDMY(iso) { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
@@ -285,19 +313,23 @@
           card("Month OT hours", d.month_ot_hours, C.ot) +
           card("Total man-hours (month)", monthTotal, C.total);
 
-      // Hide the "HOME LEAVE" pseudo-entry from the updates list (site request)
+      // Hide the "HOME LEAVE" pseudo-entry from the updates lists (site request)
       const notLeave = x => x.toUpperCase() !== "HOME LEAVE";
-      const pend = (d.pending_updates || []).filter(notLeave);
-      const done = (d.completed_updates || []).filter(notLeave);
-      document.getElementById("pending").textContent =
-        pend.length ? pend.join(", ") : "None — all sites submitted ✓";
-      document.getElementById("completed").textContent =
-        done.length ? done.join(", ") : "None yet";
+      const mPend = (d.morning_pending   || []).filter(notLeave);
+      const mDone = (d.morning_completed || []).filter(notLeave);
+      const ePend = (d.evening_pending   || d.pending_updates   || []).filter(notLeave);
+      const eDone = (d.evening_completed || d.completed_updates || []).filter(notLeave);
 
-      // End-time reminder for the co-ordinator (admin / main supervisor)
-      PEND = pend; PEND_DATE = d.date;
-      const canRemind = ME && (ME.role === "admin" || ME.role === "main_sup") && pend.length > 0;
-      document.getElementById("endremind").classList.toggle("hidden", !canRemind);
+      document.getElementById("m-pending").textContent   = mPend.length ? mPend.join(", ") : "None — all marked ✓";
+      document.getElementById("m-completed").textContent = mDone.length ? mDone.join(", ") : "None yet";
+      document.getElementById("e-pending").textContent   = ePend.length ? ePend.join(", ") : "None — all submitted ✓";
+      document.getElementById("e-completed").textContent = eDone.length ? eDone.join(", ") : "None yet";
+
+      // Reminders for the co-ordinator (admin / main supervisor)
+      MPEND = mPend; EPEND = ePend; RDATE = d.date;
+      const canR = ME && (ME.role === "admin" || ME.role === "main_sup");
+      document.getElementById("m-remind").classList.toggle("hidden", !(canR && mPend.length));
+      document.getElementById("e-remind").classList.toggle("hidden", !(canR && ePend.length));
 
       document.getElementById("sites").innerHTML = d.site_summary.map(s =>
         `<tr class="border-t border-gray-200">
