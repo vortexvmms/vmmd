@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.24.0")  # user admin: add / deactivate / reset password
+app = FastAPI(title="VMMS API", version="0.25.0")  # Rev 6 role tiers (11 roles)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,6 +59,18 @@ def require_service():
             status_code=501,
             detail="Admin key not set up on the server yet. Add SUPABASE_SERVICE_ROLE_KEY "
                    "in the backend (Render) environment, then try again.")
+
+
+# ---------------- Role tiers (Rev 6) ----------------
+# FULL       — admin, general_manager, operation_manager, hr_assistant  (everything)
+# MANAGER    — main_sup (Site Manager), wshc_lead  (all but workers/sites/allocation/users)
+# SUPERVISOR — site_sup, safety_sup, wshc, logistics_sup  (own site attendance/requests)
+FULL_ROLES = ("admin", "general_manager", "operation_manager", "hr_assistant")
+MANAGER_ROLES = ("main_sup", "wshc_lead")
+SUPERVISOR_ROLES = ("site_sup", "safety_sup", "wshc", "logistics_sup")
+ATTENDANCE_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # who can do attendance / requests
+COORDINATOR_ROLES = FULL_ROLES + MANAGER_ROLES                     # who can generate broadcast messages
+ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
 
 
 async def get_current_user(request: Request) -> dict:
@@ -175,8 +187,8 @@ async def list_workers(search: str = "", status: str = "",
 
 @app.post("/api/v1/workers", status_code=201)
 async def create_worker(body: WorkerCreate, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can add workers")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can add workers")
     code = body.worker_code.strip().upper()
     name = body.name.strip()
     if not code or not name:
@@ -205,8 +217,8 @@ class WorkerBulk(BaseModel):
 
 @app.post("/api/v1/workers/bulk")
 async def bulk_create_workers(body: WorkerBulk, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can add workers")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can add workers")
     clean, errors = [], []
     seen = set()
     for i, w in enumerate(body.workers, 1):
@@ -254,13 +266,9 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
-    # Role rules (spec §4): admin edits anything; main_sup may change status
-    # only (leave management, Rev 3); others cannot edit.
-    if user["role"] == "main_sup":
-        if "name" in changes:
-            raise HTTPException(status_code=403, detail="Main Supervisor can update leave status only")
-    elif user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Not allowed")
+    # Rev 6: only the full-access tier (admin/GM/OM/HR) edits workers.
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can edit workers")
 
     changes["updated_by"] = user["user_id"]
 
@@ -328,8 +336,8 @@ async def list_sites(user: dict = Depends(get_current_user)):
 
 @app.post("/api/v1/sites", status_code=201)
 async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can add sites")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can add sites")
     code = body.site_code.strip().upper()
     name = body.site_name.strip().upper()   # site names print in CAPS in WhatsApp messages
     if not code or not name:
@@ -353,8 +361,8 @@ async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
 
 @app.patch("/api/v1/sites/{site_id}")
 async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can edit sites")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can edit sites")
     changes = {}
     if body.site_name is not None and body.site_name.strip():
         changes["site_name"] = body.site_name.strip().upper()
@@ -390,7 +398,7 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
 
 @app.get("/api/v1/users")
 async def list_users(role: str = "", user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
+    if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     params = {"select": "id,name,role,status", "order": "name.asc"}
     if role:
@@ -404,7 +412,7 @@ async def list_users(role: str = "", user: dict = Depends(get_current_user)):
 
 
 # ---------------- User administration (admin only) ----------------
-ROLES = ("admin", "main_sup", "site_sup", "payroll")
+ROLES = ALL_ROLES
 
 
 class UserCreate(BaseModel):
@@ -424,9 +432,9 @@ class PwReset(BaseModel):
 
 @app.post("/api/v1/users", status_code=201)
 async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
-    """Create a login (Supabase Auth) + a VMMS profile row. Admin only."""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can add users")
+    """Create a login (Supabase Auth) + a VMMS profile row. Full-access tier only."""
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can add users")
     if body.role not in ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
     if len(body.password or "") < 8:
@@ -467,8 +475,8 @@ async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
 @app.patch("/api/v1/users/{user_id}")
 async def update_user_status(user_id: str, body: UserStatus, user: dict = Depends(get_current_user)):
     """Activate / deactivate a user. Deactivated users are blocked at login."""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can change users")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can change users")
     if body.status not in ("active", "inactive"):
         raise HTTPException(status_code=400, detail="Invalid status")
     if user_id == user["user_id"] and body.status == "inactive":
@@ -487,8 +495,8 @@ async def update_user_status(user_id: str, body: UserStatus, user: dict = Depend
 @app.post("/api/v1/users/{user_id}/reset_password")
 async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_current_user)):
     """Set a new password for a user's login. Admin only."""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can reset passwords")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can reset passwords")
     if len(body.password or "") < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     require_service()
@@ -512,8 +520,8 @@ async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_c
 @app.put("/api/v1/sites/{site_id}/supervisors")
 async def assign_supervisors(site_id: str, body: SupervisorAssign,
                              user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can assign supervisors")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can assign supervisors")
     async with httpx.AsyncClient(timeout=10) as client:
         old = await client.get(
             f"{REST}/site_supervisors",
@@ -557,7 +565,7 @@ class AllocationCopy(BaseModel):
 
 
 def require_allocator(user: dict):
-    if user["role"] not in ("admin", "main_sup"):
+    if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can edit allocations")
 
 
@@ -772,7 +780,7 @@ async def last_request(site_id: str, before: str, user: dict = Depends(get_curre
 async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)):
     """Replace the requested-worker set for one site + date.
     Site supervisors may only touch their own site (enforced by RLS)."""
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="You cannot submit manpower requests")
     requested = set(body.worker_ids)
 
@@ -986,9 +994,9 @@ async def day_sheet(date: str, site_id: str = "",
 
 @app.patch("/api/v1/attendance/mark")
 async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    if body.start_time and user["role"] == "site_sup":
+    if body.start_time and user["role"] in SUPERVISOR_ROLES:
         raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
 
     async with httpx.AsyncClient(timeout=10) as client:
@@ -1100,7 +1108,7 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
 
 @app.post("/api/v1/attendance/bulk_end")
 async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     async with httpx.AsyncClient(timeout=15) as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
@@ -1144,7 +1152,7 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
 async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
     """Quick helper: mark every not-yet-marked worker as Present (no end time).
     The supervisor then unticks the few who are absent. Default is still unticked."""
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     async with httpx.AsyncClient(timeout=15) as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
@@ -1171,7 +1179,7 @@ async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
 
 @app.post("/api/v1/attendance/submit")
 async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Only a Supervisor or the Administrator can submit")
     async with httpx.AsyncClient(timeout=15) as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
@@ -1235,7 +1243,7 @@ async def transferable_workers(date: str, site_id: str,
     """Workers who did NOT turn up at their allocated site — i.e. everyone
     allocated elsewhere today, plus anyone unallocated. Used when a worker
     reports to the wrong site in the morning."""
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     async with httpx.AsyncClient(timeout=15) as client:
         ra = await client.get(
@@ -1271,7 +1279,7 @@ async def transferable_workers(date: str, site_id: str,
 async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_user)):
     """Move a worker's allocation to the site where he actually reported.
     Allowed for admin, main_sup, and the receiving site's supervisor."""
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     async with httpx.AsyncClient(timeout=15) as client:
         if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
@@ -1388,7 +1396,7 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
 
 @app.get("/api/v1/messages/allocation")
 async def allocation_message(date: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("admin", "main_sup"):
+    if user["role"] not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can generate this message")
     async with httpx.AsyncClient(timeout=10) as client:
         rs = await client.get(f"{REST}/sites",
@@ -1455,7 +1463,7 @@ async def update_message(date: str, site_id: str,
 @app.get("/api/v1/messages/update_all")
 async def update_all_message(date: str, user: dict = Depends(get_current_user)):
     """One combined end-time message for ALL sites (co-ordinator posts once)."""
-    if user["role"] not in ("admin", "main_sup"):
+    if user["role"] not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Only the Co-ordinator or Administrator can generate the all-sites update")
     async with httpx.AsyncClient(timeout=10) as client:
         rows = await _load_day(client, user["token"], date, None)
@@ -1513,7 +1521,7 @@ def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> 
 async def request_message(date: str, user: dict = Depends(get_current_user)):
     # admin/main_sup get the consolidated (all sites) message;
     # a site supervisor gets only their own site's request (RLS scopes the query).
-    if user["role"] not in ("admin", "main_sup", "site_sup"):
+    if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="You cannot generate this message")
     async with httpx.AsyncClient(timeout=10) as client:
         rr = await client.get(
@@ -1555,15 +1563,15 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                               params={"select": "id,status"},
                               headers=supabase_headers(user["token"]))
         workers = rw.json() if rw.status_code == 200 else []
-        scoped = user["role"] == "site_sup"
+        scoped = user["role"] in SUPERVISOR_ROLES
 
         rs = await client.get(f"{REST}/sites",
                               params={"status": "eq.active", "select": "id,site_name"},
                               headers=supabase_headers(user["token"]))
         sites = rs.json() if rs.status_code == 200 else []
 
-        # Site Supervisors see only their own sites (request 22/07/2026)
-        if user["role"] == "site_sup":
+        # Supervisors see only their own sites (request 22/07/2026)
+        if user["role"] in SUPERVISOR_ROLES:
             rl = await client.get(f"{REST}/site_supervisors",
                                   params={"user_id": f"eq.{user['user_id']}", "select": "site_id"},
                                   headers=supabase_headers(user["token"]))
@@ -1800,8 +1808,8 @@ async def list_holidays(user: dict = Depends(get_current_user)):
 
 @app.post("/api/v1/holidays", status_code=201)
 async def add_holiday(body: HolidayBody, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can edit holidays")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can edit holidays")
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(f"{REST}/public_holidays",
                               headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
@@ -1817,8 +1825,8 @@ async def add_holiday(body: HolidayBody, user: dict = Depends(get_current_user))
 
 @app.delete("/api/v1/holidays/{holiday_date}")
 async def delete_holiday(holiday_date: str, user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only the administrator can edit holidays")
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can edit holidays")
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.delete(f"{REST}/public_holidays",
                                 params={"holiday_date": f"eq.{holiday_date}"},
@@ -1831,7 +1839,7 @@ async def delete_holiday(holiday_date: str, user: dict = Depends(get_current_use
 
 @app.get("/api/v1/settings")
 async def list_settings(user: dict = Depends(get_current_user)):
-    if user["role"] != "admin":
+    if user["role"] not in FULL_ROLES + MANAGER_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{REST}/settings",
