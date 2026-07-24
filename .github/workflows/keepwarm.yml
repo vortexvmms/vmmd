@@ -1,0 +1,28 @@
+name: Keep backend warm
+
+# Pings the VMMS backend every ~10 minutes so Render's free tier
+# does not spin it down (it sleeps after ~15 min idle, and a cold
+# start otherwise makes the next page load take ~40 seconds).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}   # allows a manual run from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          URL="https://vmms-backend-7j1v.onrender.com/api/v1/health"
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$URL?z=$(date +%s)" || echo "000")
+            echo "Attempt $i -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Backend is awake."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Health check did not return 200 (backend may be starting)."
+          exit 0
