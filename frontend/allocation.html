@@ -291,41 +291,49 @@
       }
       list.appendChild(panel);
 
-      // ---- Workers requested by 2+ sites → dropdown so admin decides here ----
-      const multi = {};
+      // ---- Requested workers that still need placing / reassigning → dropdowns ----
+      // Shows EVERY day (not only for 2+ site cases): a worker appears here if he
+      // is requested by 2+ sites, OR he is not yet allocated to a site that asked
+      // for him (still pending). Lets the admin place/move him in one tap.
+      const reqW = {};
       REQROWS.forEach(x => {
-        const m = multi[x.worker_id] = multi[x.worker_id] ||
+        const m = reqW[x.worker_id] = reqW[x.worker_id] ||
           { name: x.worker_name, code: x.worker_code, sites: [] };
         if (!m.sites.some(s => s.id === x.site_id)) m.sites.push({ id: x.site_id, name: x.site_name });
       });
-      const multiIds = Object.keys(multi).filter(id => multi[id].sites.length > 1)
-        .sort((a, b) => multi[a].name.localeCompare(multi[b].name));
+      const placeIds = Object.keys(reqW).filter(wid => {
+        const reqSites = reqW[wid].sites.map(s => s.id);
+        const cur = ALLOCMAP[wid] ? ALLOCMAP[wid].site_id : "";
+        const placedRight = cur && reqSites.includes(cur);     // already at a requesting site
+        return reqW[wid].sites.length > 1 || !placedRight;     // multi-requested OR still pending
+      }).sort((a, b) => reqW[a].name.localeCompare(reqW[b].name));
 
-      if (multiIds.length) {
+      if (placeIds.length) {
         const mp = document.createElement("div");
         mp.className = "bg-red-50 border border-red-300 rounded-xl shadow-sm p-4";
         mp.innerHTML =
-          `<p class="font-bold text-gray-800 mb-1">${multiIds.length} worker(s) requested by 2+ sites</p>
-           <p class="text-xs text-gray-500 mb-3">Pick where each one goes, then press <b>Save All</b>.</p>`;
-        multiIds.forEach(wid => {
-          const w = multi[wid];
+          `<p class="font-bold text-gray-800 mb-1">${placeIds.length} requested worker(s) to place / reassign</p>
+           <p class="text-xs text-gray-500 mb-3">Pick where each one goes, then press <b>Save</b>. (Includes anyone requested by 2+ sites.)</p>`;
+        placeIds.forEach(wid => {
+          const w = reqW[wid];
           const cur = ASSIGN[wid] || "";
+          const inReq = w.sites.some(s => s.id === cur);
           const opts = `<option value="">— Not working —</option>` +
             w.sites.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${s.name}</option>`).join("") +
-            // allow choosing a site that didn't request, if needed
-            (cur && !w.sites.some(s => s.id === cur)
-              ? `<option value="${cur}" selected>${siteName(cur)} (current)</option>` : "");
+            // if he's currently at a site that didn't request him, keep that as an option
+            (cur && !inReq ? `<option value="${cur}" selected>${siteName(cur)} (current)</option>` : "");
+          const where = cur ? (inReq ? "" : " · now at " + siteName(cur)) : " · not allocated";
           const row = document.createElement("div");
           row.className = "flex items-center gap-3 py-1.5 border-t border-red-200";
           row.innerHTML =
             `<div class="flex-1 min-w-0">
                <p class="text-sm font-medium text-gray-800 truncate">${w.code}_${w.name}</p>
-               <p class="text-[11px] text-gray-500">requested by: ${w.sites.map(s => s.name).join(", ")}</p>
+               <p class="text-[11px] text-gray-500">requested by: ${w.sites.map(s => s.name).join(", ")}${where}</p>
              </div>
-             <select class="w-40 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
+             <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
           row.querySelector("select").addEventListener("change", (e) => {
             ASSIGN[wid] = e.target.value;
-            render();   // refresh chips + save state + status
+            render();   // refresh chips + status + save button
           });
           mp.appendChild(row);
         });
