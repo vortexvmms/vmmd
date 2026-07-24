@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — Users</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-3xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1">
+        <h1 class="text-lg font-bold">Users &amp; Access</h1>
+        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-3xl mx-auto w-full pb-10">
+
+    <div id="blocked" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-6 text-center mt-8">
+      <div class="text-4xl mb-2">🔒</div>
+      <p class="font-bold text-gray-800">Administrator only</p>
+      <p class="text-sm text-gray-500">This page is for the administrator.</p>
+    </div>
+
+    <div id="content" class="hidden">
+      <!-- Add new user -->
+      <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 mb-4">
+        <p class="font-bold text-gray-800 mb-3">➕ Add a new user</p>
+        <div class="grid md:grid-cols-2 gap-2">
+          <input id="n-name" type="text" placeholder="Full name (e.g. Renganathan Anbazhagan)"
+                 class="border border-gray-300 rounded-lg p-2 text-base">
+          <select id="n-role" class="border border-gray-300 rounded-lg p-2 text-base bg-white">
+            <option value="site_sup">Site Supervisor</option>
+            <option value="main_sup">Main Supervisor</option>
+            <option value="payroll">Payroll</option>
+            <option value="admin">Administrator</option>
+          </select>
+          <input id="n-email" type="email" placeholder="Login email" autocomplete="off"
+                 class="border border-gray-300 rounded-lg p-2 text-base">
+          <input id="n-pass" type="password" placeholder="Temporary password (min 8 chars)" autocomplete="new-password"
+                 class="border border-gray-300 rounded-lg p-2 text-base">
+        </div>
+        <button onclick="addUser()" id="add-btn"
+                class="mt-3 w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg disabled:opacity-50">
+          Add user
+        </button>
+        <p class="text-[11px] text-gray-500 mt-2">The person can log in immediately with this email + password. Ask them to change it after first login.</p>
+      </div>
+
+      <input id="search" type="search" placeholder="Search name…"
+             class="w-full border border-gray-300 rounded-lg p-2 mb-3">
+
+      <div id="list" class="space-y-2"></div>
+      <p id="empty" class="hidden text-center text-gray-400 mt-8">No users.</p>
+    </div>
+  </main>
+
+  <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center z-20"></div>
+
+  <script>
+    requireLogin();
+    let ME = null, USERS = [];
+    const ROLE_LABEL = { admin:"Administrator", main_sup:"Main Supervisor", site_sup:"Site Supervisor", payroll:"Payroll" };
+    const ROLE_CLS  = { admin:"bg-red-100 text-red-700", main_sup:"bg-indigo-100 text-indigo-700",
+                        site_sup:"bg-blue-100 text-blue-700", payroll:"bg-amber-100 text-amber-700" };
+
+    function toast(msg, long=false){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"), long?6000:2800); }
+
+    async function boot(){
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok){ vmmsLogout(); return; }
+      ME = await r.json();
+      if (ME.role !== "admin"){
+        document.getElementById("blocked").classList.remove("hidden");
+        document.getElementById("summary").textContent = "Administrator only";
+        return;
+      }
+      document.getElementById("content").classList.remove("hidden");
+      await loadUsers();
+    }
+
+    async function loadUsers(){
+      const r = await vmmsApi("/api/v1/users");
+      USERS = r.ok ? await r.json() : [];
+      render();
+    }
+
+    function render(){
+      const q = document.getElementById("search").value.trim().toLowerCase();
+      const rows = USERS.filter(u => !q || (u.name||"").toLowerCase().includes(q));
+      const active = USERS.filter(u => u.status==="active").length;
+      document.getElementById("summary").textContent = `${USERS.length} users · ${active} active`;
+
+      const list = document.getElementById("list");
+      document.getElementById("empty").classList.toggle("hidden", rows.length>0);
+      list.innerHTML = rows.map(u => {
+        const inactive = u.status !== "active";
+        const roleChip = `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${ROLE_CLS[u.role]||'bg-gray-100 text-gray-600'}">${esc(ROLE_LABEL[u.role]||u.role)}</span>`;
+        const statChip = inactive
+          ? `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">DEACTIVATED</span>`
+          : `<span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>`;
+        const isSelf = u.id === ME.user_id;
+        return `<div class="bg-gray-100 border ${inactive?'border-gray-300 opacity-70':'border-gray-300'} rounded-xl shadow-sm p-4">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="min-w-0">
+              <p class="font-medium text-gray-800 truncate">${esc(u.name)}${isSelf?' <span class="text-[10px] text-gray-400">(you)</span>':''}</p>
+              <div class="flex gap-1.5 mt-1">${roleChip}${statChip}</div>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="resetPw('${u.id}', this)" class="border-2 border-gray-500 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Reset password</button>
+              ${isSelf ? '' :
+                inactive
+                  ? `<button onclick="setStatus('${u.id}','active',this)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Activate</button>`
+                  : `<button onclick="setStatus('${u.id}','inactive',this)" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Deactivate</button>`}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    async function addUser(){
+      const name=document.getElementById("n-name").value.trim();
+      const email=document.getElementById("n-email").value.trim();
+      const pass=document.getElementById("n-pass").value;
+      const role=document.getElementById("n-role").value;
+      if(!name || !email || !pass){ toast("Fill name, email and password"); return; }
+      if(pass.length<8){ toast("Password must be at least 8 characters"); return; }
+      const btn=document.getElementById("add-btn"); btn.disabled=true; btn.textContent="Adding…";
+      try{
+        const r=await vmmsApi("/api/v1/users",{method:"POST",body:JSON.stringify({name,email,password:pass,role})});
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not add user");
+        toast("User added — they can log in now", true);
+        document.getElementById("n-name").value=""; document.getElementById("n-email").value=""; document.getElementById("n-pass").value="";
+        await loadUsers();
+      }catch(ex){ toast(ex.message, true); }
+      finally{ btn.disabled=false; btn.textContent="Add user"; }
+    }
+
+    async function setStatus(id, status, btn){
+      const verb = status==="inactive" ? "Deactivate" : "Activate";
+      if(!confirm(`${verb} this user?` + (status==="inactive"?" They will not be able to log in.":""))) return;
+      btn.disabled=true;
+      try{
+        const r=await vmmsApi(`/api/v1/users/${id}`,{method:"PATCH",body:JSON.stringify({status})});
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not update");
+        toast(status==="inactive"?"User deactivated":"User activated");
+        await loadUsers();
+      }catch(ex){ toast(ex.message, true); btn.disabled=false; }
+    }
+
+    async function resetPw(id, btn){
+      const pw = window.prompt("Enter a new password for this user (min 8 characters):");
+      if(pw===null) return;
+      if((pw||"").length<8){ toast("Password must be at least 8 characters"); return; }
+      btn.disabled=true; const t=btn.textContent; btn.textContent="…";
+      try{
+        const r=await vmmsApi(`/api/v1/users/${id}/reset_password`,{method:"POST",body:JSON.stringify({password:pw})});
+        const d=await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not reset password");
+        toast("Password reset — share the new password with the user", true);
+      }catch(ex){ toast(ex.message, true); }
+      finally{ btn.disabled=false; btn.textContent=t; }
+    }
+
+    document.getElementById("search").addEventListener("input", render);
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
