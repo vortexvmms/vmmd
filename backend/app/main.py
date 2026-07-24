@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.21.0")  # copy-day no longer needs on_conflict
+app = FastAPI(title="VMMS API", version="0.22.0")  # guard: never delete an allocation that has attendance
 
 app.add_middleware(
     CORSMiddleware,
@@ -468,7 +468,8 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
         r = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{body.work_date}", "status": "eq.allocated",
-                    "select": "id,site_id,worker_id,sites(site_name),workers(name)"},
+                    "select": "id,site_id,worker_id,sites(site_name),"
+                              "workers(name),attendance(id)"},
             headers=supabase_headers(user["token"]),
         )
         if r.status_code != 200:
@@ -489,6 +490,23 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
         this_site = {a["worker_id"]: a["id"] for a in existing if a["site_id"] == body.site_id}
         to_remove = [aid for wid, aid in this_site.items() if wid not in requested]
         to_add = [wid for wid in requested if wid not in this_site]
+
+        # DATA-INTEGRITY GUARD: never delete an allocation that already has an
+        # attendance record. attendance.allocation_id is ON DELETE CASCADE, so
+        # removing such a worker would silently wipe his marked hours for that day.
+        # (Normal same-day / next-day editing has no attendance yet, so it is
+        #  unaffected — this only protects days already worked.)
+        has_att = {a["id"]: bool(a.get("attendance"))
+                   for a in existing}
+        name_by_alloc = {a["id"]: (a.get("workers") or {}).get("name", "?")
+                         for a in existing}
+        blocked = [name_by_alloc[aid] for aid in to_remove if has_att.get(aid)]
+        if blocked:
+            raise HTTPException(
+                status_code=409,
+                detail=("Attendance is already recorded for that day, so these worker(s) "
+                        "cannot be removed here: " + ", ".join(sorted(blocked)) +
+                        ". Correct their record in Attendance instead."))
 
         if to_remove:
             d = await client.delete(
