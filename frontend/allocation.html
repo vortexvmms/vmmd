@@ -319,17 +319,21 @@
           const w = reqW[wid];
           const cur = ASSIGN[wid] || "";
           const inReq = w.sites.some(s => s.id === cur);
+          const reqIds = new Set(w.sites.map(s => s.id));
+          // full site list — admin can move the worker to ANY site (requesting
+          // sites are marked "· requested", his current site "(current)")
           const opts = `<option value="">— Not working —</option>` +
-            w.sites.map(s => `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${esc(s.name)}</option>`).join("") +
-            // if he's currently at a site that didn't request him, keep that as an option
-            (cur && !inReq ? `<option value="${cur}" selected>${siteName(cur)} (current)</option>` : "");
+            SITES.map(s => {
+              const mark = s.id === cur ? " (current)" : (reqIds.has(s.id) ? " · requested" : "");
+              return `<option value="${s.id}" ${s.id === cur ? "selected" : ""}>${esc(s.site_name)}${mark}</option>`;
+            }).join("");
           const where = cur ? (inReq ? "" : " · now at " + siteName(cur)) : " · not allocated";
           const row = document.createElement("div");
           row.className = "flex items-center gap-3 py-1.5 border-t border-red-200";
           row.innerHTML =
             `<div class="flex-1 min-w-0">
                <p class="text-sm font-medium text-gray-800 truncate">${esc(w.code)}_${esc(w.name)}</p>
-               <p class="text-[11px] text-gray-500">requested by: ${w.sites.map(s => s.name).join(", ")}${where}</p>
+               <p class="text-[11px] text-gray-500">requested by: ${esc(w.sites.map(s => s.name).join(", "))}${where}</p>
              </div>
              <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
           row.querySelector("select").addEventListener("change", (e) => {

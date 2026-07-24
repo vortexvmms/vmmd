@@ -262,7 +262,9 @@
         ul:       { bg:"bg-orange-100",  border:"border-orange-300",  accent:"text-orange-700",kind:"ul" },
         nh:       { bg:"bg-emerald-100", border:"border-emerald-300", kind:"month_nh" },
         ot:       { bg:"bg-rose-100",    border:"border-rose-300",    accent:"text-red-700",   kind:"month_ot" },
+        total:    { bg:"bg-teal-100",    border:"border-teal-400",    accent:"text-teal-800" },
       };
+      const monthTotal = (Number(d.month_normal_hours || 0) + Number(d.month_ot_hours || 0)).toFixed(1);
       document.getElementById("cards").innerHTML = d.scoped
         ? card("My sites", d.total_sites, C.sites) +
           card("Allocated this day", d.today_allocated, C.alloc) +
@@ -270,7 +272,8 @@
           card("AL this day", d.today_al ?? 0, C.al) +
           card("UL this day", d.today_ul ?? 0, C.ul) +
           card("Month normal hours", d.month_normal_hours, C.nh) +
-          card("Month OT hours", d.month_ot_hours, C.ot)
+          card("Month OT hours", d.month_ot_hours, C.ot) +
+          card("Total man-hours (month)", monthTotal, C.total)
         : card("Active workers", d.total_workers, C.workers) +
           card("On leave", d.on_leave, C.leave) +
           card("Active sites", d.total_sites, C.sites) +
@@ -279,7 +282,8 @@
           card("AL this day", d.today_al ?? 0, C.al) +
           card("UL this day", d.today_ul ?? 0, C.ul) +
           card("Month normal hours", d.month_normal_hours, C.nh) +
-          card("Month OT hours", d.month_ot_hours, C.ot);
+          card("Month OT hours", d.month_ot_hours, C.ot) +
+          card("Total man-hours (month)", monthTotal, C.total);
 
       // Hide the "HOME LEAVE" pseudo-entry from the updates list (site request)
       const notLeave = x => x.toUpperCase() !== "HOME LEAVE";
