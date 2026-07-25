@@ -1,11 +1,12 @@
 name: Nightly report email
 
-# Builds the End-Time Verification (today) and Monthly Attendance Sheet
-# (month-to-date) as PDF + Excel and e-mails them to your Gmail.
-# Runs every night at 23:30 Singapore time (15:30 UTC).
+# Builds the End-Time Verification and Monthly Attendance Sheet for the
+# PREVIOUS day (the one that just ended, so it's complete and verifiable)
+# as PDF + Excel and e-mails them to your Gmail.
+# Runs every morning at 04:00 Singapore time (20:00 UTC the day before).
 on:
   schedule:
-    - cron: '30 15 * * *'
+    - cron: '0 20 * * *'
   workflow_dispatch: {}   # lets you run it manually from the Actions tab
 
 jobs:
