@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.30.0")  # clear-day / undo-copy allocation
+app = FastAPI(title="VMMS API", version="0.31.0")  # WhatsApp names in Title Case
 
 app.add_middleware(
     CORSMiddleware,
@@ -1424,6 +1424,12 @@ DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUN
 DIVIDER = "________________________________"
 
 
+def tc(name: str) -> str:
+    """Worker names print in Title Case in the WhatsApp messages, not ALL CAPS
+    (HR request 25/07/2026). Worker codes and site names stay in caps."""
+    return (name or "").strip().title()
+
+
 def format_allocation_message(work_date: str, site_names: list[str],
                               by_site: dict[str, list[str]],
                               home_leave: list[str]) -> str:
@@ -1436,12 +1442,12 @@ def format_allocation_message(work_date: str, site_names: list[str],
         lines.append(DIVIDER)
         lines.append(f"*{sname.upper()}*")
         for i, x in enumerate(by_site.get(sname, []), 1):
-            lines.append(f"{i}. {x.upper()}")
+            lines.append(f"{i}. {x}")
     if home_leave:
         lines.append(DIVIDER)
         lines.append("*HOME LEAVE*")
         for i, x in enumerate(home_leave, 1):
-            lines.append(f"{i}. {x.upper()}")
+            lines.append(f"{i}. {x}")
     return "\n".join(lines)
 
 
@@ -1460,7 +1466,7 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
         t = r["end_time"]
         if r.get("start_time") and r["start_time"] != "08:00":
             t = f'{r["start_time"]}-{r["end_time"]}'
-        lines.append(f'{n}.{r["code"]}_{r["name"].upper()}_{t}')
+        lines.append(f'{n}.{r["code"]}_{tc(r["name"])}_{t}')
     return "\n".join(lines)
 
 
@@ -1482,7 +1488,7 @@ async def allocation_message(date: str, user: dict = Depends(get_current_user)):
                               params={"status": "eq.on_leave", "select": "name,worker_code",
                                       "order": "name.asc"},
                               headers=supabase_headers(user["token"]))
-        leave = [f'{w["worker_code"]}_{w["name"]}'
+        leave = [f'{w["worker_code"]}_{tc(w["name"])}'
                  for w in (rw.json() if rw.status_code == 200 else [])]
 
         by_site: dict[str, list[str]] = {}
@@ -1490,7 +1496,7 @@ async def allocation_message(date: str, user: dict = Depends(get_current_user)):
             sname = (a.get("sites") or {}).get("site_name", "?")
             w = a.get("workers") or {}
             by_site.setdefault(sname, []).append(
-                f'{w.get("worker_code", "?")}_{w.get("name", "?")}')
+                f'{w.get("worker_code", "?")}_{tc(w.get("name", "?"))}')
         for k in by_site:
             by_site[k].sort()
 
@@ -1561,7 +1567,7 @@ async def update_all_message(date: str, user: dict = Depends(get_current_user)):
             lines.append(f"*{sname.upper()}*")
             for i, r in enumerate(sorted(by_site[sname], key=lambda x: x["name"]), 1):
                 t = r["end"] if r["start"] == "08:00" else f'{r["start"]}-{r["end"]}'
-                lines.append(f'{i}.{r["code"]}_{r["name"].upper()}_{t}')
+                lines.append(f'{i}.{r["code"]}_{tc(r["name"])}_{t}')
                 total += 1
         msg = "\n".join(lines)
         await audit(client, user, "generate_update_all_msg", "message", date, None, {"workers": total})
@@ -1581,7 +1587,7 @@ def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> 
         lines.append(DIVIDER)
         lines.append(f"*{sname.upper()}*  ({len(workers)})")
         for i, x in enumerate(sorted(workers), 1):
-            lines.append(f"{i}. {x.upper()}")
+            lines.append(f"{i}. {x}")
     lines.append(DIVIDER)
     lines.append(f"*TOTAL REQUESTED: {total}*")
     return "\n".join(lines)
@@ -1606,7 +1612,7 @@ async def request_message(date: str, user: dict = Depends(get_current_user)):
             sname = (a.get("sites") or {}).get("site_name", "?")
             w = a.get("workers") or {}
             by_site.setdefault(sname, []).append(
-                f'{w.get("worker_code", "?")}_{w.get("name", "?")}')
+                f'{w.get("worker_code", "?")}_{tc(w.get("name", "?"))}')
         msg = format_request_message(date, by_site)
         await audit(client, user, "generate_request_msg", "message", date, None,
                     {"workers": len(rows), "sites": len(by_site)})
