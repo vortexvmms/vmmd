@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.31.0")  # WhatsApp names in Title Case
+app = FastAPI(title="VMMS API", version="0.32.0")  # notifications + routing
 
 app.add_middleware(
     CORSMiddleware,
@@ -407,7 +407,7 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
 async def list_users(role: str = "", user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,name,role,status,menu", "order": "name.asc"}
+    params = {"select": "id,name,role,status,menu,notify_all,notify_requests", "order": "name.asc"}
     if role:
         params["role"] = f"eq.{role}"
     async with httpx.AsyncClient(timeout=10) as client:
@@ -437,6 +437,8 @@ class UserStatus(BaseModel):
     status: str | None = None       # "active" | "inactive"
     role: str | None = None         # change the user's role
     menu: list[str] | None = None   # per-user menu allow-list; null = role default
+    notify_all: bool | None = None       # receives EVERY notification (developer)
+    notify_requests: bool | None = None  # receives manpower-request notifications (allocator)
 
 
 class PwReset(BaseModel):
@@ -512,6 +514,11 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
 
     if "menu" in fields:
         updates["menu"] = body.menu     # only sent once the section chooser is enabled
+
+    if "notify_all" in fields:
+        updates["notify_all"] = bool(body.notify_all)
+    if "notify_requests" in fields:
+        updates["notify_requests"] = bool(body.notify_requests)
 
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
@@ -704,6 +711,15 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
                     f"{body.work_date}:{body.site_id}",
                     {"worker_ids": sorted(this_site.keys())},
                     {"worker_ids": sorted(requested)})
+
+        # notify the site's supervisors that manpower was allocated
+        if to_add or to_remove:
+            rs = await client.get(f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "site_name"},
+                                  headers=supabase_headers(user["token"]))
+            sname = rs.json()[0]["site_name"] if rs.status_code == 200 and rs.json() else "your site"
+            await notify_site_supervisors(client, [body.site_id], "allocation", "Manpower allocated",
+                                          f"{len(requested)} worker(s) allocated to {sname} for {body.work_date}.",
+                                          link=f"attendance.html?date={body.work_date}")
         return {"ok": True, "added": len(to_add), "removed": len(to_remove)}
 
 
@@ -756,6 +772,13 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
         await audit(client, user, "copy_day", "allocation",
                     f"{body.from_date}->{body.to_date}", None,
                     {"copied": copied, "skipped_on_leave": skipped_leave})
+
+        # notify supervisors of every site that received workers
+        if copied:
+            site_ids = list({a["site_id"] for a in active_rows if a["worker_id"] not in already})
+            await notify_site_supervisors(client, site_ids, "allocation", "Manpower allocated",
+                                          f"Allocation done for {body.to_date} ({copied} worker(s)).",
+                                          link=f"attendance.html?date={body.to_date}")
         return {"ok": True, "copied": copied,
                 "skipped_on_leave": skipped_leave,
                 "skipped_already_allocated": len(active_rows) - len(payload)}
@@ -895,6 +918,14 @@ async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)
                     f"{body.request_date}:{body.site_id}",
                     {"worker_ids": sorted(existing.keys())},
                     {"worker_ids": sorted(requested)})
+
+        # notify the allocator (Mani) that a site requested manpower
+        rs = await client.get(f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "site_name"},
+                              headers=supabase_headers(user["token"]))
+        sname = rs.json()[0]["site_name"] if rs.status_code == 200 and rs.json() else "A site"
+        await notify_allocator(client, "request", "Manpower requested",
+                               f"{sname} requested {len(requested)} worker(s) for {body.request_date}.",
+                               link=f"allocation.html?date={body.request_date}")
         return {"ok": True, "added": len(to_add), "removed": len(to_remove),
                 "total": len(requested)}
 
@@ -1138,6 +1169,26 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
                     {k: att.get(k) for k in ("present", "end_time")} if att else None,
                     {"present": present, "end_time": end, "normal": normal, "ot": ot})
+
+        # absence (MC / UL / AL) → notify Operation Manager, Site Manager, HR Assistant
+        was_present = att["present"] if att else None
+        if not present and was_present is not False:   # newly marked absent
+            wname, sname2 = "?", "?"
+            try:
+                rw = await client.get(f"{REST}/allocations",
+                                      params={"id": f"eq.{body.allocation_id}",
+                                              "select": "workers(name),sites(site_name)"},
+                                      headers=supabase_headers(user["token"]))
+                j = rw.json()[0] if rw.status_code == 200 and rw.json() else {}
+                wname = (j.get("workers") or {}).get("name", "?")
+                sname2 = (j.get("sites") or {}).get("site_name", "?")
+            except Exception:
+                pass
+            code = (absence or "absent").upper()
+            await notify_roles(client, ["operation_manager", "main_sup", "hr_assistant"],
+                               "absence", f"Worker absence — {code}",
+                               f"{wname} marked {code} at {sname2} on {alloc['work_date']}.",
+                               link=f"attendance.html?date={alloc['work_date']}")
         return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
 
 
@@ -1922,3 +1973,93 @@ async def list_settings(user: dict = Depends(get_current_user)):
                              params={"select": "key,value,effective_from", "order": "key.asc"},
                              headers=supabase_headers(user["token"]))
         return r.json() if r.status_code == 200 else []
+
+
+# ================= Notifications (Rev 9) =================
+# Notifications are created server-side with the service key and routed to the
+# right recipients. Every notification also copies to users flagged notify_all
+# (the developer). A notification failure never breaks the underlying action.
+
+async def _svc_user_ids(client, params: dict) -> list[str]:
+    if not SUPABASE_SERVICE_KEY:
+        return []
+    p = {"status": "eq.active", "select": "id", **params}
+    r = await client.get(f"{REST}/users", params=p, headers=service_headers())
+    return [u["id"] for u in (r.json() if r.status_code == 200 else [])]
+
+
+async def notify(client, recipients, kind, title, body="", link=None):
+    """Insert one notification per recipient (deduped) + everyone notify_all."""
+    if not SUPABASE_SERVICE_KEY:
+        return
+    try:
+        ids = set(r for r in (recipients or []) if r)
+        ids.update(await _svc_user_ids(client, {"notify_all": "eq.true"}))
+        if not ids:
+            return
+        rows = [{"user_id": uid, "kind": kind, "title": title,
+                 "body": body, "link": link} for uid in ids]
+        await client.post(f"{REST}/notifications",
+                          headers={**service_headers(), "Prefer": "return=minimal"},
+                          json=rows)
+    except Exception:
+        pass
+
+
+async def notify_roles(client, roles, kind, title, body="", link=None):
+    ids = await _svc_user_ids(client, {"role": f"in.({','.join(roles)})"})
+    await notify(client, ids, kind, title, body, link)
+
+
+async def notify_site_supervisors(client, site_ids, kind, title, body="", link=None):
+    if not SUPABASE_SERVICE_KEY or not site_ids:
+        return
+    try:
+        r = await client.get(f"{REST}/site_supervisors",
+                             params={"site_id": f"in.({','.join(site_ids)})", "select": "user_id"},
+                             headers=service_headers())
+        ids = [u["user_id"] for u in (r.json() if r.status_code == 200 else [])]
+        await notify(client, ids, kind, title, body, link)
+    except Exception:
+        pass
+
+
+async def notify_allocator(client, kind, title, body="", link=None):
+    """Manpower-request notifications go to users flagged notify_requests (the allocator)."""
+    ids = await _svc_user_ids(client, {"notify_requests": "eq.true"})
+    await notify(client, ids, kind, title, body, link)
+
+
+@app.get("/api/v1/notifications")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/notifications",
+            params={"user_id": f"eq.{user['user_id']}", "order": "created_at.desc",
+                    "limit": "50",
+                    "select": "id,kind,title,body,link,read_at,created_at"},
+            headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+        unread = sum(1 for x in rows if not x.get("read_at"))
+        return {"items": rows, "unread": unread}
+
+
+@app.post("/api/v1/notifications/read_all")
+async def read_all_notifications(user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        await client.patch(
+            f"{REST}/notifications",
+            params={"user_id": f"eq.{user['user_id']}", "read_at": "is.null"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"read_at": datetime.now(timezone.utc).isoformat()})
+        return {"ok": True}
+
+
+@app.delete("/api/v1/notifications")
+async def clear_notifications(user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        await client.delete(
+            f"{REST}/notifications",
+            params={"user_id": f"eq.{user['user_id']}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"})
+        return {"ok": True}
