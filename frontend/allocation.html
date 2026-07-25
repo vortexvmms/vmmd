@@ -52,6 +52,11 @@
     <!-- Status: allocation done / unsaved changes (pending state uses the copybar above) -->
     <div id="statusbar" class="hidden rounded-lg shadow-sm p-3 mb-3 text-sm font-bold text-center"></div>
 
+    <!-- Undo copy / clear the whole day (for light days like Sunday) -->
+    <div id="clearbar" class="hidden text-center mb-3">
+      <button onclick="clearDay()" class="text-xs font-bold text-red-700 border border-red-300 hover:bg-red-50 rounded-lg px-3 py-2">↺ Undo copy / Clear this day</button>
+    </div>
+
     <div id="filterbar" class="flex flex-wrap items-center gap-2 mb-3">
       <input id="search" type="search" placeholder="Search worker…"
              class="w-full md:flex-1 md:min-w-[200px] border border-gray-300 rounded-lg p-3 text-base focus:outline-none focus:ring-2 focus:ring-red-600">
@@ -176,6 +181,7 @@
         (REQANY[x.worker_id] = REQANY[x.worker_id] || []).push(x.site_name);
       });
       document.getElementById("copybar").classList.toggle("hidden", ALLOC.length > 0);
+      document.getElementById("clearbar").classList.toggle("hidden", ALLOC.length === 0);
       snapshotAssign();
       render();
     }
@@ -588,6 +594,24 @@
         if (!r.ok) throw new Error(data.detail || "Could not copy");
         toast(`Copied ${data.copied} workers from ${from}` +
               (data.skipped_on_leave ? ` (${data.skipped_on_leave} on leave skipped)` : ""), true);
+        await loadDay();
+      } catch (ex) {
+        toast(ex.message, true);
+      }
+    }
+
+    async function clearDay() {
+      const to = document.getElementById("date").value;
+      if (!confirm(`Clear ALL allocation for ${to}?\n\nThis removes every worker from the day so you can allocate only those actually working (e.g. Sunday).\nAnyone already marked present is kept.`)) return;
+      try {
+        const r = await vmmsApi("/api/v1/allocations/clear", {
+          method: "POST",
+          body: JSON.stringify({ work_date: to }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Could not clear the day");
+        toast(`Cleared ${data.cleared} worker(s)` +
+              (data.kept ? ` · kept ${data.kept} already marked present` : ""), true);
         await loadDay();
       } catch (ex) {
         toast(ex.message, true);
