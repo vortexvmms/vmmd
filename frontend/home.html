@@ -96,14 +96,18 @@
       payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
     };
     function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
+    // Full catalog so a custom per-user menu can include ANY section.
+    const ALL_MENU = [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Request Manpower", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]];
     const DONE_PHASE = 12; // raise this as phases complete
-    let ALLOWED = null;    // per-user section allow-list (null = show all for the role)
+    let ALLOWED = null;    // per-user section allow-list (null = the role's default menu)
 
     function renderMenu(role) {
       const menu = document.getElementById("menu");
       menu.innerHTML = "";
-      menuFor(role).forEach(([label, phase, page]) => {
-        if (ALLOWED && page !== "help.html" && ALLOWED.indexOf(page) === -1) return;
+      const src = ALLOWED
+        ? ALL_MENU.filter(([l, p, pg]) => pg === "help.html" || ALLOWED.indexOf(pg) !== -1)
+        : menuFor(role);
+      src.forEach(([label, phase, page]) => {
         const unlocked = phase <= DONE_PHASE;
         const el = document.createElement(unlocked ? "a" : "div");
         if (unlocked) el.href = page;
