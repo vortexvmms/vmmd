@@ -199,8 +199,8 @@
               ${PRESETS.map(([t, lbl]) =>
                 `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}">${lbl}</button>`).join("")}
               <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}">⋯</button>
-              <span class="text-xs font-bold ${x.ot_hours > 0 ? "text-red-700" : "text-gray-500"} ml-auto">
-                ${x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"}
+              <span class="text-xs font-bold ${x._saving ? "text-gray-400" : (x.ot_hours > 0 ? "text-red-700" : "text-gray-500")} ml-auto">
+                ${x._saving ? `${x.end_time || ""} · saving…` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time")}
               </span>
             </div>
             <input type="time" step="900" value="${x.end_time || ""}"
@@ -218,21 +218,41 @@
       });
     }
 
+    // Optimistic save: update the row on screen immediately, then save in the
+    // background. No full re-fetch, so tapping a time / present / reason feels
+    // instant instead of waiting ~1s for two network round-trips each tap.
     async function mark(x, changes, div) {
+      let reason = null;
+      if (x.submitted) {
+        reason = prompt("This day is already submitted. Reason for the change (required, goes to the audit log):");
+        if (!reason) { render(); return; }   // cancelled — reset the toggled control
+      }
+      const prev = {
+        present: x.present, end_time: x.end_time, absence_type: x.absence_type,
+        marked: x.marked, normal_hours: x.normal_hours, ot_hours: x.ot_hours,
+      };
+      Object.assign(x, changes);
+      x.marked = true;
+      x._saving = true;
+      render();                                // instant feedback
       try {
-        let reason = null;
-        if (x.submitted) {
-          reason = prompt("This day is already submitted. Reason for the change (required, goes to the audit log):");
-          if (!reason) { await loadDay(); return; }
-        }
         const r = await vmmsApi("/api/v1/attendance/mark", {
           method: "PATCH",
           body: JSON.stringify({ allocation_id: x.allocation_id, ...changes, edit_reason: reason }),
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not save");
-        await loadDay();
-      } catch (ex) { toast(ex.message, true); await loadDay(); }
+        x.normal_hours = data.normal_hours;   // authoritative hours from server
+        x.ot_hours = data.ot_hours;
+        x.day_type = data.day_type;
+        x._saving = false;
+        render();
+      } catch (ex) {
+        Object.assign(x, prev);               // revert on failure
+        x._saving = false;
+        render();
+        toast(ex.message, true);
+      }
     }
 
     async function presentAll() {
