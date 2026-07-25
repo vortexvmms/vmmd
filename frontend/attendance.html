@@ -88,8 +88,11 @@
 
     let ME = null, ROWS = [], SITES = [];
 
-    const PRESETS = [["12:00", "12PM"], ["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
-                     ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
+    // [value, label, endsNextDay]  — 12AM is midnight of the NEXT day
+    const PRESETS = [["12:00", "12PM", false], ["17:00", "5PM", false], ["18:00", "6PM", false],
+                     ["19:00", "7PM", false], ["20:00", "8PM", false], ["21:00", "9PM", false],
+                     ["22:00", "10PM", false], ["22:30", "10:30PM", false], ["23:00", "11PM", false],
+                     ["23:30", "11:30PM", false], ["00:00", "12AM", true]];
     // Absence reasons: value, label, highlight colour
     // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
     const REASONS = [["mc", "MC", "bg-yellow-500"],
@@ -196,8 +199,8 @@
           </div>
           <div class="${x.present ? "" : "hidden"}">
             <div class="flex items-center flex-wrap gap-1">
-              ${PRESETS.map(([t, lbl]) =>
-                `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}">${lbl}</button>`).join("")}
+              ${PRESETS.map(([t, lbl, nd]) =>
+                `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}" data-nd="${nd ? 1 : 0}">${lbl}</button>`).join("")}
               <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}">⋯</button>
               <span class="text-xs font-bold ${x._saving ? "text-gray-400" : (x.ot_hours > 0 ? "text-red-700" : "text-gray-500")} ml-auto">
                 ${x._saving ? `${x.end_time || ""} · saving…` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time")}
@@ -211,9 +214,9 @@
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
         div.querySelectorAll(".rsn").forEach(b =>
           b.addEventListener("click", () => mark(x, { present: false, absence_type: b.dataset.r }, div)));
-        div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t }, div)));
+        div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: b.dataset.nd === "1" }, div)));
         div.querySelector(".tcustom").addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
-        ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value }, div); });
+        ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value, end_next_day: false }, div); });
         list.appendChild(div);
       });
     }
