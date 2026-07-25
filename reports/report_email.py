@@ -387,7 +387,9 @@ def send_email(subject, body, attachments):
 def main():
     test = os.environ.get("REPORT_TEST") == "1"
     now = dt.datetime.now(SGT)
-    today = now.date()
+    # Report the day that has just ENDED (yesterday). The job runs in the early
+    # morning, so the previous day's attendance is complete and verifiable.
+    today = (now - dt.timedelta(days=1)).date()
     dfrom = today.replace(day=1).isoformat()
     dto = today.isoformat()
     days = month_days(dfrom, dto)
