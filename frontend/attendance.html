@@ -88,7 +88,7 @@
 
     let ME = null, ROWS = [], SITES = [];
 
-    const PRESETS = [["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
+    const PRESETS = [["12:00", "12PM"], ["17:00", "5PM"], ["18:00", "6PM"], ["19:00", "7PM"],
                      ["20:00", "8PM"], ["21:00", "9PM"], ["22:00", "10PM"]];
     // Absence reasons: value, label, highlight colour
     // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
@@ -236,10 +236,17 @@
       x._saving = true;
       render();                                // instant feedback
       try {
-        const r = await vmmsApi("/api/v1/attendance/mark", {
+        const opts = {
           method: "PATCH",
           body: JSON.stringify({ allocation_id: x.allocation_id, ...changes, edit_reason: reason }),
-        });
+        };
+        let r;
+        try {
+          r = await vmmsApi("/api/v1/attendance/mark", opts);
+        } catch (netErr) {                      // dropped connection — retry once
+          await new Promise(res => setTimeout(res, 900));
+          r = await vmmsApi("/api/v1/attendance/mark", opts);
+        }
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not save");
         x.normal_hours = data.normal_hours;   // authoritative hours from server
