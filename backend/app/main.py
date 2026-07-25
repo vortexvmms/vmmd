@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.29.0")  # per-user menu sections live
+app = FastAPI(title="VMMS API", version="0.30.0")  # clear-day / undo-copy allocation
 
 app.add_middleware(
     CORSMiddleware,
@@ -599,6 +599,10 @@ class AllocationCopy(BaseModel):
     to_date: str
 
 
+class AllocationClear(BaseModel):
+    work_date: str
+
+
 def require_allocator(user: dict):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can edit allocations")
@@ -755,6 +759,37 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
         return {"ok": True, "copied": copied,
                 "skipped_on_leave": skipped_leave,
                 "skipped_already_allocated": len(active_rows) - len(payload)}
+
+
+@app.post("/api/v1/allocations/clear")
+async def clear_allocation(body: AllocationClear, user: dict = Depends(get_current_user)):
+    """Clear a whole day's allocation (an 'undo' for Copy-from-yesterday, and the
+    quick way to strip a light day like Sunday back to blank). Allocations that
+    ALREADY have attendance are kept, so marked hours can never be wiped."""
+    require_allocator(user)
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{body.work_date}", "status": "eq.allocated",
+                    "select": "id,attendance(id)"},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not read the day")
+        rows = r.json()
+        removable = [a["id"] for a in rows if not a.get("attendance")]
+        kept = len(rows) - len(removable)
+        if removable:
+            d = await client.delete(
+                f"{REST}/allocations",
+                params={"id": f"in.({','.join(removable)})"},
+                headers=supabase_headers(user["token"]),
+            )
+            if d.status_code not in (200, 204):
+                raise HTTPException(status_code=500, detail="Could not clear the day")
+        await audit(client, user, "clear_day", "allocation", body.work_date, None,
+                    {"cleared": len(removable), "kept": kept})
+        return {"ok": True, "cleared": len(removable), "kept": kept}
 
 
 # ---------------- Manpower Requests (site supervisor → admin) ----------------
