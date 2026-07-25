@@ -362,6 +362,52 @@ def build_pdf_monthly(rows, days, today, path):
     log("wrote", path)
 
 
+# -------------------------------------------------------------- overview
+def build_overview(rows, day):
+    """Plain-text summary of the reporting day for the e-mail body."""
+    dstr = day.strftime("%d/%m/%Y (%a)")
+    todays = [a for a in rows if a.get("date") == day.isoformat()]
+    head = f"--- OVERVIEW - {dstr} ---"
+    if not todays:
+        return head + "\nNo allocation recorded for this day."
+
+    present = [a for a in todays if a.get("present")]
+    absent = [a for a in todays if not a.get("present")]
+    nh = sum(float(a.get("nh", 0)) for a in present)
+    ot = sum(float(a.get("ot", 0)) for a in present)
+
+    sites = {}
+    for a in present:
+        s = sites.setdefault(a.get("site", "?"), {"n": 0, "nh": 0.0, "ot": 0.0})
+        s["n"] += 1
+        s["nh"] += float(a.get("nh", 0))
+        s["ot"] += float(a.get("ot", 0))
+    site_lines = "\n".join(
+        f"  - {name}: {v['n']} present, {round(v['nh'],1)} hrs (OT {round(v['ot'],1)})"
+        for name, v in sorted(sites.items())
+    ) or "  - (none present)"
+
+    pend = [a for a in present if (not a.get("end") or not a.get("submitted"))]
+    nm = lambda a: a.get("worker", "?")
+    def cap(items, fmt):
+        shown = ", ".join(fmt(a) for a in items[:20])
+        return shown + (f"  +{len(items)-20} more" if len(items) > 20 else "")
+    pend_txt = cap(pend, nm) if pend else "none"
+    abs_txt = cap(absent, lambda a: f"{nm(a)} ({a.get('absence') or 'absent'})") if absent else "none"
+
+    return "\n".join([
+        head,
+        f"Present {len(present)}/{len(todays)} - Absent {len(absent)} - "
+        f"Man-hours {round(nh+ot,1)} (basic {round(nh,1)} + OT {round(ot,1)})",
+        "",
+        "By site:",
+        site_lines,
+        "",
+        f"End-time verification pending ({len(pend)}): {pend_txt}",
+        f"Absent ({len(absent)}): {abs_txt}",
+    ])
+
+
 # ---------------------------------------------------------------- email
 def send_email(subject, body, attachments):
     msg = EmailMessage()
@@ -414,18 +460,14 @@ def main():
     build_pdf_verification(rows, today, f_vpdf)
     build_pdf_monthly(rows, days, today, f_mpdf)
 
-    pending = sum(
-        1 for a in rows
-        if a.get("date") == dto and a.get("present") and (not a.get("end") or not a.get("submitted"))
-    )
     body = (
-        f"VMMS site reports for {today.strftime('%d/%m/%Y')} (SGT).\n\n"
-        f"Attached:\n"
-        f"  1. End-Time Verification (today)  — PDF\n"
-        f"  2. Monthly Attendance Sheet ({today.strftime('%B %Y')}) — PDF\n"
-        f"  3. Both reports — Excel (2 sheets)\n\n"
-        f"End-time verification: {pending} worker(s) still PENDING for today.\n\n"
-        f"— Automated VMMS report. Review before use; not a payroll-final document."
+        build_overview(rows, today) + "\n\n"
+        + "Attached:\n"
+        + f"  1. End-Time Verification ({today.strftime('%d/%m/%Y')}) - PDF\n"
+        + f"  2. Monthly Attendance Sheet ({today.strftime('%B %Y')}) - PDF\n"
+        + "  3. Both reports - Excel (2 sheets)\n\n"
+        + "- Automated VMMS report for the previous day. "
+        + "Review before use; not a payroll-final document."
     )
     attachments = [f_vpdf, f_mpdf, f_xlsx]
 
