@@ -165,6 +165,17 @@
     }
     function toggleSections(id){ document.getElementById("sec-"+id).classList.toggle("hidden"); }
 
+    async function setFlag(id, flag, checked){
+      try{
+        const body = {}; body[flag] = checked;
+        const r = await vmmsApi(`/api/v1/users/${id}`, {method:"PATCH", body:JSON.stringify(body)});
+        const d = await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not update");
+        const u = USERS.find(x => x.id === id); if(u) u[flag] = checked;
+        toast(checked ? "Enabled" : "Disabled");
+      }catch(ex){ toast(ex.message, true); await loadUsers(); }
+    }
+
     async function saveSections(id, btn){
       const div = document.getElementById("sec-"+id);
       const cbs = [...div.querySelectorAll(".sec-cb")];
@@ -234,6 +245,10 @@
                   ? `<button onclick="setStatus('${u.id}','active',this)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Activate</button>`
                   : `<button onclick="setStatus('${u.id}','inactive',this)" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Deactivate</button>`}
             </div>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+            <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_all?'checked':''} onchange="setFlag('${u.id}','notify_all',this.checked)" class="accent-red-700 w-4 h-4"> 🔔 Gets ALL notifications</label>
+            <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_requests?'checked':''} onchange="setFlag('${u.id}','notify_requests',this.checked)" class="accent-red-700 w-4 h-4"> 📋 Gets manpower requests</label>
           </div>
           ${isSelf ? '' : `
           <button onclick="toggleSections('${u.id}')" class="mt-2 text-xs font-bold text-red-700">▸ Sections${Array.isArray(u.menu)?' (custom)':''}</button>
