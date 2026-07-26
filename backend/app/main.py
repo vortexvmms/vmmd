@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.33.0")  # 'not working' (Sun/PH) + copy-7-days
+app = FastAPI(title="VMMS API", version="0.34.0")  # site off-days
 
 app.add_middleware(
     CORSMiddleware,
@@ -1973,6 +1973,47 @@ async def list_settings(user: dict = Depends(get_current_user)):
                              params={"select": "key,value,effective_from", "order": "key.asc"},
                              headers=supabase_headers(user["token"]))
         return r.json() if r.status_code == 200 else []
+
+
+# ---------------- Site "not working" (off) days ----------------
+class SiteOff(BaseModel):
+    site_id: str
+    off_date: str
+    off: bool = True
+
+
+@app.get("/api/v1/site_off")
+async def list_site_off(date: str, user: dict = Depends(get_current_user)):
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(f"{REST}/site_off_days",
+                             params={"off_date": f"eq.{date}", "select": "site_id"},
+                             headers=supabase_headers(user["token"]))
+        return [x["site_id"] for x in (r.json() if r.status_code == 200 else [])]
+
+
+@app.post("/api/v1/site_off")
+async def set_site_off(body: SiteOff, user: dict = Depends(get_current_user)):
+    """Mark (or clear) a site as not working on a date. Site supervisor for their
+    own site, or the allocator/management for any site (enforced by RLS)."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        if body.off:
+            r = await client.post(
+                f"{REST}/site_off_days",
+                headers={**supabase_headers(user["token"]),
+                         "Prefer": "resolution=ignore-duplicates,return=minimal"},
+                json={"site_id": body.site_id, "off_date": body.off_date,
+                      "created_by": user["user_id"]})
+            if r.status_code not in (200, 201, 204):
+                raise HTTPException(status_code=403,
+                    detail="Only the site's supervisor or the allocator can mark this site off")
+        else:
+            d = await client.delete(
+                f"{REST}/site_off_days",
+                params={"site_id": f"eq.{body.site_id}", "off_date": f"eq.{body.off_date}"},
+                headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"})
+            if d.status_code not in (200, 204):
+                raise HTTPException(status_code=403, detail="Could not update the site")
+        return {"ok": True, "off": body.off}
 
 
 # ================= Notifications (Rev 9) =================
