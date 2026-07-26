@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.32.0")  # notifications + routing
+app = FastAPI(title="VMMS API", version="0.33.0")  # 'not working' (Sun/PH) + copy-7-days
 
 app.add_middleware(
     CORSMiddleware,
@@ -1137,7 +1137,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                 raise HTTPException(status_code=400, detail=str(ve))
         # (recomputed at day level below if the worker has more than one site today)
 
-        if body.absence_type and body.absence_type not in ("absent", "mc", "ul", "al"):
+        if body.absence_type and body.absence_type not in ("absent", "mc", "ul", "al", "nw"):
             raise HTTPException(status_code=400, detail="Invalid absence type")
         absence = None if present else (
             body.absence_type or (att.get("absence_type") if att else None) or "absent")
