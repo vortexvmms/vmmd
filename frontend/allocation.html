@@ -93,6 +93,7 @@
     let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
     let REQBYSITE = {}, REQANY = {};   // requests: site_id -> Set(worker_id) ; worker_id -> [site_name]
+    let SITE_OFF = new Set();          // site_ids marked "not working" for this date
     let REQROWS = [], ALLOCMAP = {};   // raw request rows ; worker_id -> {site_id, site_name} (where allocated)
 
     // ---- Filter pill toggles (By Worker + By Site) ----
@@ -168,10 +169,12 @@
 
     async function loadDay() {
       const date = document.getElementById("date").value;
-      const [r, rq] = await Promise.all([
+      const [r, rq, so] = await Promise.all([
         vmmsApi(`/api/v1/allocations?date=${date}`),
         vmmsApi(`/api/v1/requests?date=${date}`),
+        vmmsApi(`/api/v1/site_off?date=${date}`),
       ]);
+      SITE_OFF = new Set(so.ok ? await so.json() : []);
       ALLOC = r.ok ? await r.json() : [];
       ALLOCMAP = {};
       ALLOC.forEach(a => { ALLOCMAP[a.worker_id] = { site_id: a.site_id, site_name: a.site_name }; });
@@ -240,7 +243,7 @@
       const date = document.getElementById("date").value;
       const [y, m, d] = date.split("-");
       const dow = RDAYS[new Date(date + "T00:00:00").getDay()];
-      const notReq = SITES.filter(s => !REQBYSITE[s.id] || REQBYSITE[s.id].size === 0);
+      const notReq = SITES.filter(s => (!REQBYSITE[s.id] || REQBYSITE[s.id].size === 0) && !SITE_OFF.has(s.id));
       const lines = ["*MANPOWER REQUEST REMINDER*", `*${d}-${RMON[+m - 1]}-${y}*`, `*${dow}*`, "",
         "The following sites have NOT sent their manpower request for this date. Please send it:"];
       notReq.forEach((s, i) => {
@@ -302,7 +305,7 @@
       document.getElementById("empty").classList.add("hidden");
 
       // ---- Sites that have NOT sent a request → reminder for the co-ordinator ----
-      const notReq = SITES.filter(s => !REQBYSITE[s.id] || REQBYSITE[s.id].size === 0);
+      const notReq = SITES.filter(s => (!REQBYSITE[s.id] || REQBYSITE[s.id].size === 0) && !SITE_OFF.has(s.id));
       const panel = document.createElement("div");
       if (notReq.length === 0) {
         panel.className = "bg-green-50 border border-green-200 rounded-xl shadow-sm p-4";
@@ -320,6 +323,15 @@
           notReq.map(s => `<div class="text-sm text-gray-700 py-0.5">• ${esc(s.site_name)} — ${esc((s.supervisors || []).map(x => x.name).join(", ") || "(no supervisor)")}</div>`).join("");
       }
       list.appendChild(panel);
+
+      // ---- Sites marked NOT working today (supervisor set them off) ----
+      const offSites = SITES.filter(s => SITE_OFF.has(s.id));
+      if (offSites.length) {
+        const op = document.createElement("div");
+        op.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 text-sm text-gray-600";
+        op.innerHTML = `🚫 Not working today: <b>${offSites.map(s => esc(s.site_name)).join(", ")}</b>`;
+        list.appendChild(op);
+      }
 
       // ---- Requested workers that still need placing / reassigning → dropdowns ----
       // Shows EVERY day (not only for 2+ site cases): a worker appears here if he

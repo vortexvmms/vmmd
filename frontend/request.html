@@ -42,6 +42,7 @@
       </div>
     </div>
 
+    <div id="siteoffbar" class="mb-3"></div>
     <div id="reqstatus" class="hidden rounded-xl p-3 mb-3 text-sm"></div>
 
     <input id="search" type="search" placeholder="Search worker…"
@@ -71,6 +72,7 @@
     requireLogin();
 
     let ME = null, SITES = [], WORKERS = [], REQ = [], ALLOC = [], SELECTED = new Set();
+    let SITE_OFF = new Set();                // site_ids marked "not working" for this date
     let PENDING = [];                       // requested-but-not-allocated workers (for the reminder)
     const COORD_NAME = "Manikandan";
     const COORD_WA = "6590541701";          // WhatsApp number, no + or spaces
@@ -127,10 +129,12 @@
 
     async function loadDay() {
       const date = document.getElementById("date").value;
-      const [r, ra] = await Promise.all([
+      const [r, ra, so] = await Promise.all([
         vmmsApi(`/api/v1/requests?date=${date}`),
         vmmsApi(`/api/v1/allocations?date=${date}`),
+        vmmsApi(`/api/v1/site_off?date=${date}`),
       ]);
+      SITE_OFF = new Set(so.ok ? await so.json() : []);
       if (!r.ok) {
         REQ = [];
         toast("Requests are not switched on yet — the administrator must run the setup step first.", true);
@@ -174,7 +178,38 @@
       }catch(ex){ toast(ex.message, true); }
     }
 
+    function renderSiteOff() {
+      const bar = document.getElementById("siteoffbar");
+      if (!bar) return;
+      const siteId = document.getElementById("site").value;
+      const dparts = document.getElementById("date").value.split("-");
+      const dstr = dparts.length === 3 ? `${dparts[2]}/${dparts[1]}/${dparts[0]}` : "";
+      if (SITE_OFF.has(siteId)) {
+        bar.className = "mb-3 rounded-xl p-3 bg-gray-800 text-white flex items-center justify-between gap-2 flex-wrap";
+        bar.innerHTML = `<span class="text-sm font-bold">🚫 This site is NOT WORKING on ${dstr} — no manpower needed.</span>
+          <button onclick="toggleSiteOff(false)" class="bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">Site is working →</button>`;
+      } else {
+        bar.className = "mb-3 text-right";
+        bar.innerHTML = `<button onclick="toggleSiteOff(true)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">🚫 Mark site NOT working this day</button>`;
+      }
+    }
+
+    async function toggleSiteOff(off) {
+      const siteId = document.getElementById("site").value;
+      const date = document.getElementById("date").value;
+      if (off && SELECTED.size && !confirm("Mark this site as NOT working for this day? Any request you send won't be needed.")) return;
+      try {
+        const r = await vmmsApi("/api/v1/site_off", { method: "POST", body: JSON.stringify({ site_id: siteId, off_date: date, off }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Could not update");
+        if (off) SITE_OFF.add(siteId); else SITE_OFF.delete(siteId);
+        toast(off ? "Site marked NOT working — the allocator sees it as off." : "Site marked working.", true);
+        renderSiteOff();
+      } catch (ex) { toast(ex.message, true); }
+    }
+
     function render() {
+      renderSiteOff();
       const siteId = document.getElementById("site").value;
       const q = document.getElementById("search").value.trim().toLowerCase();
       const onlySel = document.getElementById("only-sel").checked;
