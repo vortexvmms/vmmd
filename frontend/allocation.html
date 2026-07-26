@@ -260,6 +260,34 @@
     }
 
     /* ---------------- REQUESTS (did each site get what it asked for?) ---------------- */
+    // One-tap: place every requested worker at the site that asked for him.
+    // A worker requested by 2+ sites is LEFT OUT (admin decides) with a warning.
+    function allocateAllRequested() {
+      const byWorker = {};
+      REQROWS.forEach(x => {
+        const m = byWorker[x.worker_id] = byWorker[x.worker_id] || { name: x.worker_name, sites: [] };
+        if (!m.sites.includes(x.site_id)) m.sites.push(x.site_id);
+      });
+      const multi = [];
+      let placed = 0;
+      Object.keys(byWorker).forEach(wid => {
+        const w = byWorker[wid];
+        if (w.sites.length > 1) { multi.push(w.name); return; }   // requested by 2+ sites → leave out
+        if (!(wid in ASSIGN)) return;                             // inactive / on leave
+        if (ASSIGN[wid] !== w.sites[0]) { ASSIGN[wid] = w.sites[0]; placed++; }
+      });
+      render();
+      if (multi.length) {
+        alert(`Placed ${placed} worker(s) at their requested site.\n\n` +
+              `⚠ ${multi.length} worker(s) are requested by MORE THAN ONE site and were LEFT OUT.\n` +
+              `Check with the site managers before allocating:\n\n` +
+              multi.sort().join(", ") +
+              `\n\nNow press Save to apply the placements.`);
+      } else {
+        toast(`Placed ${placed} worker(s) at their requested site — press Save to apply.`, true);
+      }
+    }
+
     function renderRequests() {
       // group requested workers by site
       const bySite = {};
@@ -314,8 +342,11 @@
         const mp = document.createElement("div");
         mp.className = "bg-red-50 border border-red-300 rounded-xl shadow-sm p-4";
         mp.innerHTML =
-          `<p class="font-bold text-gray-800 mb-1">${placeIds.length} requested worker(s) to place / reassign</p>
-           <p class="text-xs text-gray-500 mb-3">Pick where each one goes, then press <b>Save</b>. (Includes anyone requested by 2+ sites.)</p>`;
+          `<div class="flex items-center justify-between gap-2 flex-wrap mb-1">
+             <p class="font-bold text-gray-800">${placeIds.length} requested worker(s) to place / reassign</p>
+             <button onclick="allocateAllRequested()" class="bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-3 py-2 rounded-lg">⚡ Allocate all to requested site</button>
+           </div>
+           <p class="text-xs text-gray-500 mb-3">One tap places everyone at the site that asked for them, then press <b>Save</b>. Anyone requested by 2+ sites is left for you to decide.</p>`;
         placeIds.forEach(wid => {
           const w = reqW[wid];
           const cur = ASSIGN[wid] || "";
@@ -335,6 +366,7 @@
             `<div class="flex-1 min-w-0">
                <p class="text-sm font-medium text-gray-800 truncate">${esc(w.code)}_${esc(w.name)}</p>
                <p class="text-[11px] text-gray-500">requested by: ${esc(w.sites.map(s => s.name).join(", "))}${where}</p>
+               ${w.sites.length > 1 ? `<p class="text-[11px] font-bold text-red-700">⚠ Requested by ${w.sites.length} sites — check with site managers before allocating</p>` : ""}
              </div>
              <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
           row.querySelector("select").addEventListener("change", (e) => {
