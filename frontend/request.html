@@ -35,10 +35,11 @@
         Tick the workers you want at your site for the chosen day, then Send Request.
         The allocator sees your request while planning the next day.
       </p>
-      <button id="copylast" onclick="copyLast()"
-              class="shrink-0 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">
-        Copy last request
-      </button>
+      <div class="shrink-0 flex items-center gap-1 flex-wrap justify-end">
+        <select id="copyfrom" class="border border-gray-300 rounded-lg p-2 text-xs bg-white"></select>
+        <button onclick="copyFromDay()" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy day</button>
+        <button id="copylast" onclick="copyLast()" class="bg-gray-700 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">Copy last</button>
+      </div>
     </div>
 
     <div id="reqstatus" class="hidden rounded-xl p-3 mb-3 text-sm"></div>
@@ -139,7 +140,38 @@
       ALLOC = ra.ok ? await ra.json() : [];   // allocations for your site(s) that date
       const siteId = document.getElementById("site").value;
       SELECTED = new Set(REQ.filter(a => a.site_id === siteId).map(a => a.worker_id));
+      fillCopyFrom();
       render();
+    }
+
+    const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    function fillCopyFrom(){
+      const sel = document.getElementById("copyfrom"); if(!sel) return;
+      const base = new Date(document.getElementById("date").value + "T00:00:00");
+      let html = "";
+      for(let i=1;i<=7;i++){
+        const d = new Date(base.getTime() - i*86400000);
+        const v = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+        html += `<option value="${v}">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} (${DOW[d.getDay()]})</option>`;
+      }
+      sel.innerHTML = html;
+    }
+
+    async function copyFromDay(){
+      const chosen = document.getElementById("copyfrom").value;
+      const siteId = document.getElementById("site").value;
+      if(!chosen) return;
+      try{
+        const r = await vmmsApi(`/api/v1/requests?date=${chosen}`);
+        const d = r.ok ? await r.json() : [];
+        const activeIds = new Set(WORKERS.map(w => w.id));
+        const ids = d.filter(a => a.site_id === siteId).map(a => a.worker_id).filter(id => activeIds.has(id));
+        if(!ids.length){ toast("No request found for that day at your site."); return; }
+        SELECTED = new Set(ids);
+        const [y,m,dd] = chosen.split("-");
+        toast(`Copied ${ids.length} from ${dd}/${m}/${y} — review, then Send Request.`, true);
+        render();
+      }catch(ex){ toast(ex.message, true); }
     }
 
     function render() {

@@ -97,6 +97,16 @@
     // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
     const REASONS = [["mc", "MC", "bg-yellow-500"],
                      ["ul", "UL", "bg-orange-600"], ["al", "AL", "bg-blue-600"]];
+    // On Sundays & public holidays there is no MC/UL/AL — a worker simply did
+    // not turn up, so the supervisor marks "Not working" (site request 26/07/2026).
+    const REASONS_REST = [["nw", "Not working", "bg-gray-600"]];
+    let HOLIDAYS = new Set();
+    function isRestDay(dateStr){
+      if(!dateStr) return false;
+      const d = new Date(dateStr + "T00:00:00");
+      return d.getDay() === 0 || HOLIDAYS.has(dateStr);   // Sunday or public holiday
+    }
+    function reasonsFor(){ return isRestDay(document.getElementById("date").value) ? REASONS_REST : REASONS; }
 
     function toast(msg, long = false) {
       const t = document.getElementById("toast");
@@ -109,6 +119,7 @@
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
+      try { const h = await vmmsApi("/api/v1/holidays"); if (h.ok) (await h.json()).forEach(x => HOLIDAYS.add(x.holiday_date)); } catch (e) {}
       document.getElementById("date").value = fmtDate(new Date());
       await loadDay();
     }
@@ -194,7 +205,7 @@
           </div>
           <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1 flex-wrap">
             <span class="text-xs text-gray-500">Reason:</span>
-            ${REASONS.map(([v, l, c]) =>
+            ${reasonsFor().map(([v, l, c]) =>
               `<button class="rsn text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === v ? c + " text-white" : "bg-gray-100 text-gray-600"}" data-r="${v}">${l}</button>`).join("")}
           </div>
           <div class="${x.present ? "" : "hidden"}">

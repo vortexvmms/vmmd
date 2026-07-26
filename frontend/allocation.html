@@ -43,10 +43,12 @@
   <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
     <div id="copybar" class="hidden bg-amber-50 border border-amber-300 rounded-xl shadow-sm p-4 mb-3 text-center">
       <p class="text-sm font-bold text-amber-800 mb-1">⏳ PENDING — no allocation done for this day yet.</p>
-      <p class="text-xs text-amber-700 mb-2">Assign workers below and Save, or copy yesterday's plan.</p>
-      <button onclick="copyDay()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">
-        Copy previous day's allocation
-      </button>
+      <p class="text-xs text-amber-700 mb-2">Assign workers below and Save, or copy a previous day's plan (last 7 days).</p>
+      <div class="flex items-center justify-center gap-2 flex-wrap">
+        <label class="text-xs font-bold text-amber-800">Copy from:</label>
+        <select id="copyfrom" class="border border-amber-300 rounded-lg p-2 text-sm bg-white"></select>
+        <button onclick="copyDay()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">Copy that day</button>
+      </div>
     </div>
 
     <!-- Status: allocation done / unsaved changes (pending state uses the copybar above) -->
@@ -182,6 +184,7 @@
       });
       document.getElementById("copybar").classList.toggle("hidden", ALLOC.length > 0);
       document.getElementById("clearbar").classList.toggle("hidden", ALLOC.length === 0);
+      fillCopyFrom();
       snapshotAssign();
       render();
     }
@@ -582,9 +585,24 @@
       }
     }
 
+    const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    function fillCopyFrom() {
+      const sel = document.getElementById("copyfrom");
+      if (!sel) return;
+      const base = new Date(document.getElementById("date").value + "T00:00:00");
+      let html = "";
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(base.getTime() - i * 86400000);
+        const v = fmtDate(d);
+        html += `<option value="${v}">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} (${DOW[d.getDay()]})</option>`;
+      }
+      sel.innerHTML = html;
+    }
+
     async function copyDay() {
       const to = document.getElementById("date").value;
-      const from = fmtDate(new Date(new Date(to).getTime() - 24 * 3600 * 1000));
+      const from = (document.getElementById("copyfrom") || {}).value ||
+                   fmtDate(new Date(new Date(to).getTime() - 24 * 3600 * 1000));
       try {
         const r = await vmmsApi("/api/v1/allocations/copy", {
           method: "POST",
