@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.34.0")  # site off-days
+app = FastAPI(title="VMMS API", version="0.35.0")  # overnight end + class day
 
 app.add_middleware(
     CORSMiddleware,
@@ -1125,6 +1125,12 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         end_nd = body.end_next_day if body.end_next_day is not None else (att["end_next_day"] if att else False)
         present = body.present if body.present is not None else (att["present"] if att else True)
 
+        # "Class" = paid training day. The worker is not on site but the company
+        # pays 08:00–17:00 (a normal 8-hour day). Stored as a present, paid day and
+        # tagged 'class' so reports can show it distinctly.
+        if body.absence_type == "class":
+            present, start, end, end_nd = True, "08:00", "17:00", False
+
         if user["role"] != "admin" and await month_locked(client, user["token"], alloc["work_date"]):
             raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
 
@@ -1137,10 +1143,10 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                 raise HTTPException(status_code=400, detail=str(ve))
         # (recomputed at day level below if the worker has more than one site today)
 
-        if body.absence_type and body.absence_type not in ("absent", "mc", "ul", "al", "nw"):
+        if body.absence_type and body.absence_type not in ("absent", "mc", "ul", "al", "nw", "class"):
             raise HTTPException(status_code=400, detail="Invalid absence type")
-        absence = None if present else (
-            body.absence_type or (att.get("absence_type") if att else None) or "absent")
+        absence = "class" if body.absence_type == "class" else (
+            None if present else (body.absence_type or (att.get("absence_type") if att else None) or "absent"))
 
         payload = {"present": present, "start_time": start, "end_time": end,
                    "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
@@ -1826,7 +1832,8 @@ async def report_attendance(dfrom: str, dto: str, site_id: str = "",
                 "worker_code": (a.get("workers") or {}).get("worker_code", ""),
                 "worker": (a.get("workers") or {}).get("name", "?"),
                 "present": att["present"] if att else None,
-                "absence": ((att.get("absence_type") or "absent") if att and not att["present"] else ""),
+                "absence": ("class" if att and att.get("absence_type") == "class"
+                            else ((att.get("absence_type") or "absent") if att and not att["present"] else "")),
                 "start": att["start_time"][:5] if att and att["start_time"] else "",
                 "end": att["end_time"][:5] if att and att["end_time"] else "",
                 "nh": float(att["normal_hours"]) if att and att["present"] else 0,
