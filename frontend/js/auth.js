@@ -101,7 +101,16 @@ async function vmmsApi(path, options = {}) {
   _wakePending++;
   if (!_wakeTimer) _wakeTimer = setTimeout(_wakeShow, 2500);
   try {
-    let r = await doFetch();
+    // A dropped connection / cold-start makes fetch reject with "Failed to fetch".
+    // Retry once after a short pause before surfacing the error to the page.
+    let r;
+    try {
+      r = await doFetch();
+    } catch (netErr) {
+      if (netErr && netErr.message === "NOT_SIGNED_IN") throw netErr;
+      await new Promise(res => setTimeout(res, 1200));
+      r = await doFetch();
+    }
     if (r.status === 401) {
       const ok = await vmmsRefresh();
       if (!ok) throw new Error("NOT_SIGNED_IN");
