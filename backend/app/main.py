@@ -943,9 +943,16 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
     R5 Sunday/PH all OT. Past-midnight credited to the start date."""
     s = _to_min(start)
     e_raw = _to_min(end)
-    e = e_raw + (1440 if end_next_day else 0)
-    if e <= s:
-        raise ValueError("End time must be after start time")
+
+# If end time is earlier than start time,
+# treat it as next-day / overnight work.
+if end_next_day or e_raw < s:
+    e = e_raw + 1440
+else:
+    e = e_raw
+
+if e <= s:
+    raise ValueError("End time must be after start time")
 
     # R2/R3: deduct 1h lunch only when work spans the 12:00–13:00 window
     finished_by_noon = (not end_next_day) and e_raw <= 720
@@ -972,9 +979,16 @@ def worked_hours(start: str, end: str, end_next_day: bool) -> float:
     """Hours actually worked in one segment, lunch rules R2/R3 applied."""
     s = _to_min(start)
     e_raw = _to_min(end)
-    e = e_raw + (1440 if end_next_day else 0)
-    if e <= s:
-        raise ValueError("End time must be after start time")
+
+# If end time is earlier than start time,
+# treat it as next-day / overnight work.
+if end_next_day or e_raw < s:
+    e = e_raw + 1440
+else:
+    e = e_raw
+
+if e <= s:
+    raise ValueError("End time must be after start time")
     finished_by_noon = (not end_next_day) and e_raw <= 720
     lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
     return (e - s - lunch) / 60.0
