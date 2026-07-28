@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.35.0")  # overnight end + class day
+app = FastAPI(title="VMMS API", version="0.35.1")  # attendance save diagnostics
 
 app.add_middleware(
     CORSMiddleware,
@@ -1162,8 +1162,12 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                 f"{REST}/attendance",
                 headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
                 json={**payload, "allocation_id": body.allocation_id})
-        if ru.status_code not in (200, 201) or not ru.json():
-            raise HTTPException(status_code=500, detail="Could not save attendance")
+        if ru.status_code not in (200, 201):
+            raise HTTPException(status_code=500,
+                detail=f"Could not save attendance (db {ru.status_code}: {ru.text[:160]})")
+        if not ru.json():
+            raise HTTPException(status_code=500,
+                detail="Attendance not saved — the update matched no row (permission / RLS, or the day changed). Reload the day and try again.")
 
         # split-day: if this worker worked at more than one site today,
         # recalculate the whole day so the 8-hour normal quota is applied once
