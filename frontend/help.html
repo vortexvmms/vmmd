@@ -36,11 +36,13 @@
     // Item types: "text" (bullet), {step:"..."} numbered, {ex:"..."} worked example, {note:"..."} note.
     const COMMON_INTRO =
       "This is your quick guide — the same steps as the printed manual. Tap a heading to open or close it. " +
-      "The app stays signed in. The first time you open it each morning it may take up to 1 minute to wake up — please wait, don't tap many times.";
+      "The app stays signed in. The first time you open it each morning it may take up to 1 minute to wake up — please wait, don't tap many times. " +
+      "The 🔔 bell at the top-right shows your notifications; tap it to read them and to mark all as read.";
 
     const GETTING_STARTED = { h: "Getting started — phone & sign in", items: [
       { step: "First time only: open Chrome, go to vortexvmms.github.io/vmmd, then Chrome menu (⋮) → \"Add to Home screen\" → Add. A red VMMS icon appears on your phone." },
       { step: "Sign in with the email and password given by the office. You stay signed in on that phone." },
+      { step: "The 🔔 bell (top-right) tells you what needs your attention — new requests, allocations, or leave. A red dot means unread." },
       { note: "Forgot your password? Only the Administrator can reset it — call the office. Never share your password." },
     ]};
 
@@ -49,21 +51,27 @@
       { h: "Request manpower for the next day", items: [
         { step: "Open Request Manpower. Your site and tomorrow's date are already set." },
         { step: "Tick the workers you want at your site tomorrow." },
-        { step: "Shortcut: press \"Copy last request\" to bring back your previous list, then adjust." },
-        { step: "Press Send Request. You can change and re-send any time." },
-        { ex: "You need the same 8 men as yesterday plus one more. Press \"Copy last request\" to bring back yesterday's 8, tick the extra worker, then Send Request." },
+        { step: "Shortcut: press \"Copy from\" and pick any of the last 7 days to bring that day's list back, then adjust." },
+        { step: "Site closed tomorrow? Press \"🚫 Mark site NOT working this day\". It then won't show in the allocator's pending reminder. Tap again to undo." },
+        { step: "Press Send Request. A green tick confirms it saved. You can change and re-send any time." },
+        { ex: "You need the same 8 men as two days ago plus one more. Press \"Copy from\" → choose that date to bring back the 8, tick the extra worker, then Send Request." },
       ]},
       { h: "Every morning — mark who came", items: [
         { step: "Open Attendance. Your site and today's date show automatically." },
-        { step: "Everyone is ticked Present. Untick anyone who did not come and choose the reason: ABSENT or MC (medical leave)." },
+        { step: "Everyone is ticked Present. Untick anyone who did not come and choose the reason: MC (medical leave), UL (unpaid leave) or AL (annual leave)." },
+        { step: "Worker went for training? Tap 📚 Class — the company pays a full day (8:00–17:00) and it is counted for you automatically." },
+        { step: "Sunday or Public Holiday and a worker isn't working? Choose \"Not working\" (no MC/UL/AL needed on rest days)." },
         { step: "Worker came to your site but was allocated elsewhere? Tap \"+ Worker reported to this site\", find his name, then choose  M = with you all day  ·  S = split day (worked at both sites)." },
+        { note: "Each change saves on its own with a green \"✓ Saved\". If you ever see \"failed to fetch\", wait a second and tap again — the app retries for you." },
       ]},
       { h: "Every evening — end times, submit, message", items: [
-        { step: "Tap \"Set all 5 PM\" (or 7 PM / 10 PM) to set the end time for everyone at once." },
-        { step: "Change the few who are different — tap the time on their row." },
+        { step: "Tap a time chip to set the end time for everyone at once: 4 PM, 5 PM, 7 PM, 10 PM, 10:30 PM, 11 PM, 11:30 PM or 12 AM." },
+        { step: "Overnight shift (finished after midnight)? Pick 1 AM–6 AM — the app knows it is the next morning and counts the hours correctly." },
+        { step: "Change the few who are different — tap the time on their row (the ⋯ gives more times)." },
         { step: "Check the bottom bar: Normal hours and OT for your site." },
         { step: "Press SUBMIT DAY." },
         { step: "Go to WhatsApp → Site Update → Generate → Share to the group." },
+        { ex: "Chinaiah worked until 3:30 AM. On his row tap ⋯ → 03:30. The app treats it as next-day and puts all the extra hours into OT." },
         { note: "Made a mistake after submitting? You can still fix it — the app will ask you to type a short reason. No need to call the office." },
       ]},
       { h: "Dashboard & reports (your sites)", items: [
@@ -77,6 +85,7 @@
       ]},
       { h: "If something goes wrong", items: [
         "App slow to open in the morning → normal, wait up to 1 minute, it is waking up.",
+        "\"failed to fetch\" or \"could not save\" → wait a second and tap again; the app retries. If it keeps failing, the server may still be waking up.",
         "\"Session expired\" → sign in again with your email and password.",
         "Forgot password → call the office; only the Administrator can reset it.",
         "Worker missing from my list → use \"+ Worker reported to this site\".",
@@ -98,17 +107,30 @@
         { step: "Tap the By Site tab, then choose a site from the dropdown." },
         { step: "Tick the workers for that site. Workers a supervisor asked for show a red REQUESTED tag, and the bar shows \"Requested here: X · Allocated: Y\"." },
         { step: "Press Save Allocation. Change the site and repeat." },
-        { note: "If the date is empty, press \"Copy previous day's allocation\" to bring yesterday forward, then adjust. Workers on home leave are skipped automatically." },
+        { note: "If the date is empty, press \"Copy from\" and pick any of the last 7 days to bring that allocation forward, then adjust. Workers on home leave are skipped automatically." },
+      ]},
+      { h: "Requests — allocate everyone in one tap", items: [
+        { step: "In the Requests view, press \"⚡ Allocate all to requested site\" to place every requested worker at the site that asked for him — in one tap." },
+        { step: "Once a worker is placed he clears from the request/reminder list, so you always see only what's still pending." },
+        { note: "A worker requested by 2+ sites is left out with the warning \"check with site managers before allocate\" — decide his site, then place him yourself." },
+        { step: "Sites a supervisor marked \"not working\" don't appear in the pending reminder." },
+      ]},
+      { h: "Undo a copy / clear a day", items: [
+        "Copied the wrong day? Press \"Undo copy\" to remove what the copy added.",
+        "\"Clear day\" empties that date's allocation — but rows that already have attendance are kept safe.",
       ]},
       { h: "Plan changes at night", items: [
         "Open Daily Allocation for that same date, change the sites, Save.",
         "Generate the allocation message again and send the new one to the group. No limit on how many times.",
+        "The supervisors you allocate to get a 🔔 notification telling them how many of their requested workers they got.",
       ]},
       { h: "WhatsApp messages", items: [
         "Allocation — one message for all sites (tomorrow's distribution).",
         "Request — one consolidated message of what every site asked for.",
-        "Site Update — the end-of-day message for one site (today).",
+        "Site Update — the end-of-day message for one site (today). It now also lists anyone on MC / UL / AL.",
+        { step: "Home leave list: in Site Update, open the site dropdown and choose \"🏠 Home Leave\" to generate the list of workers currently on leave." },
         { step: "Choose the type and date → Generate → Copy or Share to WhatsApp." },
+        { note: "Names now print in Title Case, e.g. \"1. VES001-Renga Anbu-19:00\" — not in capitals." },
       ]},
       { h: "Dashboard", items: [
         { step: "Use the date box to view any day; press Today to jump back." },
@@ -124,9 +146,18 @@
         "Normal weekday (Mon–Fri): up to 8 h a day; 1 h lunch deducted.",
         "Finish by 12:00 noon: no lunch deduction.",
         "Saturday: normal until 12:00 (max 4 h); everything after lunch is OT.",
-        "Sunday & Public Holiday: all hours are OT.",
+        "Sunday & Public Holiday: all hours are OT. \"Not working\" marks a rest-day absence.",
         "OT counts in half-hour steps, rounded down (17:45 finish = 0.5 OT).",
         "Split day (two sites): 8 normal hours counted once for the day, then OT.",
+        "Class (paid training): counted as a full paid day, 08:00–17:00.",
+        "Overnight finish (e.g. 03:30): the app rolls to the next day and puts the extra hours into OT.",
+      ]},
+      { h: "Notifications — who gets told what", items: [
+        "Supervisor sends a request → the allocator (Mani) is notified.",
+        "Allocator saves an allocation → each affected site supervisor is notified (with how many they got).",
+        "MC / UL / AL marked → Operation Manager, Site Manager and HR Assistant are notified.",
+        "Renganathan receives all notifications.",
+        { note: "Set who Mani is, and who gets all notifications, with the tick-boxes in Users & Access." },
       ]},
       { h: "A full day, end to end", items: [
         "Evening before: supervisors send their Request Manpower.",
@@ -138,6 +169,18 @@
     ];
 
     const ADMIN_EXTRA = [
+      { h: "Users & Access (Administrator)", items: [
+        { step: "Open Users & Access to see everyone who can log in." },
+        { step: "Change a person's role from the dropdown on their row — the app updates what they can do straight away." },
+        { step: "Under \"Sections\", tick which home-screen options each person sees (every option is listed, not only the ones their role would normally get)." },
+        { step: "Tick \"📋 Gets manpower requests\" for the allocator (Mani), and \"🔔 Gets ALL notifications\" for anyone who should receive everything (e.g. Renganathan)." },
+        { note: "New logins are still created in Supabase (Authentication) first, then given a role here — see the setup guide." },
+      ]},
+      { h: "Automatic 4 AM email report (Administrator)", items: [
+        "Every day at 4:00 AM (SGT) VMMS emails the previous day's report automatically — attendance verification plus the monthly attendance sheet, as PDF and Excel, with a full overview in the email body.",
+        "It runs on its own; no one has to press anything. It is your daily payroll backup.",
+        { note: "The Vortex logo prints in the header of the emailed reports." },
+      ]},
       { h: "Workers (Administrator)", items: [
         "Search by name or ID; filter by Active / On Leave / Inactive.",
         "Press + to add one worker; BULK ADD to paste many (one per line: ID, Full Name).",
@@ -177,12 +220,22 @@
     ];
 
     const HELP = {
-      admin:    ALLOCATOR.concat(ADMIN_EXTRA),
-      main_sup: ALLOCATOR,
-      site_sup: SITE_SUP,
-      payroll:  PAYROLL,
+      admin:            ALLOCATOR.concat(ADMIN_EXTRA),
+      general_manager:  ALLOCATOR,
+      operation_manager:ALLOCATOR,
+      hr_assistant:     PAYROLL,
+      main_sup:         ALLOCATOR,
+      wshc_lead:        ALLOCATOR,
+      site_sup:         SITE_SUP,
+      safety_sup:       SITE_SUP,
+      wshc:             SITE_SUP,
+      logistics_sup:    SITE_SUP,
     };
-    const LABEL = { admin: "Administrator", main_sup: "Main Supervisor", site_sup: "Site Supervisor", payroll: "Payroll" };
+    const LABEL = {
+      admin: "Administrator", general_manager: "General Manager", operation_manager: "Operation Manager",
+      hr_assistant: "HR Assistant", main_sup: "Main Supervisor", wshc_lead: "WSHC Lead",
+      site_sup: "Site Supervisor", safety_sup: "Safety Supervisor", wshc: "WSHC", logistics_sup: "Logistics Supervisor",
+    };
 
     function itemHTML(it) {
       if (typeof it === "string")
@@ -203,7 +256,7 @@
       document.getElementById("role").textContent = "Guide for: " + (LABEL[me.role] || me.role);
       document.getElementById("intro").textContent = COMMON_INTRO;
 
-      const sections = HELP[me.role] || [];
+      const sections = HELP[me.role] || SITE_SUP;
       const wrap = document.getElementById("sections");
       sections.forEach((s, i) => {
         const d = document.createElement("details");
