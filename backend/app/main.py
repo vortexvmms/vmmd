@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.36.0")  # allocation outcome notifications
+app = FastAPI(title="VMMS API", version="0.37.0")  # site update leave names + home-leave msg
 
 app.add_middleware(
     CORSMiddleware,
@@ -1524,10 +1524,22 @@ def format_allocation_message(work_date: str, site_names: list[str],
     return "\n".join(lines)
 
 
+ABSENCE_LABEL = {"mc": "MC", "ul": "UL", "al": "AL"}
+
+
+def _leave_lines(leave: list[dict]) -> list[str]:
+    """A '*ON LEAVE*' block listing MC / UL / AL workers, or [] if none."""
+    if not leave:
+        return []
+    out = ["", "*ON LEAVE*"]
+    for i, r in enumerate(sorted(leave, key=lambda x: x["name"]), 1):
+        out.append(f'{i}.{r["code"]}_{tc(r["name"])}_{ABSENCE_LABEL.get(r["type"], r["type"].upper())}')
+    return out
+
+
 def format_update_message(work_date: str, site_name: str, supervisor: str,
-                          rows: list[dict]) -> str:
-    """Spec §7.2 (Rev 7 format): WORKERID_NAME_ENDTIME, all caps.
-    Non-default starts shown as WORKERID_NAME_START-END."""
+                          rows: list[dict], leave: list[dict] | None = None) -> str:
+    """Spec §7.2: WORKERID_NAME_ENDTIME, plus an ON LEAVE block for MC/UL/AL."""
     d = date_cls.fromisoformat(work_date)
     lines = [f"*SITE: {site_name.upper()}*",
              f"*DATE: {d.day:02d}/{d.month:02d}/{d.year}*",
@@ -1540,6 +1552,7 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
         if r.get("start_time") and r["start_time"] != "08:00":
             t = f'{r["start_time"]}-{r["end_time"]}'
         lines.append(f'{n}.{r["code"]}_{tc(r["name"])}_{t}')
+    lines += _leave_lines(leave)
     return "\n".join(lines)
 
 
@@ -1589,21 +1602,26 @@ async def update_message(date: str, site_id: str,
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
         site_name = (rows[0].get("sites") or {}).get("site_name", "?")
 
-        present, missing = [], 0
+        present, leave, missing = [], [], 0
         for a in rows:
             att = a.get("attendance")
-            if not att or not att["present"]:
+            if not att:
+                continue
+            w = a.get("workers") or {}
+            if not att["present"]:
+                if att.get("absence_type") in ("mc", "ul", "al"):
+                    leave.append({"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
+                                  "type": att["absence_type"]})
                 continue
             if not att["end_time"]:
                 missing += 1
                 continue
-            present.append({"name": (a.get("workers") or {}).get("name", "?"),
-                            "code": (a.get("workers") or {}).get("worker_code", "?"),
+            present.append({"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
                             "start_time": att["start_time"][:5] if att["start_time"] else "08:00",
                             "end_time": att["end_time"][:5]})
         present.sort(key=lambda x: x["name"])
 
-        msg = format_update_message(date, site_name, user["name"], present)
+        msg = format_update_message(date, site_name, user["name"], present, leave)
         await audit(client, user, "generate_update_msg", "message",
                     f"{date}:{site_id}", None, {"workers": len(present)})
         return {"message": msg, "workers": len(present), "missing_end_time": missing}
@@ -1617,34 +1635,60 @@ async def update_all_message(date: str, user: dict = Depends(get_current_user)):
     async with httpx.AsyncClient(timeout=10) as client:
         rows = await _load_day(client, user["token"], date, None)
         by_site: dict[str, list[dict]] = {}
+        leave_by_site: dict[str, list[dict]] = {}
         missing = 0
         for a in rows:
             att = a.get("attendance")
             sname = (a.get("sites") or {}).get("site_name", "?")
-            if not att or not att["present"]:
+            w = a.get("workers") or {}
+            if not att:
+                continue
+            if not att["present"]:
+                if att.get("absence_type") in ("mc", "ul", "al"):
+                    leave_by_site.setdefault(sname, []).append(
+                        {"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
+                         "type": att["absence_type"]})
                 continue
             if not att["end_time"]:
                 missing += 1
                 continue
             by_site.setdefault(sname, []).append({
-                "name": (a.get("workers") or {}).get("name", "?"),
-                "code": (a.get("workers") or {}).get("worker_code", "?"),
+                "name": w.get("name", "?"), "code": w.get("worker_code", "?"),
                 "start": att["start_time"][:5] if att["start_time"] else "08:00",
                 "end": att["end_time"][:5],
             })
         d = date_cls.fromisoformat(date)
         lines = ["*END TIME UPDATE*", f"*{d.day:02d}/{d.month:02d}/{d.year}*"]
         total = 0
-        for sname in sorted(by_site):
+        for sname in sorted(set(by_site) | set(leave_by_site)):
             lines.append(DIVIDER)
             lines.append(f"*{sname.upper()}*")
-            for i, r in enumerate(sorted(by_site[sname], key=lambda x: x["name"]), 1):
+            for i, r in enumerate(sorted(by_site.get(sname, []), key=lambda x: x["name"]), 1):
                 t = r["end"] if r["start"] == "08:00" else f'{r["start"]}-{r["end"]}'
                 lines.append(f'{i}.{r["code"]}_{tc(r["name"])}_{t}')
                 total += 1
+            lines += _leave_lines(leave_by_site.get(sname))
         msg = "\n".join(lines)
         await audit(client, user, "generate_update_all_msg", "message", date, None, {"workers": total})
         return {"message": msg, "workers": total, "missing_end_time": missing, "sites": len(by_site)}
+
+
+@app.get("/api/v1/messages/home_leave")
+async def home_leave_message(user: dict = Depends(get_current_user)):
+    """Message listing every worker currently on Home Leave (status on_leave)."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        rw = await client.get(f"{REST}/workers",
+                              params={"status": "eq.on_leave", "select": "name,worker_code",
+                                      "order": "name.asc"},
+                              headers=supabase_headers(user["token"]))
+        workers = rw.json() if rw.status_code == 200 else []
+        d = date_cls.fromisoformat(sgt_today())
+        lines = ["*HOME LEAVE*", f"*{d.day:02d}/{d.month:02d}/{d.year}*", DIVIDER]
+        for i, w in enumerate(workers, 1):
+            lines.append(f'{i}.{w["worker_code"]}_{tc(w["name"])}')
+        lines.append(DIVIDER)
+        lines.append(f"*TOTAL ON HOME LEAVE: {len(workers)}*")
+        return {"message": "\n".join(lines), "workers": len(workers)}
 
 
 def format_request_message(request_date: str, by_site: dict[str, list[str]]) -> str:
