@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.35.1")  # attendance save diagnostics
+app = FastAPI(title="VMMS API", version="0.36.0")  # allocation outcome notifications
 
 app.add_middleware(
     CORSMiddleware,
@@ -712,14 +712,26 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
                     {"worker_ids": sorted(this_site.keys())},
                     {"worker_ids": sorted(requested)})
 
-        # notify the site's supervisors that manpower was allocated
+        # notify the site's supervisors with the request outcome (allocated / not allocated)
         if to_add or to_remove:
             rs = await client.get(f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "site_name"},
                                   headers=supabase_headers(user["token"]))
             sname = rs.json()[0]["site_name"] if rs.status_code == 200 and rs.json() else "your site"
-            await notify_site_supervisors(client, [body.site_id], "allocation", "Manpower allocated",
-                                          f"{len(requested)} worker(s) allocated to {sname} for {body.work_date}.",
-                                          link=f"attendance.html?date={body.work_date}")
+            svc = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
+            rq = await client.get(f"{REST}/manpower_requests",
+                                  params={"request_date": f"eq.{body.work_date}",
+                                          "site_id": f"eq.{body.site_id}", "select": "worker_id"},
+                                  headers=svc)
+            reqset = {x["worker_id"] for x in (rq.json() if rq.status_code == 200 else [])}
+            if reqset:
+                got = len(reqset & requested)
+                pending = len(reqset - requested)
+                msg = (f"{sname} · {body.work_date}: {got} of your {len(reqset)} requested worker(s) allocated" +
+                       (f" — {pending} NOT allocated to you." if pending else " — all allocated ✓."))
+            else:
+                msg = f"{len(requested)} worker(s) allocated to {sname} for {body.work_date}."
+            await notify_site_supervisors(client, [body.site_id], "allocation", "Allocation updated",
+                                          msg, link=f"attendance.html?date={body.work_date}")
         return {"ok": True, "added": len(to_add), "removed": len(to_remove)}
 
 
@@ -943,16 +955,9 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
     R5 Sunday/PH all OT. Past-midnight credited to the start date."""
     s = _to_min(start)
     e_raw = _to_min(end)
-
-# If end time is earlier than start time,
-# treat it as next-day / overnight work.
-if end_next_day or e_raw < s:
-    e = e_raw + 1440
-else:
-    e = e_raw
-
-if e <= s:
-    raise ValueError("End time must be after start time")
+    e = e_raw + (1440 if end_next_day else 0)
+    if e <= s:
+        raise ValueError("End time must be after start time")
 
     # R2/R3: deduct 1h lunch only when work spans the 12:00–13:00 window
     finished_by_noon = (not end_next_day) and e_raw <= 720
@@ -979,16 +984,9 @@ def worked_hours(start: str, end: str, end_next_day: bool) -> float:
     """Hours actually worked in one segment, lunch rules R2/R3 applied."""
     s = _to_min(start)
     e_raw = _to_min(end)
-
-# If end time is earlier than start time,
-# treat it as next-day / overnight work.
-if end_next_day or e_raw < s:
-    e = e_raw + 1440
-else:
-    e = e_raw
-
-if e <= s:
-    raise ValueError("End time must be after start time")
+    e = e_raw + (1440 if end_next_day else 0)
+    if e <= s:
+        raise ValueError("End time must be after start time")
     finished_by_noon = (not end_next_day) and e_raw <= 720
     lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
     return (e - s - lunch) / 60.0
