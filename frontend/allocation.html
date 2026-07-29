@@ -347,7 +347,7 @@
         const reqSites = reqW[wid].sites.map(s => s.id);
         const cur = ALLOCMAP[wid] ? ALLOCMAP[wid].site_id : "";
         const placedRight = cur && reqSites.includes(cur);     // already at a requesting site
-        return reqW[wid].sites.length > 1 || !placedRight;     // multi-requested OR still pending
+        return !placedRight;   // show until placed at a requesting site; clears once allocated
       }).sort((a, b) => reqW[a].name.localeCompare(reqW[b].name));
 
       if (placeIds.length) {

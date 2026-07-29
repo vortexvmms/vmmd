@@ -114,10 +114,12 @@
     function toMin(t){ const p = (t || "08:00").split(":"); return (+p[0]) * 60 + (+(p[1] || 0)); }
     function nextDayFor(x, t){ return toMin(t) <= toMin(x.start_time || "08:00"); }
 
-    function toast(msg, long = false) {
+    function toast(msg, long = false, ok = false) {
       const t = document.getElementById("toast");
-      t.textContent = msg; t.classList.remove("hidden");
-      setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
+      t.textContent = msg;
+      t.style.background = ok ? "#16a34a" : "";   // green flash for a successful save
+      t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), long ? 6000 : (ok ? 1400 : 2500));
     }
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
 
@@ -214,12 +216,12 @@
             ${reasonsFor().map(([v, l, c]) =>
               `<button class="rsn text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === v ? c + " text-white" : "bg-gray-100 text-gray-600"}" data-r="${v}">${l}</button>`).join("")}
             ${isRestDay(document.getElementById("date").value) ? "" :
-              `<button class="rsn-class text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">📚 Class (paid)</button>`}
+              `<button class="rsn-class text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">📚 Class</button>`}
           </div>
           <div class="${x.present ? "" : "hidden"}">
             ${x.absence_type === "class"
               ? `<div class="flex items-center justify-between gap-2">
-                   <span class="text-sm font-bold text-indigo-700">📚 CLASS — company-paid 08:00–17:00 (8h)</span>
+                   <span class="text-sm font-bold text-indigo-700">📚 CLASS (8h)</span>
                    <button class="clr-class text-xs font-bold text-gray-500 underline">Undo</button>
                  </div>`
               : `<div class="flex items-center flex-wrap gap-1">
@@ -286,6 +288,7 @@
         x.day_type = data.day_type;
         x._saving = false;
         render();
+        toast("✓ Saved", false, true);        // green confirmation
       } catch (ex) {
         Object.assign(x, prev);               // revert on failure
         x._saving = false;
