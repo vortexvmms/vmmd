@@ -43,6 +43,17 @@ RED = "C00000"
 GREY = "595959"
 LIGHT = "F2F2F2"
 
+# company logo for the report header (downloaded once; skipped if unreachable)
+LOGO_URL = "https://www.vortex.sg/images/Vortex-Logo_Type.png"
+LOGO_PATH = None
+try:
+    import urllib.request
+    _lp = os.path.join(os.environ.get("OUT_DIR", "."), "_vortex_logo.png")
+    urllib.request.urlretrieve(LOGO_URL, _lp)
+    LOGO_PATH = _lp
+except Exception:
+    LOGO_PATH = None
+
 
 def log(*a):
     print(*a, flush=True)
@@ -246,6 +257,14 @@ class PDF(FPDF):
     title = ""
 
     def header(self):
+        top = 8
+        if LOGO_PATH:
+            try:
+                self.image(LOGO_PATH, x=self.l_margin, y=6, h=8)   # logo top-left
+                top = 16
+            except Exception:
+                pass
+        self.set_y(top)
         self.set_font("Helvetica", "B", 13)
         self.set_text_color(0xC0, 0, 0)
         self.cell(0, 8, latin(self.title), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
