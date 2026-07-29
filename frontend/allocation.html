@@ -108,9 +108,11 @@
       });
     }
 
-    function toast(msg, long = false) {
+    function toast(msg, long = false, ok = false) {
       const t = document.getElementById("toast");
-      t.textContent = msg; t.classList.remove("hidden");
+      t.textContent = msg;
+      t.style.background = ok ? "#16a34a" : "";
+      t.classList.remove("hidden");
       setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
     }
 
@@ -619,7 +621,7 @@
             added += d.added; removed += d.removed;
           }
         }
-        toast(`Saved — ${added} added, ${removed} removed across all sites`, true);
+        toast(`✓ Saved — ${added} added, ${removed} removed across all sites`, true, true);
         await loadDay();
       } catch (ex) {
         toast(ex.message, true);

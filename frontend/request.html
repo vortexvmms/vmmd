@@ -91,9 +91,11 @@
       window.open("https://wa.me/" + COORD_WA + "?text=" + encodeURIComponent(lines.join("\n")), "_blank");
     }
 
-    function toast(msg, long = false) {
+    function toast(msg, long = false, ok = false) {
       const t = document.getElementById("toast");
-      t.textContent = msg; t.classList.remove("hidden");
+      t.textContent = msg;
+      t.style.background = ok ? "#16a34a" : "";
+      t.classList.remove("hidden");
       setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
     }
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
@@ -332,7 +334,7 @@
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not send");
-        toast(`Request sent — ${data.total} worker(s) for your site`, true);
+        toast(`✓ Request sent — ${data.total} worker(s) for your site`, true, true);
         await loadDay();
       } catch (ex) {
         toast(ex.message, true);
