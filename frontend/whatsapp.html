@@ -26,6 +26,7 @@
       <button id="t-alloc" class="flex-1 bg-white text-red-700 font-bold rounded-lg p-2 text-sm">Allocation</button>
       <button id="t-request" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Request</button>
       <button id="t-update" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Site Update</button>
+      <button id="t-home" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Home Leave</button>
     </div>
     <div class="flex gap-2 mt-2">
       <input id="date" type="date" class="flex-1 rounded-lg p-2 text-gray-800 text-base">
@@ -79,10 +80,12 @@
       document.getElementById("t-alloc").className   = btnCls(t === "alloc");
       document.getElementById("t-request").className = btnCls(t === "request");
       document.getElementById("t-update").className  = btnCls(t === "update");
+      document.getElementById("t-home").className    = btnCls(t === "home");
       document.getElementById("site").classList.toggle("hidden", t !== "update");
-      // allocation + request are for TOMORROW; update is for TODAY
+      document.getElementById("date").classList.toggle("hidden", t === "home");   // home leave is current status
+      // allocation + request are for TOMORROW; update/home are for TODAY
       document.getElementById("date").value =
-        fmtDate(new Date(Date.now() + (t === "update" ? 0 : 24 * 3600 * 1000)));
+        fmtDate(new Date(Date.now() + ((t === "update" || t === "home") ? 0 : 24 * 3600 * 1000)));
       document.getElementById("msg").classList.add("hidden");
       document.getElementById("actionbar").classList.add("hidden");
       document.getElementById("warn").classList.add("hidden");
@@ -128,6 +131,8 @@
           url = `/api/v1/messages/allocation?date=${date}`;
         } else if (TYPE === "request") {
           url = `/api/v1/messages/requests?date=${date}`;
+        } else if (TYPE === "home") {
+          url = `/api/v1/messages/home_leave`;
         } else {
           const sid = document.getElementById("site").value;
           if (!sid) throw new Error("No site available for this date");
@@ -152,6 +157,9 @@
           warn.classList.remove("hidden");
         } else if (TYPE === "request" && data.workers === 0) {
           warn.textContent = "⚠ No manpower requests submitted for this date yet.";
+          warn.classList.remove("hidden");
+        } else if (TYPE === "home" && data.workers === 0) {
+          warn.textContent = "No workers are on Home Leave right now.";
           warn.classList.remove("hidden");
         } else {
           warn.classList.add("hidden");
