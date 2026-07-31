@@ -9,6 +9,7 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
   POST   /api/v1/attendance/submit           submit & lock the site's day
 """
 import os
+import time
 from datetime import date as date_cls
 
 import httpx
@@ -16,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.37.0")  # site update leave names + home-leave msg
+app = FastAPI(title="VMMS API", version="0.38.0")  # perf: in-memory auth cache (fewer round-trips per tap)
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,11 +74,44 @@ COORDINATOR_ROLES = FULL_ROLES + MANAGER_ROLES                     # who can gen
 ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
 
 
+# --- identity cache -------------------------------------------------------
+# Every authenticated request otherwise costs TWO Supabase round-trips just to
+# identify the user (verify the JWT, then read the profile row). During
+# attendance a supervisor taps dozens of end-time chips in a burst — that was
+# ~2 extra network hops per tap on the free tier, which is what made each tap
+# feel like the server was "waking up" again. We cache the resolved identity
+# per token for a short window so a burst of taps reuses it. Trade-off: a role
+# or status change takes up to _USER_CACHE_TTL seconds to take effect.
+_USER_CACHE: dict[str, tuple[float, dict]] = {}
+_USER_CACHE_TTL = 120  # seconds
+
+
+def _cache_get(token: str):
+    hit = _USER_CACHE.get(token)
+    if hit and hit[0] > time.time():
+        u = dict(hit[1]); u["token"] = token
+        return u
+    return None
+
+
+def _cache_put(token: str, user: dict):
+    _USER_CACHE[token] = (time.time() + _USER_CACHE_TTL,
+                          {k: v for k, v in user.items() if k != "token"})
+    if len(_USER_CACHE) > 400:                       # opportunistic cleanup
+        now = time.time()
+        for k in [k for k, (exp, _) in _USER_CACHE.items() if exp <= now]:
+            _USER_CACHE.pop(k, None)
+
+
 async def get_current_user(request: Request) -> dict:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not signed in")
     token = auth.removeprefix("Bearer ").strip()
+
+    cached = _cache_get(token)
+    if cached:
+        return cached
 
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{SUPABASE_URL}/auth/v1/user", headers=supabase_headers(token))
@@ -104,7 +138,7 @@ async def get_current_user(request: Request) -> dict:
         if profile.get("status") != "active":
             raise HTTPException(status_code=403, detail="Account is deactivated")
 
-    return {
+    user = {
         "token": token,
         "auth_uid": auth_uid,
         "email": auth_user.get("email"),
@@ -113,6 +147,8 @@ async def get_current_user(request: Request) -> dict:
         "role": profile["role"],
         "menu": profile.get("menu"),
     }
+    _cache_put(token, user)
+    return user
 
 
 async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
