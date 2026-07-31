@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.38.1")  # perf: auth cache for full session (~55 min)
+app = FastAPI(title="VMMS API", version="0.39.0")  # perf: shared keep-alive HTTP client to Supabase
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,6 +36,35 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
 # management (create login, reset password). Never sent to the frontend.
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 REST = f"{SUPABASE_URL}/rest/v1"
+
+# ---- one shared HTTP client to Supabase ----------------------------------
+# Every call used to open a brand-new httpx client, which meant a fresh TLS
+# handshake to Supabase for each of the ~6 hops in a single attendance save.
+# Reusing one kept-alive client keeps the connection open, cutting ~100-300ms
+# off every database call — a big latency win on the free tier at zero cost.
+# A single AsyncClient is safe for concurrent use across requests.
+_HTTP = httpx.AsyncClient(
+    timeout=20,
+    limits=httpx.Limits(max_keepalive_connections=20, max_connections=40,
+                        keepalive_expiry=120),
+)
+
+
+class _KeepOpen:
+    """Yield the shared client inside `async with` without closing it after."""
+    def __init__(self, c): self._c = c
+    async def __aenter__(self): return self._c
+    async def __aexit__(self, *exc): return False
+
+
+def shared_client(*_a, **_k):
+    """Drop-in for httpx.AsyncClient(...) that returns the shared client."""
+    return _KeepOpen(_HTTP)
+
+
+@app.on_event("shutdown")
+async def _close_http():
+    await _HTTP.aclose()
 
 
 def supabase_headers(user_token: str | None = None) -> dict:
@@ -116,7 +145,7 @@ async def get_current_user(request: Request) -> dict:
     if cached:
         return cached
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{SUPABASE_URL}/auth/v1/user", headers=supabase_headers(token))
         if r.status_code != 200:
             raise HTTPException(status_code=401, detail="Session expired — please log in again")
@@ -182,7 +211,7 @@ async def health():
     db_status = "not_configured"
     if SUPABASE_URL and SUPABASE_ANON_KEY:
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            async with shared_client() as client:
                 r = await client.get(f"{SUPABASE_URL}/auth/v1/health", headers=supabase_headers())
                 detail["status_code"] = r.status_code
                 db_status = "connected" if r.status_code == 200 else "error"
@@ -223,7 +252,7 @@ async def list_workers(search: str = "", status: str = "",
     if search:
         s = search.replace("%", "").replace(",", "").strip()
         params["or"] = f"(name.ilike.*{s}*,worker_code.ilike.*{s}*)"
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/workers", params=params,
                              headers=supabase_headers(user["token"]))
         if r.status_code != 200:
@@ -240,7 +269,7 @@ async def create_worker(body: WorkerCreate, user: dict = Depends(get_current_use
     if not code or not name:
         raise HTTPException(status_code=400, detail="Worker ID and name are required")
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.post(
             f"{REST}/workers",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
@@ -282,7 +311,7 @@ async def bulk_create_workers(body: WorkerBulk, user: dict = Depends(get_current
     if not clean:
         raise HTTPException(status_code=400, detail="Nothing valid to import. " + "; ".join(errors[:3]))
 
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with shared_client() as client:
         r = await client.post(
             f"{REST}/workers",
             params={"on_conflict": "worker_code"},
@@ -318,7 +347,7 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
 
     changes["updated_by"] = user["user_id"]
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         old = await client.get(
             f"{REST}/workers",
             params={"id": f"eq.{worker_id}", "select": "worker_code,name,status"},
@@ -359,7 +388,7 @@ class SupervisorAssign(BaseModel):
 
 @app.get("/api/v1/sites")
 async def list_sites(user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/sites",
             params={"select": "id,site_code,site_name,status,site_supervisors(user_id,users(name))",
@@ -389,7 +418,7 @@ async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
     if not code or not name:
         raise HTTPException(status_code=400, detail="Site code and name are required")
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.post(
             f"{REST}/sites",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
@@ -419,7 +448,7 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         old = await client.get(
             f"{REST}/sites",
             params={"id": f"eq.{site_id}", "select": "site_code,site_name,status"},
@@ -449,7 +478,7 @@ async def list_users(role: str = "", user: dict = Depends(get_current_user)):
     params = {"select": "id,name,role,status,menu,notify_all,notify_requests", "order": "name.asc"}
     if role:
         params["role"] = f"eq.{role}"
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/users", params=params,
                              headers=supabase_headers(user["token"]))
         if r.status_code != 200:   # tolerate the 'menu' column not existing yet
@@ -494,7 +523,7 @@ async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
     if len(body.password or "") < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     require_service()
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with shared_client() as client:
         # 1) create the auth login (email pre-confirmed so they can log in right away)
         a = await client.post(
             f"{SUPABASE_URL}/auth/v1/admin/users",
@@ -562,7 +591,7 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.patch(
             f"{REST}/users", params={"id": f"eq.{user_id}"},
             headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
@@ -581,7 +610,7 @@ async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_c
     if len(body.password or "") < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     require_service()
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/users",
                              params={"id": f"eq.{user_id}", "select": "auth_uid,name"},
                              headers=supabase_headers(user["token"]))
@@ -603,7 +632,7 @@ async def assign_supervisors(site_id: str, body: SupervisorAssign,
                              user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only management can assign supervisors")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         old = await client.get(
             f"{REST}/site_supervisors",
             params={"site_id": f"eq.{site_id}", "select": "user_id"},
@@ -656,7 +685,7 @@ def require_allocator(user: dict):
 
 @app.get("/api/v1/allocations")
 async def list_allocations(date: str, user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{date}", "status": "eq.allocated",
@@ -680,7 +709,7 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
     require_allocator(user)
     requested = set(body.worker_ids)
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         # everything already allocated on this date (all sites)
         r = await client.get(
             f"{REST}/allocations",
@@ -777,7 +806,7 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
 @app.post("/api/v1/allocations/copy")
 async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current_user)):
     require_allocator(user)
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         src = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{body.from_date}", "status": "eq.allocated",
@@ -841,7 +870,7 @@ async def clear_allocation(body: AllocationClear, user: dict = Depends(get_curre
     quick way to strip a light day like Sunday back to blank). Allocations that
     ALREADY have attendance are kept, so marked hours can never be wiped."""
     require_allocator(user)
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{body.work_date}", "status": "eq.allocated",
@@ -878,7 +907,7 @@ class RequestBulk(BaseModel):
 async def list_requests(date: str, user: dict = Depends(get_current_user)):
     """Requests for a date. RLS scopes site_sup to their own site(s);
     admin/main_sup/payroll see all."""
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/manpower_requests",
             params={"request_date": f"eq.{date}",
@@ -903,7 +932,7 @@ async def list_requests(date: str, user: dict = Depends(get_current_user)):
 async def last_request(site_id: str, before: str, user: dict = Depends(get_current_user)):
     """Most recent request for this site strictly BEFORE `before` (YYYY-MM-DD).
     Used by the 'Copy last request' button. RLS scopes site_sup to their site."""
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/manpower_requests",
             params={"site_id": f"eq.{site_id}", "request_date": f"lt.{before}",
@@ -928,7 +957,7 @@ async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=403, detail="You cannot submit manpower requests")
     requested = set(body.worker_ids)
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/manpower_requests",
             params={"request_date": f"eq.{body.request_date}",
@@ -1119,7 +1148,7 @@ async def _load_day(client, token, work_date: str, site_id: str | None):
 @app.get("/api/v1/attendance")
 async def day_sheet(date: str, site_id: str = "",
                     user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], date, site_id or None)
         out = []
         for a in rows:
@@ -1151,7 +1180,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
     if body.start_time and user["role"] in SUPERVISOR_ROLES:
         raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
 
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         # the allocation (RLS scopes site_sup to own sites automatically)
         ra = await client.get(
             f"{REST}/allocations",
@@ -1292,7 +1321,7 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
 async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
@@ -1336,7 +1365,7 @@ async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
     The supervisor then unticks the few who are absent. Default is still unticked."""
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
@@ -1363,7 +1392,7 @@ async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
 async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Only a Supervisor or the Administrator can submit")
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], body.work_date, body.site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
@@ -1427,7 +1456,7 @@ async def transferable_workers(date: str, site_id: str,
     reports to the wrong site in the morning."""
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         ra = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{date}", "status": "eq.allocated",
@@ -1463,7 +1492,7 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
     Allowed for admin, main_sup, and the receiving site's supervisor."""
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
             raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
 
@@ -1599,7 +1628,7 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
 async def allocation_message(date: str, user: dict = Depends(get_current_user)):
     if user["role"] not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Only the Main Supervisor or Administrator can generate this message")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rs = await client.get(f"{REST}/sites",
                               params={"status": "eq.active", "select": "id,site_name", "order": "site_name.asc"},
                               headers=supabase_headers(user["token"]))
@@ -1635,7 +1664,7 @@ async def allocation_message(date: str, user: dict = Depends(get_current_user)):
 @app.get("/api/v1/messages/update")
 async def update_message(date: str, site_id: str,
                          user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], date, site_id)
         if not rows:
             raise HTTPException(status_code=404, detail="No allocation for that site/date (or not your site)")
@@ -1671,7 +1700,7 @@ async def update_all_message(date: str, user: dict = Depends(get_current_user)):
     """One combined end-time message for ALL sites (co-ordinator posts once)."""
     if user["role"] not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Only the Co-ordinator or Administrator can generate the all-sites update")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rows = await _load_day(client, user["token"], date, None)
         by_site: dict[str, list[dict]] = {}
         leave_by_site: dict[str, list[dict]] = {}
@@ -1715,7 +1744,7 @@ async def update_all_message(date: str, user: dict = Depends(get_current_user)):
 @app.get("/api/v1/messages/home_leave")
 async def home_leave_message(user: dict = Depends(get_current_user)):
     """Message listing every worker currently on Home Leave (status on_leave)."""
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rw = await client.get(f"{REST}/workers",
                               params={"status": "eq.on_leave", "select": "name,worker_code",
                                       "order": "name.asc"},
@@ -1755,7 +1784,7 @@ async def request_message(date: str, user: dict = Depends(get_current_user)):
     # a site supervisor gets only their own site's request (RLS scopes the query).
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="You cannot generate this message")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         rr = await client.get(
             f"{REST}/manpower_requests",
             params={"request_date": f"eq.{date}",
@@ -1790,7 +1819,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
     today = date or sgt_today()
     month_start = today[:8] + "01"
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with shared_client() as client:
         rw = await client.get(f"{REST}/workers",
                               params={"select": "id,status"},
                               headers=supabase_headers(user["token"]))
@@ -1920,7 +1949,7 @@ async def report_attendance(dfrom: str, dto: str, site_id: str = "",
     d1, d2 = date_cls.fromisoformat(dfrom), date_cls.fromisoformat(dto)
     if d2 < d1 or (d2 - d1).days > 62:
         raise HTTPException(status_code=400, detail="Date range must be 1–62 days")
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with shared_client() as client:
         rows = await _range_rows(client, user["token"], dfrom, dto, site_id or None)
         out = []
         for a in rows:
@@ -1949,7 +1978,7 @@ async def report_manhours(month: str, user: dict = Depends(get_current_user)):
     dfrom = month + "-01"
     y, m = int(month[:4]), int(month[5:7])
     dto = (date_cls(y + (m == 12), (m % 12) + 1, 1) - timedelta(days=1)).isoformat()
-    async with httpx.AsyncClient(timeout=20) as client:
+    async with shared_client() as client:
         rows = await _range_rows(client, user["token"], dfrom, dto, None)
         sites: dict[str, dict] = {}
         workers: dict[str, dict] = {}
@@ -1996,7 +2025,7 @@ class MonthBody(BaseModel):
 async def lock_month(body: MonthBody, user: dict = Depends(get_current_user)):
     if user["role"] not in ("admin", "payroll"):
         raise HTTPException(status_code=403, detail="Only Payroll or the Administrator can close a month")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.post(
             f"{REST}/month_locks",
             params={"on_conflict": "month"},
@@ -2013,7 +2042,7 @@ async def lock_month(body: MonthBody, user: dict = Depends(get_current_user)):
 async def unlock_month(body: MonthBody, user: dict = Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Only the Administrator can re-open a month")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.delete(
             f"{REST}/month_locks",
             params={"month": f"eq.{body.month}-01"},
@@ -2032,7 +2061,7 @@ class HolidayBody(BaseModel):
 
 @app.get("/api/v1/holidays")
 async def list_holidays(user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/public_holidays",
                              params={"select": "holiday_date,description", "order": "holiday_date.asc"},
                              headers=supabase_headers(user["token"]))
@@ -2043,7 +2072,7 @@ async def list_holidays(user: dict = Depends(get_current_user)):
 async def add_holiday(body: HolidayBody, user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only management can edit holidays")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.post(f"{REST}/public_holidays",
                               headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
                               json={"holiday_date": body.holiday_date, "description": body.description.strip()})
@@ -2060,7 +2089,7 @@ async def add_holiday(body: HolidayBody, user: dict = Depends(get_current_user))
 async def delete_holiday(holiday_date: str, user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only management can edit holidays")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.delete(f"{REST}/public_holidays",
                                 params={"holiday_date": f"eq.{holiday_date}"},
                                 headers=supabase_headers(user["token"]))
@@ -2074,7 +2103,7 @@ async def delete_holiday(holiday_date: str, user: dict = Depends(get_current_use
 async def list_settings(user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES + MANAGER_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/settings",
                              params={"select": "key,value,effective_from", "order": "key.asc"},
                              headers=supabase_headers(user["token"]))
@@ -2090,7 +2119,7 @@ class SiteOff(BaseModel):
 
 @app.get("/api/v1/site_off")
 async def list_site_off(date: str, user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(f"{REST}/site_off_days",
                              params={"off_date": f"eq.{date}", "select": "site_id"},
                              headers=supabase_headers(user["token"]))
@@ -2101,7 +2130,7 @@ async def list_site_off(date: str, user: dict = Depends(get_current_user)):
 async def set_site_off(body: SiteOff, user: dict = Depends(get_current_user)):
     """Mark (or clear) a site as not working on a date. Site supervisor for their
     own site, or the allocator/management for any site (enforced by RLS)."""
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         if body.off:
             r = await client.post(
                 f"{REST}/site_off_days",
@@ -2179,7 +2208,7 @@ async def notify_allocator(client, kind, title, body="", link=None):
 
 @app.get("/api/v1/notifications")
 async def list_notifications(user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         r = await client.get(
             f"{REST}/notifications",
             params={"user_id": f"eq.{user['user_id']}", "order": "created_at.desc",
@@ -2193,7 +2222,7 @@ async def list_notifications(user: dict = Depends(get_current_user)):
 
 @app.post("/api/v1/notifications/read_all")
 async def read_all_notifications(user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         await client.patch(
             f"{REST}/notifications",
             params={"user_id": f"eq.{user['user_id']}", "read_at": "is.null"},
@@ -2204,7 +2233,7 @@ async def read_all_notifications(user: dict = Depends(get_current_user)):
 
 @app.delete("/api/v1/notifications")
 async def clear_notifications(user: dict = Depends(get_current_user)):
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with shared_client() as client:
         await client.delete(
             f"{REST}/notifications",
             params={"user_id": f"eq.{user['user_id']}"},
