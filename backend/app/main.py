@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.38.0")  # perf: in-memory auth cache (fewer round-trips per tap)
+app = FastAPI(title="VMMS API", version="0.38.1")  # perf: auth cache for full session (~55 min)
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,8 +82,11 @@ ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
 # feel like the server was "waking up" again. We cache the resolved identity
 # per token for a short window so a burst of taps reuses it. Trade-off: a role
 # or status change takes up to _USER_CACHE_TTL seconds to take effect.
+# The cache is keyed by the login token, which Supabase rotates roughly hourly
+# (the app auto-refreshes it), so caching for a token's full life effectively
+# means "for the whole session" — a new token after refresh is a fresh lookup.
 _USER_CACHE: dict[str, tuple[float, dict]] = {}
-_USER_CACHE_TTL = 120  # seconds
+_USER_CACHE_TTL = 3300  # seconds (~55 min ≈ one login token's lifetime)
 
 
 def _cache_get(token: str):
