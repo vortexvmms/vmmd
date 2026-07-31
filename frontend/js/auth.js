@@ -19,6 +19,7 @@ function getSession() {
 
 function clearSession() {
   localStorage.removeItem(VMMS_SESSION_KEY);
+  try { localStorage.removeItem("vmms_ref_cache"); } catch {}
 }
 
 // ---- login with email + password (Supabase Auth) ----
@@ -40,6 +41,7 @@ async function vmmsLogin(email, password) {
     if (msg.includes("invalid")) throw new Error("Wrong email or password.");
     throw new Error(data.error_description || data.msg || "Login failed — try again.");
   }
+  try { localStorage.removeItem("vmms_ref_cache"); } catch {}   // fresh login → drop any old reference cache
   saveSession(data);
   return data;
 }
@@ -83,9 +85,58 @@ function _wakeShow() {
 }
 function _wakeHide() { if (_wakeEl) _wakeEl.style.display = "none"; }
 
+// ---- reference-data cache (workers / sites / holidays) -------------------
+// These lists barely change during a day, but every page was re-fetching them
+// on load. We cache the GET responses on the phone for a short window so most
+// pages open without hitting the network for them. Any add/edit/delete to the
+// same resource clears its cache immediately, and login/logout wipe it, so the
+// data is never stale in a way the user would notice.
+const VMMS_REF_KEY = "vmms_ref_cache";
+const VMMS_REF_TTL = [                       // [path prefix, milliseconds]
+  ["/api/v1/holidays", 12 * 3600 * 1000],    // ~yearly changes
+  ["/api/v1/sites",    30 * 60 * 1000],      // rarely change
+  ["/api/v1/workers",   5 * 60 * 1000],      // occasional adds/leave
+];
+function _refTtl(path) {
+  const m = VMMS_REF_TTL.find(([p]) => path === p || path.startsWith(p + "?"));
+  return m ? m[1] : 0;
+}
+function _refPrefix(path) {                   // for busting on mutations
+  const m = VMMS_REF_TTL.find(([p]) => path === p || path.startsWith(p));
+  return m ? m[0] : null;
+}
+function _refRead() {
+  try { return JSON.parse(localStorage.getItem(VMMS_REF_KEY)) || {}; }
+  catch { return {}; }
+}
+function _refWrite(o) { try { localStorage.setItem(VMMS_REF_KEY, JSON.stringify(o)); } catch {} }
+function vmmsClearRefCache(prefix) {
+  if (!prefix) { localStorage.removeItem(VMMS_REF_KEY); return; }
+  const o = _refRead(); let changed = false;
+  for (const k of Object.keys(o)) if (k.startsWith(prefix)) { delete o[k]; changed = true; }
+  if (changed) _refWrite(o);
+}
+
 // ---- call the VMMS backend with the session token ----
 // Retries once after a refresh if the token has expired.
 async function vmmsApi(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+
+  // Serve reference GETs from the phone cache when still fresh.
+  if (method === "GET") {
+    const ttl = _refTtl(path);
+    if (ttl) {
+      const hit = _refRead()[path];
+      if (hit && (Date.now() - hit.t) < ttl) {
+        return new Response(hit.b, { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+    }
+  } else {
+    // A write to workers/sites/holidays invalidates that resource's cache.
+    const pfx = _refPrefix(path);
+    if (pfx) vmmsClearRefCache(pfx);
+  }
+
   const doFetch = async () => {
     const s = getSession();
     if (!s) throw new Error("NOT_SIGNED_IN");
@@ -120,6 +171,14 @@ async function vmmsApi(path, options = {}) {
       const ok = await vmmsRefresh();
       if (!ok) throw new Error("NOT_SIGNED_IN");
       r = await doFetch();
+    }
+    // Store fresh reference GETs for next time (read a clone so we don't
+    // consume the body the caller still needs).
+    if (method === "GET" && _refTtl(path) && r.ok) {
+      try {
+        const b = await r.clone().text();
+        const o = _refRead(); o[path] = { t: Date.now(), b }; _refWrite(o);
+      } catch {}
     }
     return r;
   } finally {
