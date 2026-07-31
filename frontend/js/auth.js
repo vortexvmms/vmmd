@@ -99,7 +99,10 @@ async function vmmsApi(path, options = {}) {
     });
   };
   _wakePending++;
-  if (!_wakeTimer) _wakeTimer = setTimeout(_wakeShow, 2500);
+  // Only show the "waking up" banner on a genuine cold start (~40s), not on a
+  // normal slow-ish save — otherwise it flashes on every attendance tap and
+  // looks like the server is sleeping when it is just busy.
+  if (!_wakeTimer) _wakeTimer = setTimeout(_wakeShow, 7000);
   try {
     // A dropped connection / cold-start makes fetch reject with "Failed to fetch".
     // Retry up to twice with a growing pause before surfacing the error.
