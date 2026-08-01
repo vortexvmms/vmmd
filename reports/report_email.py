@@ -35,7 +35,7 @@ from fpdf.enums import XPos, YPos
 # ---- public (non-secret) config, mirrors frontend/js/config.js ----
 SUPABASE_URL = "https://lqnbdemtgkermhaqfboh.supabase.co"
 SUPABASE_PUBLISHABLE = "sb_publishable_GV2oQS2wP2ltMeg2Teh1Rw_qT3lLGno"
-BACKEND_URL = "https://vmms-backend-7j1v.onrender.com"
+BACKEND_URL = "https://vmms-backend-sg.onrender.com"
 SGT = dt.timezone(dt.timedelta(hours=8))
 
 # brand colours
