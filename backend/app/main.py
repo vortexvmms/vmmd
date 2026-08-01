@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.40.0")  # attendance: group end-time apply (selected workers)
+app = FastAPI(title="VMMS API", version="0.41.0")  # dashboard: monthly MC/AL/UL leave leaderboard
 
 app.add_middleware(
     CORSMiddleware,
@@ -1852,7 +1852,8 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             f"{REST}/allocations",
             params={"and": f"(work_date.gte.{month_start},work_date.lte.{today})",
                     "status": "eq.allocated",
-                    "select": "work_date,site_id,sites(site_name),"
+                    "select": "work_date,site_id,worker_id,sites(site_name),"
+                              "workers(name,worker_code),"
                               "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)"},
             headers=supabase_headers(user["token"]))
         month_rows = rm.json() if rm.status_code == 200 else []
@@ -1861,6 +1862,8 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         today_mc = today_al = today_ul = 0
         today_by_site: dict[str, dict] = {}
         site_month: dict[str, dict] = {}
+        # per-worker leave tally for the month → "who takes the most MC/AL/UL"
+        leave_by_worker: dict[str, dict] = {}
 
         for a in month_rows:
             sname = (a.get("sites") or {}).get("site_name", "?")
@@ -1869,6 +1872,16 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             ot = float(att["ot_hours"]) if att and att["present"] else 0.0
             month_nh += nh
             month_ot += ot
+
+            # count each MC / AL / UL day per worker across the month
+            if att and not att.get("present"):
+                at = att.get("absence_type")
+                if at in ("mc", "al", "ul"):
+                    w = a.get("workers") or {}
+                    code = w.get("worker_code") or a.get("worker_id") or "?"
+                    lw = leave_by_worker.setdefault(
+                        code, {"name": w.get("name", "?"), "code": code, "mc": 0, "al": 0, "ul": 0})
+                    lw[at] += 1
 
             sm = site_month.setdefault(sname, {"nh": 0.0, "ot": 0.0})
             sm["nh"] += nh
@@ -1905,6 +1918,11 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                     "month_ot": round(site_month.get(s["site_name"], {}).get("ot", 0), 1)}
                    for s in sites]
 
+        # leave leaderboard — most total leave days this month (MC + AL + UL)
+        leave_leaders = sorted(
+            ({**v, "total": v["mc"] + v["al"] + v["ul"]} for v in leave_by_worker.values()),
+            key=lambda x: (-x["total"], x["name"]))[:15]
+
         return {
             "date": today,
             "scoped": scoped,
@@ -1925,6 +1943,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             "month_normal_hours": round(month_nh, 1),
             "month_ot_hours": round(month_ot, 1),
             "site_summary": summary,
+            "leave_leaders": leave_leaders,
         }
 
 
