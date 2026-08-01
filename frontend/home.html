@@ -11,10 +11,49 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <style>
+    /* ---- Liquid-Glass home (iOS-style frosted cards on a Vortex-red gradient) ---- */
+    body.glass-home {
+      background: linear-gradient(165deg, #7E0000 0%, #A80000 28%, #C51E1E 52%, #E88585 78%, #F6E6E6 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+    }
+    .glass {
+      background: rgba(255,255,255,0.60);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      backdrop-filter: blur(18px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.55);
+      box-shadow: 0 10px 34px rgba(70,0,0,0.20);
+      border-radius: 20px;
+    }
+    .glass-header {
+      background: rgba(110,0,0,0.42);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      backdrop-filter: blur(20px) saturate(140%);
+      border-bottom: 1px solid rgba(255,255,255,0.18);
+    }
+    .glass-tile {
+      background: rgba(255,255,255,0.56);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      backdrop-filter: blur(14px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.5);
+      box-shadow: 0 6px 20px rgba(70,0,0,0.15);
+      border-radius: 18px;
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .glass-tile:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(70,0,0,0.24); background: rgba(255,255,255,0.72); }
+    .glass-tile:active { transform: translateY(0); }
+    .glass-tile.locked { opacity: .5; }
+    /* frosted look needs a fallback for browsers without backdrop-filter */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .glass, .glass-tile { background: rgba(255,255,255,0.92); }
+      .glass-header { background: #8A0000; }
+    }
+  </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="glass-home min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between md:px-8">
+  <header class="glass-header text-white p-4 flex items-center justify-between md:px-8 sticky top-0 z-10">
     <div class="flex items-center gap-3">
       <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
            class="h-9 bg-white rounded-lg p-1" onerror="this.style.display='none'">
@@ -29,16 +68,16 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md md:max-w-4xl mx-auto w-full">
-    <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
+    <div id="loading" class="text-center text-white mt-10">Checking your account…</div>
 
     <div id="content" class="hidden">
-      <div class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-5 mt-4">
-        <p class="text-xl font-bold text-gray-800" id="greet">—</p>
-        <p class="text-sm text-gray-500" id="name">—</p>
-        <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-100 text-red-700">—</span>
+      <div class="glass p-5 mt-4">
+        <p class="text-xl font-bold text-gray-900" id="greet">—</p>
+        <p class="text-sm text-gray-600" id="name">—</p>
+        <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-700 text-white">—</span>
       </div>
 
-      <div id="switcher" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mt-3 flex items-center gap-2">
+      <div id="switcher" class="hidden glass p-3 mt-3 flex items-center gap-2">
         <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
         <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
           <option value="admin">Administrator</option>
@@ -58,7 +97,7 @@
       <div class="mt-6 space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3" id="menu"></div>
     </div>
 
-    <div id="noprofile" class="hidden bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-6 mt-10 text-center">
+    <div id="noprofile" class="hidden glass p-6 mt-10 text-center">
       <div class="text-4xl mb-3">⚠️</div>
       <p class="font-bold text-gray-800 mb-2">Login works, but no VMMS role is linked yet.</p>
       <p class="text-sm text-gray-500">Ask the administrator to link your account (Phase 3 guide, Step 3).</p>
@@ -66,7 +105,7 @@
     </div>
   </main>
 
-  <footer class="p-4 flex items-center justify-center text-xs text-black">
+  <footer class="p-4 flex items-center justify-center text-xs text-gray-700">
     <span>Vortex Engineering Pte Ltd</span>
   </footer>
 
@@ -111,10 +150,10 @@
         const unlocked = phase <= DONE_PHASE;
         const el = document.createElement(unlocked ? "a" : "div");
         if (unlocked) el.href = page;
-        el.className = "bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4 flex items-center justify-between " + (unlocked ? "active:bg-gray-50" : "opacity-50");
-        el.innerHTML = `<span class="font-medium text-gray-800">${label}</span>` +
-          (unlocked ? `<span class="text-red-700 font-bold">›</span>`
-                    : `<span class="text-xs text-gray-400">Phase ${phase}</span>`);
+        el.className = "glass-tile p-4 flex items-center justify-between " + (unlocked ? "" : "locked");
+        el.innerHTML = `<span class="font-medium text-gray-900">${label}</span>` +
+          (unlocked ? `<span class="text-red-700 font-bold text-lg">›</span>`
+                    : `<span class="text-xs text-gray-500">Phase ${phase}</span>`);
         menu.appendChild(el);
       });
     }
