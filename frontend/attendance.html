@@ -39,13 +39,20 @@
     </div>
 
     <div id="bulkbar" class="bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-3 mb-3">
-      <p class="text-sm text-gray-600 mb-2">Evening — set end time for present workers:</p>
+      <p class="text-sm font-bold text-gray-700 mb-1">Set end time for ALL present workers:</p>
       <div class="flex items-center gap-2 flex-wrap">
         <button onclick="bulkApply('17:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">5 PM</button>
         <button onclick="bulkApply('19:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">7 PM</button>
         <button onclick="bulkApply('22:00')" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm">10 PM</button>
         <input id="bulk-time" type="time" step="900" class="border border-gray-300 rounded-lg p-2 text-sm flex-1 min-w-[100px]">
         <button onclick="bulkSet()" class="border-2 border-gray-800 text-gray-800 font-bold px-3 py-2 rounded-lg text-sm">Apply</button>
+      </div>
+      <div class="mt-3 pt-2 border-t border-gray-200">
+        <p class="text-xs text-gray-500 mb-1">Different times per group? Tick the workers on their cards below, then pick the time in the red bar. Tip for big sites: set the most common time above first, then just fix the groups that differ.</p>
+        <div class="flex gap-3">
+          <button onclick="selectAllPresent()" class="text-xs font-bold text-red-700 underline">Select all present</button>
+          <button onclick="selectNoEnd()" class="text-xs font-bold text-red-700 underline">Select those with no end time</button>
+        </div>
       </div>
     </div>
 
@@ -81,12 +88,27 @@
     </div>
   </div>
 
+  <!-- Group end-time bar: appears when workers are selected below. Set ONE end
+       time for the whole selected group in a single save. -->
+  <div id="groupbar" class="hidden fixed left-0 right-0 bottom-24 px-3 z-20">
+    <div class="max-w-md mx-auto bg-red-700 text-white rounded-xl shadow-lg p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-bold"><span id="groupcount">0</span> selected — set their end time:</span>
+        <button onclick="clearSel()" class="text-xs underline">Clear</button>
+      </div>
+      <div id="groupchips" class="flex flex-wrap gap-1.5"></div>
+      <input id="group-time" type="time" step="900"
+             class="hidden mt-2 w-full rounded-lg p-2 text-gray-800 text-base">
+    </div>
+  </div>
+
   <div id="toast" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
 
   <script>
     requireLogin();
 
     let ME = null, ROWS = [], SITES = [];
+    const SEL = new Set();   // allocation_ids selected for a group end-time apply
 
     // [value, label, endsNextDay]  — 12AM is midnight of the NEXT day
     const PRESETS = [["12:00", "12PM", false], ["16:00", "4PM", false], ["17:00", "5PM", false], ["18:00", "6PM", false],
@@ -127,6 +149,7 @@
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
+      initGroupChips();
       try { const h = await vmmsApi("/api/v1/holidays"); if (h.ok) (await h.json()).forEach(x => HOLIDAYS.add(x.holiday_date)); } catch (e) {}
       document.getElementById("date").value = fmtDate(new Date());
       await loadDay();
@@ -200,13 +223,16 @@
         div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 " +
           (absent ? "border-gray-300 opacity-60" : (!x.marked ? "border-yellow-300" : "border-gray-300"));
         div.innerHTML = `
-          <div class="flex items-center justify-between mb-2">
-            <div>
+          <div class="flex items-center gap-2 mb-2">
+            ${x.present && x.absence_type !== "class"
+              ? `<input type="checkbox" title="Select for group end-time" class="w-5 h-5 accent-red-600 sel-cb shrink-0" ${SEL.has(x.allocation_id) ? "checked" : ""}>`
+              : `<span class="inline-block w-5 shrink-0"></span>`}
+            <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-800">${esc(x.worker_name)}
                 ${!x.marked ? '<span class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 rounded px-1.5 py-0.5 align-middle">NOT MARKED</span>' : ''}</p>
               <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${x.start_time}</p>
             </div>
-            <label class="flex items-center gap-1 text-sm">
+            <label class="flex items-center gap-1 text-sm shrink-0">
               <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""}>
               Present
             </label>
@@ -237,6 +263,8 @@
           </div>`;
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
+        const selcb = div.querySelector(".sel-cb");
+        if (selcb) selcb.addEventListener("change", () => toggleSel(x.allocation_id, selcb.checked));
         cb.addEventListener("change", () => mark(x, { present: cb.checked }, div));
         div.querySelectorAll(".rsn").forEach(b =>
           b.addEventListener("click", () => mark(x, { present: false, absence_type: b.dataset.r }, div)));
@@ -250,6 +278,7 @@
         if (ein) ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value, end_next_day: nextDayFor(x, ein.value) }, div); });
         list.appendChild(div);
       });
+      updateGroupBar();
     }
 
     // Optimistic save: update the row on screen immediately, then save in the
@@ -324,6 +353,66 @@
         toast(`End time ${t} set for ${data.updated} present workers — adjust exceptions individually`);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
+    }
+
+    // ---- group end-time: tick a set of workers, set ONE time for all of them ----
+    // Quick times for the group bar. [value, label, endsNextDay]
+    const GROUP_CHIPS = [["17:00", "5PM", false], ["19:00", "7PM", false], ["22:00", "10PM", false],
+                         ["22:30", "10:30", false], ["23:00", "11PM", false], ["00:00", "12AM", true],
+                         ["03:30", "3:30", true], ["04:00", "4AM", true]];
+
+    function toggleSel(id, on) { if (on) SEL.add(id); else SEL.delete(id); updateGroupBar(); }
+    function clearSel() { SEL.clear(); render(); }
+    function selectAllPresent() {
+      ROWS.forEach(x => { if (x.present && x.absence_type !== "class") SEL.add(x.allocation_id); });
+      render();
+    }
+    function selectNoEnd() {
+      ROWS.forEach(x => { if (x.present && x.absence_type !== "class" && !x.end_time) SEL.add(x.allocation_id); });
+      render();
+    }
+    function updateGroupBar() {
+      const n = ROWS.filter(x => SEL.has(x.allocation_id) && x.present).length;
+      document.getElementById("groupcount").textContent = n;
+      document.getElementById("groupbar").classList.toggle("hidden", n === 0);
+    }
+    function initGroupChips() {
+      const box = document.getElementById("groupchips");
+      box.innerHTML = GROUP_CHIPS.map(([t, l], i) =>
+        `<button data-i="${i}" class="gchip bg-white text-red-700 text-xs font-bold px-3 py-1.5 rounded-full">${l}</button>`).join("")
+        + `<button id="gcustom" class="bg-red-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">⋯ other</button>`;
+      box.querySelectorAll(".gchip").forEach(b => {
+        const [t, l, nd] = GROUP_CHIPS[+b.dataset.i];
+        b.addEventListener("click", () => applyGroup(t, l, nd));
+      });
+      document.getElementById("gcustom").addEventListener("click", () => {
+        const inp = document.getElementById("group-time");
+        inp.classList.toggle("hidden");
+        if (!inp.classList.contains("hidden")) inp.focus();
+      });
+      document.getElementById("group-time").addEventListener("change", (e) => {
+        const t = e.target.value; if (!t) return;
+        applyGroup(t, t, toMin(t) < toMin("08:00"));   // 00:00–07:59 = finished next morning
+        e.target.value = ""; e.target.classList.add("hidden");
+      });
+    }
+    async function applyGroup(t, label, nd) {
+      const ids = ROWS.filter(x => SEL.has(x.allocation_id) && x.present).map(x => x.allocation_id);
+      if (!ids.length) { toast("Tick some workers first"); return; }
+      const date = document.getElementById("date").value, site = document.getElementById("site").value;
+      ROWS.forEach(x => { if (ids.includes(x.allocation_id)) { x.end_time = t; x.end_next_day = nd; x._saving = true; } });
+      render();                                        // instant feedback for the whole group
+      try {
+        const r = await vmmsApi("/api/v1/attendance/bulk_end", {
+          method: "POST",
+          body: JSON.stringify({ work_date: date, site_id: site, end_time: t, end_next_day: nd, allocation_ids: ids }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.detail || "Could not set the group");
+        SEL.clear();
+        await loadDay();                               // authoritative hours from the server
+        toast(`${label} set for ${d.updated} worker(s)`, false, true);
+      } catch (ex) { toast(ex.message, true); await loadDay(); }
     }
 
     async function submitDay(stage) {
