@@ -182,6 +182,20 @@ if (window.tailwind) {
                   "body.vmms-pdf *,.pdfing,.pdfing *{animation:none!important;opacity:1!important;transform:none!important}";
   (document.head || document.documentElement).appendChild(s);
 })();
+// Load one or more <script>s in order, then call cb. Skips any already added.
+function vmmsLoadScripts(urls, cb) {
+  var i = 0;
+  (function next() {
+    if (i >= urls.length) { cb(); return; }
+    var url = urls[i++];
+    if (document.querySelector('script[data-vmms="' + url + '"]')) { next(); return; }
+    var s = document.createElement("script");
+    s.src = url; s.dataset.vmms = url;
+    s.onload = next;
+    s.onerror = function () { cb(); };   // proceed anyway; caller checks the globals
+    document.head.appendChild(s);
+  })();
+}
 window.vmmsDownloadPdf = function (elementId, filename, opts) {
   opts = opts || {};
   // elementId may be an id, or "body"/null for a full-page capture
@@ -204,8 +218,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
     var orient = opts.landscape ? "landscape" : "portrait";
 
     // "Fit to one page": capture once, then scale the whole image onto a single A4 page.
-    if (opts.onePage && window.html2canvas && window.jspdf) {
-      // let the browser paint the print-only header before capture
+    function captureOnePage() {
       setTimeout(function () {
         window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff",
           windowWidth: Math.max(el.scrollWidth, document.documentElement.clientWidth) })
@@ -221,6 +234,18 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
           done();
         }).catch(fail);
       }, 60);
+    }
+    // Guarantee ONE page: html2pdf's bundle doesn't always expose the standalone
+    // libs, which made this silently fall through to the multi-page path. Load
+    // them explicitly, then capture and scale onto a single A4 sheet.
+    if (opts.onePage) {
+      vmmsLoadScripts([
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+      ], function () {
+        if (window.html2canvas && window.jspdf) captureOnePage();
+        else fail();
+      });
       return;
     }
 
