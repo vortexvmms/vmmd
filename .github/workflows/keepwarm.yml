@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Ping health endpoint
         run: |
-          URL="https://vmms-backend-7j1v.onrender.com/api/v1/health"
+          URL="https://vmms-backend-sg.onrender.com/api/v1/health"
           for i in 1 2 3; do
             code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "$URL?z=$(date +%s)" || echo "000")
             echo "Attempt $i -> HTTP $code"
