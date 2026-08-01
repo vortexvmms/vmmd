@@ -26,15 +26,21 @@
 
     /* ---- Print: A4 landscape, Arial Narrow, compact (Section 8 standard) ---- */
     @media print {
-      @page { size: A4 landscape; margin: 8mm; }
+      @page { size: A4 landscape; margin: 10mm 8mm; }
       html, body { background: #fff; }
       header, #controls, #actions { display: none !important; }
-      #sheet { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
+      /* overflow-x:auto on #sheet was clipping rows at page breaks — reset it */
+      #sheet { box-shadow: none !important; border: none !important; padding: 0 !important;
+               margin: 0 !important; overflow: visible !important; }
       body, #sheet { font-family: "Arial Narrow", Arial, sans-serif; }
-      #grid { font-size: 7.4pt; width: 100%; }
+      #grid { font-size: 7.4pt; width: 100%; border-collapse: collapse; }
       #grid th, #grid td { padding: 1px 2px; }
+      /* repeat the day-column header on every page; never split a worker row */
       thead { display: table-header-group; }
-      tr, td, th { page-break-inside: avoid; }
+      tfoot { display: table-footer-group; }
+      tr    { break-inside: avoid; page-break-inside: avoid; }
+      td, th { break-inside: avoid; page-break-inside: avoid; }
+      #dochdr, #footnote { break-inside: avoid; page-break-inside: avoid; }
       .no-print { display: none !important; }
       .print-only { display: block !important; }
     }

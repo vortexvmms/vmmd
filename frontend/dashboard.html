@@ -127,6 +127,23 @@
       </table>
     </div>
 
+    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">LEAVE — MOST DAYS THIS MONTH (MC / AL / UL)</h2>
+    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-200 text-gray-600 text-xs">
+          <tr>
+            <th class="text-left p-3">Worker</th>
+            <th class="text-right p-3">MC</th>
+            <th class="text-right p-3">AL</th>
+            <th class="text-right p-3">UL</th>
+            <th class="text-right p-3">Total</th>
+          </tr>
+        </thead>
+        <tbody id="leaders"></tbody>
+      </table>
+      <p id="leaders-empty" class="hidden text-center text-gray-400 p-4 text-sm">No MC / AL / UL recorded this month.</p>
+    </div>
+
     <p class="print-only" style="font-size:9px; color:#8a8a8a; margin-top:12px;">
       VMMS · Internal Use Only · Figures are as recorded at time of printing.
     </p>
@@ -347,6 +364,19 @@
              <td class="p-3 text-right">${tDay}</td>
              <td class="p-3 text-right">${Math.round(tNh * 10) / 10}</td>
              <td class="p-3 text-right">${Math.round(tOt * 10) / 10}</td></tr>`;
+
+      // Leave leaderboard — who took the most MC / AL / UL this month
+      const LL = d.leave_leaders || [];
+      document.getElementById("leaders").innerHTML = LL.map((w, i) =>
+        `<tr class="border-t border-gray-200">
+           <td class="p-3 font-medium text-gray-800">${i + 1}. ${esc(w.name)}
+             <span class="text-xs text-gray-400">${esc(w.code)}</span></td>
+           <td class="p-3 text-right ${w.mc ? "text-yellow-700 font-bold" : "text-gray-400"}">${w.mc}</td>
+           <td class="p-3 text-right ${w.al ? "text-sky-700 font-bold" : "text-gray-400"}">${w.al}</td>
+           <td class="p-3 text-right ${w.ul ? "text-orange-700 font-bold" : "text-gray-400"}">${w.ul}</td>
+           <td class="p-3 text-right font-bold text-gray-900">${w.total}</td>
+         </tr>`).join("");
+      document.getElementById("leaders-empty").classList.toggle("hidden", LL.length > 0);
     }
 
     document.getElementById("date").addEventListener("change", () => { WCACHE = SCACHE = null; load(); });
