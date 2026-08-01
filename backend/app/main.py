@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.39.0")  # perf: shared keep-alive HTTP client to Supabase
+app = FastAPI(title="VMMS API", version="0.40.0")  # attendance: group end-time apply (selected workers)
 
 app.add_middleware(
     CORSMiddleware,
@@ -1123,6 +1123,8 @@ class BulkEnd(BaseModel):
     work_date: str
     site_id: str
     end_time: str
+    allocation_ids: list[str] | None = None   # if set, only these present workers get the time
+    end_next_day: bool | None = False         # overnight finish (e.g. group finishing 03:30)
 
 
 class SubmitDay(BaseModel):
@@ -1328,6 +1330,10 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         if user["role"] != "admin" and await month_locked(client, user["token"], body.work_date):
             raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
         day_type = await get_day_type(client, user["token"], body.work_date)
+        # When allocation_ids is given, only those workers get the time (group
+        # apply); otherwise every present worker at the site does (whole-site).
+        sel = set(body.allocation_ids) if body.allocation_ids else None
+        end_nd = bool(body.end_next_day)
         updated = 0
         for a in rows:
             att = a.get("attendance")
@@ -1335,14 +1341,16 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
             # (no default tick — unmarked and absent workers are skipped)
             if not att:
                 continue
+            if sel is not None and a["id"] not in sel:
+                continue
             if att["submitted_at"]:
                 continue
             if not att["present"]:
                 continue
             start = att["start_time"][:5] if att and att["start_time"] else "08:00"
-            normal, ot = compute_hours(day_type, start, body.end_time, False)
+            normal, ot = compute_hours(day_type, start, body.end_time, end_nd)
             payload = {"present": True, "start_time": start, "end_time": body.end_time,
-                       "end_next_day": False, "normal_hours": normal, "ot_hours": ot,
+                       "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                        "day_type": day_type}
             if att:
                 await client.patch(f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
