@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VMMS — DPR History</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    body.dl { background:#F3F4F6; }
+    .dpanel { background:#fff; border:1px solid #E5E7EB; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    table.dt { width:100%; font-size:14px; border-collapse:collapse; }
+    table.dt thead th { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#6B7280; background:#F9FAFB; padding:10px 12px; text-align:left; font-weight:700; }
+    table.dt tbody td { padding:10px 12px; border-top:1px solid #F1F1F1; }
+    table.dt tbody tr:hover { background:#FAFAFA; }
+    .openbtn { font-size:12px; font-weight:700; color:#fff; background:#C00000; border-radius:8px; padding:6px 12px; text-decoration:none; white-space:nowrap; }
+  </style>
+</head>
+<body class="dl min-h-screen flex flex-col">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-4xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold">Daily Progress Report — History</h1><p class="text-red-100 text-xs" id="count">Loading…</p></div>
+      <a href="dpr.html" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">+ New</a>
+    </div>
+    <div class="flex gap-2 mt-3 max-w-4xl mx-auto w-full">
+      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"><option value="">All sites</option></select>
+      <input id="month" type="month" class="rounded-lg p-2 text-gray-800 text-base">
+      <button onclick="load()" class="bg-red-900 text-white text-sm font-bold px-3 rounded-lg">Filter</button>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-4xl mx-auto w-full pb-10">
+    <div class="dpanel" style="overflow:hidden">
+      <table class="dt">
+        <thead><tr><th>Date</th><th>Site</th><th>Project</th><th>Prepared by</th><th class="hidden sm:table-cell">Men</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" class="hidden text-center text-gray-400 p-6 text-sm">No reports found for this filter.</p>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+    function fmtDMY(iso){ if(!iso) return ""; const p=iso.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
+
+    async function boot(){
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
+      const rs=await vmmsApi("/api/v1/sites");
+      const sites=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
+      document.getElementById("site").innerHTML='<option value="">All sites</option>'+sites.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
+      await load();
+    }
+    async function load(){
+      const site=document.getElementById("site").value, month=document.getElementById("month").value;
+      const q=[]; if(site) q.push("site_id="+site); if(month) q.push("month="+month);
+      const r=await vmmsApi("/api/v1/dpr/list"+(q.length?"?"+q.join("&"):""));
+      const list=r.ok?await r.json():[];
+      document.getElementById("count").textContent=`${list.length} report(s)`;
+      document.getElementById("empty").classList.toggle("hidden", list.length>0);
+      document.getElementById("rows").innerHTML=list.map(x=>`
+        <tr>
+          <td style="font-weight:600;color:#111827">${fmtDMY(x.report_date)}</td>
+          <td>${esc(x.site_name)}</td>
+          <td style="color:#6B7280">${esc(x.project_title||"—")}</td>
+          <td style="color:#6B7280">${esc(x.prepared_by_name||"—")}</td>
+          <td class="hidden sm:table-cell">${x.manpower}${x.photos?` · ${x.photos}📷`:""}</td>
+          <td style="text-align:right"><a class="openbtn" href="dpr.html?site=${x.site_id}&date=${x.report_date}">Open / PDF</a></td>
+        </tr>`).join("");
+    }
+    boot();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

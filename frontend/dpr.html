@@ -59,6 +59,7 @@
     <div class="flex items-center gap-3 max-w-3xl mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
       <div class="flex-1"><h1 class="text-lg font-bold">Daily Progress Report</h1><p class="text-red-100 text-xs">Daily Work Record</p></div>
+      <a href="dprlist.html" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg mr-10">History</a>
     </div>
     <div class="flex gap-2 mt-3 max-w-3xl mx-auto w-full">
       <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"></select>
@@ -179,6 +180,10 @@
       SITES=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
       document.getElementById("site").innerHTML=SITES.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       document.getElementById("date").value=todayIso();
+      // open a specific report from the history page (?site=&date=)
+      const q=new URLSearchParams(location.search);
+      if(q.get("site") && SITES.some(s=>s.id===q.get("site"))) document.getElementById("site").value=q.get("site");
+      if(q.get("date")) document.getElementById("date").value=q.get("date");
       // worker-name autocomplete
       try{ const rw=await vmmsApi("/api/v1/workers"); const ws=rw.ok?await rw.json():[];
         document.getElementById("wnames").innerHTML=ws.filter(w=>w.status==="active").map(w=>`<option value="${esc(w.name)}">`).join(""); }catch(e){}
