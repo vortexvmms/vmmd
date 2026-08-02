@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.42.0")  # Daily Progress Report (Daily Work Record) module
+app = FastAPI(title="VMMS API", version="0.43.0")  # DPR: name-based manpower + project directory
 
 app.add_middleware(
     CORSMiddleware,
@@ -2325,31 +2325,22 @@ async def dpr_prefill(date: str, site_id: str, user: dict = Depends(get_current_
             headers=supabase_headers(user["token"]))
         arows = ra.json() if ra.status_code == 200 else []
 
-        groups: dict[str, dict] = {}
+        # One row per present worker — the supervisor fills the trade/role
+        # (from the worker's saved trade if any) and can add extra names (PM/CM).
+        manpower = []
         for a in arows:
             att = a.get("attendance")
             if not att or not att.get("present"):
                 continue
             w = a.get("workers") or {}
-            trade = (w.get("trade") or "").strip() or "General worker"
-            g = groups.setdefault(trade, {"role": trade, "no": 0, "from": 8, "to": None,
-                                          "total": 0.0, "remarks": "", "_from_set": False})
-            g["no"] += 1
-            g["total"] += float(att.get("normal_hours") or 0) + float(att.get("ot_hours") or 0)
             st = (att.get("start_time") or "08:00")[:5]
             sh = int(st.split(":")[0])
-            g["from"] = sh if not g["_from_set"] else min(g["from"], sh)
-            g["_from_set"] = True
             en = (att.get("end_time") or "")[:5]
-            if en:
-                eh = int(en.split(":")[0]) + (24 if att.get("end_next_day") else 0)
-                g["to"] = eh if g["to"] is None else max(g["to"], eh)
-        manpower = []
-        for g in groups.values():
-            g.pop("_from_set", None)
-            g["total"] = round(g["total"], 1)
-            manpower.append(g)
-        manpower.sort(key=lambda x: x["role"].lower())
+            to = (int(en.split(":")[0]) + (24 if att.get("end_next_day") else 0)) if en else None
+            total = round(float(att.get("normal_hours") or 0) + float(att.get("ot_hours") or 0), 1)
+            manpower.append({"name": w.get("name", ""), "role": (w.get("trade") or ""),
+                             "no": 1, "from": sh, "to": to, "total": total, "remarks": ""})
+        manpower.sort(key=lambda x: (x["name"] or "").lower())
 
         # header carry-over from the latest report at this site
         rh = await client.get(
@@ -2397,5 +2388,39 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500,
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
+        rows = r.json()
+        return rows[0] if rows else {"ok": True}
+
+
+class ProjectIn(BaseModel):
+    title: str
+    to_party: str | None = None
+    attention: str | None = None
+    location: str | None = None
+
+
+@app.get("/api/v1/dpr/projects")
+async def list_projects(user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/dpr_projects",
+                             params={"select": "*", "order": "title.asc"},
+                             headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
+
+
+@app.post("/api/v1/dpr/projects", status_code=201)
+async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:   # office / managers maintain the directory
+        raise HTTPException(status_code=403, detail="Only managers can add projects")
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/dpr_projects",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"title": body.title, "to_party": body.to_party, "attention": body.attention,
+                  "location": body.location, "created_by": user["user_id"]})
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
