@@ -17,21 +17,27 @@
     .fld { width:100%; border:1px solid #D1D5DB; border-radius:8px; padding:9px 10px; font-size:14px; background:#fff; }
     .lbl { font-size:12px; font-weight:600; color:#6B7280; margin-bottom:4px; display:block; }
     .sect { font-size:11px; font-weight:800; letter-spacing:.05em; color:#6B7280; text-transform:uppercase; margin:20px 0 8px; }
+    .grid3 { display:grid; grid-template-columns:1fr; gap:12px; }
+    .grid2 { display:grid; grid-template-columns:1fr; gap:12px; }
+    @media (min-width:640px){ .grid3{grid-template-columns:1fr 1fr 1fr;} .grid2{grid-template-columns:1fr 1fr;} }
     .tblwrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    table.edt { border-collapse:collapse; width:100%; min-width:560px; font-size:13px; }
+    table.edt { border-collapse:collapse; width:100%; min-width:640px; font-size:13px; }
     table.edt th { background:#F9FAFB; color:#6B7280; font-size:11px; text-transform:uppercase; letter-spacing:.03em; padding:8px 6px; text-align:left; border-bottom:1px solid #E5E7EB; }
     table.edt td { padding:5px 6px; border-bottom:1px solid #F1F1F1; }
     table.edt input { width:100%; border:1px solid #E5E7EB; border-radius:6px; padding:6px 7px; font-size:13px; }
     table.edt input.num { text-align:center; }
     .xbtn { color:#C00000; font-weight:700; font-size:16px; background:none; border:none; cursor:pointer; padding:2px 6px; }
     .addbtn { margin-top:8px; font-size:13px; font-weight:700; color:#C00000; background:none; border:1px dashed #E7A3A3; border-radius:8px; padding:8px 12px; width:100%; }
+    .dropzone { border:2px dashed #D1D5DB; border-radius:12px; padding:14px; text-align:center; color:#6B7280; font-size:13px; }
+    .dropzone.drag { border-color:#C00000; background:#FDECEC; color:#C00000; }
+    .pgrid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    @media (min-width:640px){ .pgrid2{grid-template-columns:1fr 1fr 1fr;} }
     .photo { position:relative; border:1px solid #E5E7EB; border-radius:10px; overflow:hidden; background:#fff; }
     .photo img { width:100%; height:110px; object-fit:cover; display:block; }
     .photo input { width:100%; border:none; border-top:1px solid #F1F1F1; padding:7px 8px; font-size:12px; }
     .photo .rm { position:absolute; top:5px; right:5px; background:rgba(192,0,0,.92); color:#fff; border:none; border-radius:50%; width:24px; height:24px; font-weight:700; cursor:pointer; }
-    /* ---- print sheet (mirrors the Excel Daily Work Record) ---- */
-    #sheet { display:none; }
-    #sheet.show { display:block; }
+    /* print sheet — rendered off-screen so html2canvas can capture it reliably */
+    #sheet { position:absolute; left:-10000px; top:0; width:760px; background:#fff; }
     .dpr-sheet { font-family:Arial, sans-serif; color:#111; font-size:11px; width:100%; }
     .dpr-sheet .ttl { text-align:center; font-weight:bold; font-size:15px; border:2px solid #000; padding:5px; }
     .dpr-sheet .proj { text-align:center; font-weight:bold; font-size:12px; padding:3px 0; }
@@ -52,10 +58,7 @@
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
     <div class="flex items-center gap-3 max-w-3xl mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1">
-        <h1 class="text-lg font-bold">Daily Progress Report</h1>
-        <p class="text-red-100 text-xs" id="hint">Daily Work Record</p>
-      </div>
+      <div class="flex-1"><h1 class="text-lg font-bold">Daily Progress Report</h1><p class="text-red-100 text-xs">Daily Work Record</p></div>
     </div>
     <div class="flex gap-2 mt-3 max-w-3xl mx-auto w-full">
       <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"></select>
@@ -66,17 +69,22 @@
   <main class="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
     <div id="banner" class="hidden panel p-3 mb-3 text-sm text-center"></div>
 
-    <!-- header block -->
     <div class="panel p-4">
-      <label class="lbl">Project</label>
-      <input id="f-project" class="fld" placeholder="Project title">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+      <label class="lbl">Project directory</label>
+      <div class="flex gap-2">
+        <select id="proj" class="fld" onchange="onProj()"><option value="">— choose a saved project —</option></select>
+        <button onclick="saveProject()" class="text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 whitespace-nowrap">Save as project</button>
+      </div>
+      <div class="grid3 mt-3">
+        <div><label class="lbl">Project</label><input id="f-project" class="fld" placeholder="Project title"></div>
         <div><label class="lbl">To</label><input id="f-to" class="fld" placeholder="POKB Representative"></div>
         <div><label class="lbl">Attention</label><input id="f-attn" class="fld" placeholder="Mr. ..."></div>
+      </div>
+      <div class="grid2 mt-3">
+        <div><label class="lbl">Location</label><input id="f-loc" class="fld"></div>
         <div><label class="lbl">Item of work</label><input id="f-item" class="fld"></div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-        <div><label class="lbl">Location</label><input id="f-loc" class="fld"></div>
+      <div class="grid2 mt-3">
         <div><label class="lbl">Date job carried out</label><input id="f-jobdate" type="date" class="fld"></div>
       </div>
       <div class="mt-3">
@@ -85,7 +93,6 @@
       </div>
     </div>
 
-    <!-- manpower -->
     <div class="flex items-center justify-between mt-5">
       <h2 class="sect" style="margin:0">Manpower</h2>
       <button onclick="prefill()" class="text-xs font-bold text-white bg-red-700 rounded-lg px-3 py-2">⟳ Auto-fill from attendance</button>
@@ -93,15 +100,14 @@
     <div class="panel p-3">
       <div class="tblwrap">
         <table class="edt">
-          <thead><tr><th style="min-width:150px">Role</th><th>No.</th><th>From</th><th>To</th><th>Total h</th><th style="min-width:110px">Remarks</th><th></th></tr></thead>
+          <thead><tr><th style="min-width:150px">Name</th><th style="min-width:120px">Role / Trade</th><th>No.</th><th>From</th><th>To</th><th>Total h</th><th style="min-width:100px">Remarks</th><th></th></tr></thead>
           <tbody id="mp"></tbody>
-          <tfoot><tr><td style="font-weight:700">Total</td><td class="c" id="mp-no" style="text-align:center;font-weight:700">0</td><td></td><td></td><td class="c" id="mp-tot" style="text-align:center;font-weight:700">0</td><td></td><td></td></tr></tfoot>
+          <tfoot><tr><td style="font-weight:700">Total</td><td></td><td class="c" id="mp-no" style="text-align:center;font-weight:700">0</td><td></td><td></td><td class="c" id="mp-tot" style="text-align:center;font-weight:700">0</td><td></td><td></td></tr></tfoot>
         </table>
       </div>
-      <button class="addbtn" onclick="addRow('mp')">+ Add manpower row</button>
+      <button class="addbtn" onclick="addMp()">+ Add person (PM / CM / other)</button>
     </div>
 
-    <!-- plant & equipment -->
     <h2 class="sect">Plant &amp; equipment</h2>
     <div class="panel p-3">
       <div class="tblwrap">
@@ -110,10 +116,9 @@
           <tbody id="eq"></tbody>
         </table>
       </div>
-      <button class="addbtn" onclick="addRow('eq')">+ Add equipment row</button>
+      <button class="addbtn" onclick="addEq()">+ Add equipment row</button>
     </div>
 
-    <!-- materials -->
     <h2 class="sect">Material / tools</h2>
     <div class="panel p-3">
       <div class="tblwrap">
@@ -122,23 +127,24 @@
           <tbody id="mt"></tbody>
         </table>
       </div>
-      <button class="addbtn" onclick="addRow('mt')">+ Add material row</button>
+      <button class="addbtn" onclick="addMt()">+ Add material row</button>
     </div>
 
-    <!-- photos -->
     <h2 class="sect">Activity photos</h2>
     <div class="panel p-3">
-      <div id="photos" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+      <div id="dropzone" class="dropzone mb-3">
+        On a computer: <b>copy a photo (e.g. from WhatsApp) and paste it here</b>, or drag &amp; drop images.
+      </div>
+      <div id="photos" class="pgrid2"></div>
       <label class="addbtn" style="display:block; text-align:center; cursor:pointer; margin-top:10px;">
-        + Add photos
+        + Add photos (from phone / files)
         <input id="pfile" type="file" accept="image/*" multiple class="hidden" onchange="onPhotos(event)">
       </label>
       <p id="upmsg" class="text-xs text-gray-400 mt-1"></p>
     </div>
 
-    <!-- sign off -->
     <h2 class="sect">Sign-off</h2>
-    <div class="panel p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div class="panel p-4 grid2">
       <div><label class="lbl">Prepared by (Vortex)</label><input id="f-prep" class="fld"></div>
       <div><label class="lbl">Conformed by</label><input id="f-conf" class="fld" placeholder="POKB JV Representative"></div>
     </div>
@@ -152,18 +158,19 @@
   </div>
 
   <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
-
+  <datalist id="wnames"></datalist>
   <div id="sheet"></div>
 
   <script>
     requireLogin();
-    let ME=null, SITES=[];
-    let PHOTOS=[];   // [{url,caption}]
+    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[];
 
     function toast(m,long=false,ok=false){const t=document.getElementById("toast");t.textContent=m;t.style.background=ok?"#16a34a":"";t.classList.remove("hidden");setTimeout(()=>t.classList.add("hidden"),long?6000:(ok?1500:2600));}
     function todayIso(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
     function val(id){return document.getElementById(id).value.trim();}
     function setv(id,v){document.getElementById(id).value=v==null?"":v;}
+    function siteVal(){return document.getElementById("site").value;}
+    function dateVal(){return document.getElementById("date").value;}
 
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;} ME=await r.json();
@@ -172,12 +179,44 @@
       SITES=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
       document.getElementById("site").innerHTML=SITES.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       document.getElementById("date").value=todayIso();
+      // worker-name autocomplete
+      try{ const rw=await vmmsApi("/api/v1/workers"); const ws=rw.ok?await rw.json():[];
+        document.getElementById("wnames").innerHTML=ws.filter(w=>w.status==="active").map(w=>`<option value="${esc(w.name)}">`).join(""); }catch(e){}
+      await loadProjects();
       await load();
     }
 
-    // ---- table rows ----
+    async function loadProjects(){
+      try{ const r=await vmmsApi("/api/v1/dpr/projects"); PROJECTS=r.ok?await r.json():[]; }catch(e){ PROJECTS=[]; }
+      document.getElementById("proj").innerHTML='<option value="">— choose a saved project —</option>'+
+        PROJECTS.map((p,i)=>`<option value="${i}">${esc(p.title)}</option>`).join("");
+    }
+    function onProj(){
+      const i=document.getElementById("proj").value; if(i==="") return;
+      const p=PROJECTS[+i]; if(!p) return;
+      setv("f-project",p.title); setv("f-to",p.to_party); setv("f-attn",p.attention); setv("f-loc",p.location);
+    }
+    async function saveProject(){
+      const title=val("f-project"); if(!title){ toast("Enter a project title first"); return; }
+      try{
+        const r=await vmmsApi("/api/v1/dpr/projects",{method:"POST",body:JSON.stringify({title, to_party:val("f-to"), attention:val("f-attn"), location:val("f-loc")})});
+        if(!r.ok){ const e=await r.json(); throw new Error(e.detail||"Could not save"); }
+        await loadProjects(); toast("Project saved to directory", false, true);
+      }catch(ex){ toast(ex.message, true); }
+    }
+
+    // ---- rows ----
     function mpRow(x={}){return `<tr>
+      <td><input data-k="name" list="wnames" value="${esc(x.name||"")}"></td>
       <td><input data-k="role" value="${esc(x.role||"")}"></td>
+      <td><input data-k="no" class="num" value="${x.no??1}" oninput="recalc(this)"></td>
+      <td><input data-k="from" class="num" value="${x.from??""}" oninput="recalc(this)"></td>
+      <td><input data-k="to" class="num" value="${x.to??""}" oninput="recalc(this)"></td>
+      <td><input data-k="total" class="num" value="${x.total??""}"></td>
+      <td><input data-k="remarks" value="${esc(x.remarks||"")}"></td>
+      <td><button class="xbtn" onclick="delRow(this,1)">×</button></td></tr>`;}
+    function eqRow(x={}){return `<tr>
+      <td><input data-k="name" value="${esc(x.name||"")}"></td>
       <td><input data-k="no" class="num" value="${x.no??""}" oninput="recalc(this)"></td>
       <td><input data-k="from" class="num" value="${x.from??""}" oninput="recalc(this)"></td>
       <td><input data-k="to" class="num" value="${x.to??""}" oninput="recalc(this)"></td>
@@ -190,85 +229,75 @@
       <td><input data-k="unit" class="num" value="${esc(x.unit||"")}"></td>
       <td><input data-k="remarks" value="${esc(x.remarks||"")}"></td>
       <td><button class="xbtn" onclick="delRow(this)">×</button></td></tr>`;}
-    function eqRow(x={}){return mpRow({role:x.name, no:x.no, from:x.from, to:x.to, total:x.total, remarks:x.remarks});}
 
-    function renderMp(list){document.getElementById("mp").innerHTML=(list||[]).map(mpRow).join(""); totalMp();}
-    function renderEq(list){document.getElementById("eq").innerHTML=(list||[]).map(eqRow).join("");}
-    function renderMt(list){document.getElementById("mt").innerHTML=(list||[]).map(mtRow).join("");}
-
-    function addRow(tb){
-      const html = tb==="mt"?mtRow():(tb==="eq"?eqRow():mpRow());
-      document.getElementById(tb).insertAdjacentHTML("beforeend", html);
-    }
-    function delRow(btn){ btn.closest("tr").remove(); totalMp(); }
+    function renderMp(l){document.getElementById("mp").innerHTML=(l||[]).map(mpRow).join(""); totalMp();}
+    function renderEq(l){document.getElementById("eq").innerHTML=(l||[]).map(eqRow).join("");}
+    function renderMt(l){document.getElementById("mt").innerHTML=(l||[]).map(mtRow).join("");}
+    function addMp(){document.getElementById("mp").insertAdjacentHTML("beforeend", mpRow()); totalMp();}
+    function addEq(){document.getElementById("eq").insertAdjacentHTML("beforeend", eqRow());}
+    function addMt(){document.getElementById("mt").insertAdjacentHTML("beforeend", mtRow());}
+    function delRow(btn,isMp){ btn.closest("tr").remove(); if(isMp) totalMp(); }
     function recalc(inp){
-      const tr=inp.closest("tr");
-      const g=k=>parseFloat(tr.querySelector(`[data-k="${k}"]`).value)||0;
+      const tr=inp.closest("tr"); const g=k=>parseFloat(tr.querySelector(`[data-k="${k}"]`).value)||0;
       const no=g("no"), f=g("from"), t=g("to");
-      if(t>f){ const span=t-f-(t-f>6?1:0); tr.querySelector('[data-k="total"]').value = Math.round(no*span*10)/10; }
-      totalMp();
+      if(t>f){ const span=t-f-(t-f>6?1:0); tr.querySelector('[data-k="total"]').value=Math.round(no*span*10)/10; }
+      if(tr.closest("tbody").id==="mp") totalMp();
     }
     function totalMp(){
       let no=0,tot=0;
-      document.querySelectorAll("#mp tr").forEach(tr=>{
-        no+=parseFloat(tr.querySelector('[data-k="no"]')?.value)||0;
-        tot+=parseFloat(tr.querySelector('[data-k="total"]')?.value)||0;
-      });
-      document.getElementById("mp-no").textContent=no;
+      document.querySelectorAll("#mp tr").forEach(tr=>{ no+=parseFloat(tr.querySelector('[data-k="no"]')?.value)||0; tot+=parseFloat(tr.querySelector('[data-k="total"]')?.value)||0; });
+      document.getElementById("mp-no").textContent=Math.round(no*10)/10;
       document.getElementById("mp-tot").textContent=Math.round(tot*10)/10;
     }
-
     function readTable(tb, keys){
       const out=[];
-      document.querySelectorAll(`#${tb} tr`).forEach(tr=>{
-        const o={}; let any=false;
+      document.querySelectorAll(`#${tb} tr`).forEach(tr=>{ const o={}; let any=false;
         keys.forEach(k=>{ const el=tr.querySelector(`[data-k="${k}"]`); const v=el?el.value.trim():""; o[k]=v; if(v) any=true; });
-        if(any) out.push(o);
-      });
+        if(any) out.push(o); });
       return out;
     }
 
     // ---- photos ----
     function renderPhotos(){
-      document.getElementById("photos").innerHTML = PHOTOS.map((p,i)=>`
-        <div class="photo">
-          <button class="rm" onclick="rmPhoto(${i})">×</button>
-          <img src="${esc(p.url)}" alt="">
-          <input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value">
-        </div>`).join("");
+      document.getElementById("photos").innerHTML=PHOTOS.map((p,i)=>`
+        <div class="photo"><button class="rm" onclick="rmPhoto(${i})">×</button>
+        <img src="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
     }
     function rmPhoto(i){ PHOTOS.splice(i,1); renderPhotos(); }
-    async function onPhotos(e){
-      const files=[...e.target.files]; e.target.value="";
-      if(!files.length) return;
-      const site=document.getElementById("site").value, date=document.getElementById("date").value;
-      const msg=document.getElementById("upmsg");
-      for(let i=0;i<files.length;i++){
-        msg.textContent=`Uploading ${i+1} of ${files.length}…`;
+    async function handleUpload(files){
+      files=[...files].filter(f=>f && f.type && f.type.startsWith("image/")); if(!files.length) return;
+      const site=siteVal(), date=dateVal(), msg=document.getElementById("upmsg");
+      for(let i=0;i<files.length;i++){ msg.textContent=`Uploading ${i+1} of ${files.length}…`;
         try{ const url=await uploadPhoto(files[i], site, date); PHOTOS.push({url, caption:""}); renderPhotos(); }
-        catch(ex){ toast("Photo upload failed — check the storage bucket is set up.", true); }
-      }
+        catch(ex){ toast("Photo upload failed — is the dpr-photos bucket set up?", true); } }
       msg.textContent="";
     }
+    async function onPhotos(e){ const f=[...e.target.files]; e.target.value=""; await handleUpload(f); }
     async function uploadPhoto(file, site, date){
-      const s=getSession();
-      const safe=file.name.replace(/[^a-zA-Z0-9.]/g,"_");
-      const path=`${site}/${date}/${Date.now()}_${safe}`;
+      const s=getSession(); const ext=(file.type.split("/")[1]||"png").replace(/[^a-z0-9]/gi,"");
+      const path=`${site}/${date}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
       const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST",
-        headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE,
-                  "Content-Type":file.type||"application/octet-stream", "x-upsert":"true" },
-        body:file
-      });
+        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":file.type||"application/octet-stream", "x-upsert":"true" }, body:file });
       if(!r.ok) throw new Error("upload "+r.status);
       return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+    }
+    // copy-paste (laptop) + drag-drop
+    document.addEventListener("paste", async (e)=>{
+      const items=(e.clipboardData||{}).items||[]; const imgs=[];
+      for(const it of items){ if(it.type && it.type.startsWith("image/")){ const f=it.getAsFile(); if(f) imgs.push(f); } }
+      if(imgs.length){ e.preventDefault(); toast("Pasting photo…"); await handleUpload(imgs); }
+    });
+    function initDrop(){
+      const dz=document.getElementById("dropzone");
+      ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag");}));
+      ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("drag");}));
+      dz.addEventListener("drop", async e=>{ await handleUpload(e.dataTransfer.files); });
     }
 
     // ---- load / prefill / save ----
     async function load(){
-      const site=document.getElementById("site").value, date=document.getElementById("date").value;
-      const r=await vmmsApi(`/api/v1/dpr?date=${date}&site_id=${site}`);
-      const d = r.ok ? await r.json() : {};
+      const r=await vmmsApi(`/api/v1/dpr?date=${dateVal()}&site_id=${siteVal()}`);
+      const d=r.ok?await r.json():{};
       const banner=document.getElementById("banner");
       if(d && d.id){
         banner.textContent="Saved report loaded — edit and Save to update."; banner.className="panel p-3 mb-3 text-sm text-center"; banner.classList.remove("hidden");
@@ -276,117 +305,101 @@
         setv("f-item",d.item_of_work); setv("f-loc",d.location); setv("f-jobdate",d.date_job_carried);
         setv("f-desc",d.description); setv("f-prep",d.prepared_by_name||ME.name); setv("f-conf",d.conformed_by_party||"POKB JV Representative");
         renderMp(d.manpower); renderEq(d.equipment); renderMt(d.materials);
-        PHOTOS = Array.isArray(d.photos)? d.photos.slice():[]; renderPhotos();
+        PHOTOS=Array.isArray(d.photos)?d.photos.slice():[]; renderPhotos();
       } else {
         banner.classList.add("hidden");
         renderMp([]); renderEq([]); renderMt([]); PHOTOS=[]; renderPhotos();
-        setv("f-jobdate",date);
-        await prefill(true);   // pull header + manpower for a fresh day
+        setv("f-jobdate",dateVal());
+        await prefill(true);
       }
     }
-
     async function prefill(silent){
-      const site=document.getElementById("site").value, date=document.getElementById("date").value;
       try{
-        const r=await vmmsApi(`/api/v1/dpr/prefill?date=${date}&site_id=${site}`);
-        if(!r.ok) throw 0;
-        const d=await r.json();
-        const h=d.header||{};
+        const r=await vmmsApi(`/api/v1/dpr/prefill?date=${dateVal()}&site_id=${siteVal()}`);
+        if(!r.ok) throw 0; const d=await r.json(); const h=d.header||{};
         if(!val("f-project")) setv("f-project",h.project_title);
         if(!val("f-to")) setv("f-to",h.to_party);
         if(!val("f-attn")) setv("f-attn",h.attention);
         if(!val("f-loc")) setv("f-loc",h.location);
         if(!val("f-item")) setv("f-item",h.item_of_work);
         if(!val("f-conf")) setv("f-conf",h.conformed_by_party||"POKB JV Representative");
-        if(d.manpower && d.manpower.length){ renderMp(d.manpower); }
-        if(!silent) toast(`Filled ${d.present||0} present worker(s) from attendance`, false, true);
-      }catch(ex){ if(!silent) toast("Nothing to auto-fill (mark attendance first).", true); }
+        if(d.manpower && d.manpower.length) renderMp(d.manpower);
+        if(!silent) toast(`Pulled ${d.present||0} present worker(s) from attendance`, false, true);
+      }catch(ex){ if(!silent) toast("Nothing to pull (mark attendance first).", true); }
     }
-
     function collect(){
-      return {
-        site_id: document.getElementById("site").value,
-        report_date: document.getElementById("date").value,
-        project_title: val("f-project"), to_party: val("f-to"), attention: val("f-attn"),
-        item_of_work: val("f-item"), location: val("f-loc"), date_job_carried: val("f-jobdate"),
-        description: document.getElementById("f-desc").value,
-        manpower: readTable("mp",["role","no","from","to","total","remarks"]),
-        equipment: readTable("eq",["role","no","from","to","total","remarks"]).map(o=>({name:o.role,no:o.no,from:o.from,to:o.to,total:o.total,remarks:o.remarks})),
-        materials: readTable("mt",["name","qty","unit","remarks"]),
-        photos: PHOTOS,
-        prepared_by_name: val("f-prep"), conformed_by_party: val("f-conf"), status:"submitted",
-      };
+      return { site_id:siteVal(), report_date:dateVal(),
+        project_title:val("f-project"), to_party:val("f-to"), attention:val("f-attn"),
+        item_of_work:val("f-item"), location:val("f-loc"), date_job_carried:val("f-jobdate"),
+        description:document.getElementById("f-desc").value,
+        manpower:readTable("mp",["name","role","no","from","to","total","remarks"]),
+        equipment:readTable("eq",["name","no","from","to","total","remarks"]),
+        materials:readTable("mt",["name","qty","unit","remarks"]),
+        photos:PHOTOS, prepared_by_name:val("f-prep"), conformed_by_party:val("f-conf"), status:"submitted" };
     }
-
     async function save(){
       const btn=document.getElementById("savebtn"); btn.disabled=true; btn.textContent="Saving…";
-      try{
-        const r=await vmmsApi("/api/v1/dpr",{method:"POST",body:JSON.stringify(collect())});
-        const d=await r.json(); if(!r.ok) throw new Error(d.detail||"Could not save");
-        toast("✓ Report saved", false, true);
+      try{ const r=await vmmsApi("/api/v1/dpr",{method:"POST",body:JSON.stringify(collect())}); const d=await r.json();
+        if(!r.ok) throw new Error(d.detail||"Could not save"); toast("✓ Report saved", false, true);
         document.getElementById("banner").classList.add("hidden");
-      }catch(ex){ toast(ex.message,true); }
-      finally{ btn.disabled=false; btn.textContent="Save"; }
+      }catch(ex){ toast(ex.message,true); } finally{ btn.disabled=false; btn.textContent="Save"; }
     }
 
-    // ---- PDF (mirrors the Excel layout) ----
-    function esc2(v){return esc(v==null?"":v);}
+    // ---- PDF ----
     function buildSheet(){
-      const d=collect();
-      const mp=d.manpower, eq=d.equipment, mt=d.materials;
+      const d=collect(); const mp=d.manpower, eq=d.equipment, mt=d.materials;
       const noSum=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0);
       const totSum=mp.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
-      const row=(r,cols)=>`<tr>${cols.map(c=>`<td class="${c.c?'c':''}">${esc2(r[c.k])}</td>`).join("")}</tr>`;
-      const mpc=[{k:"role"},{k:"no",c:1},{k:"from",c:1},{k:"to",c:1},{k:"total",c:1},{k:"remarks"}];
-      const mtc=[{k:"name"},{k:"qty",c:1},{k:"unit",c:1},{k:"remarks"}];
       const dmy=v=>{ if(!v) return ""; const p=v.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; };
+      const e=v=>esc(v==null?"":v);
+      const mpRows=mp.map(r=>`<tr><td>${e(r.name)}</td><td>${e(r.role)}</td><td class="c">${e(r.no)}</td><td class="c">${e(r.from)}</td><td class="c">${e(r.to)}</td><td class="c">${e(r.total)}</td><td>${e(r.remarks)}</td></tr>`).join("");
+      const eqRows=eq.map(r=>`<tr><td>${e(r.name)}</td><td class="c">${e(r.no)}</td><td class="c">${e(r.from)}</td><td class="c">${e(r.to)}</td><td class="c">${e(r.total)}</td><td>${e(r.remarks)}</td></tr>`).join("") || '<tr><td colspan="6">&nbsp;</td></tr>';
+      const mtRows=mt.map(r=>`<tr><td>${e(r.name)}</td><td class="c">${e(r.qty)}</td><td class="c">${e(r.unit)}</td><td>${e(r.remarks)}</td></tr>`).join("") || '<tr><td colspan="4">&nbsp;</td></tr>';
       let html=`<div class="dpr-sheet">
-        <div class="proj">${esc2(d.project_title)}</div>
+        <div class="proj">${e(d.project_title)}</div>
         <div class="ttl">DAILY WORK RECORD</div>
         <table class="st" style="margin-top:6px">
-          <tr><td style="width:15%"><b>To:</b></td><td style="width:35%">${esc2(d.to_party)}</td><td style="width:15%"><b>Attention:</b></td><td style="width:20%">${esc2(d.attention)}</td><td style="width:15%"><b>Date:</b> ${dmy(d.report_date)}</td></tr>
-          <tr><td><b>Location:</b></td><td>${esc2(d.location)}</td><td><b>Item of Work:</b></td><td colspan="2">${esc2(d.item_of_work)}</td></tr>
-          <tr><td colspan="4"><b>Description of Works:</b></td><td><b>Date job carried:</b> ${dmy(d.date_job_carried)}</td></tr>
-          <tr><td colspan="5" style="white-space:pre-wrap; min-height:40px">${esc2(d.description)}</td></tr>
+          <tr><td style="width:15%"><b>To:</b></td><td style="width:32%">${e(d.to_party)}</td><td style="width:14%"><b>Attention:</b></td><td style="width:22%">${e(d.attention)}</td><td style="width:17%"><b>Date:</b> ${dmy(d.report_date)}</td></tr>
+          <tr><td><b>Location:</b></td><td>${e(d.location)}</td><td><b>Item of Work:</b></td><td colspan="2">${e(d.item_of_work)}</td></tr>
+          <tr><td colspan="4"><b>Description of Works:</b></td><td><b>Date job:</b> ${dmy(d.date_job_carried)}</td></tr>
+          <tr><td colspan="5" style="white-space:pre-wrap">${e(d.description)}</td></tr>
         </table>
         <table class="st" style="margin-top:8px">
-          <tr class="hd"><th>Manpower</th><th class="c">No.</th><th class="c">From</th><th class="c">To</th><th class="c">Total Hours</th><th>Remarks</th></tr>
-          ${mp.map(r=>row(r,mpc)).join("")}
-          <tr class="hd"><td><b>Total</b></td><td class="c"><b>${noSum}</b></td><td></td><td></td><td class="c"><b>${Math.round(totSum*10)/10}</b></td><td></td></tr>
+          <tr class="hd"><th>Name</th><th>Role / Trade</th><th class="c">No.</th><th class="c">From</th><th class="c">To</th><th class="c">Total Hours</th><th>Remarks</th></tr>
+          ${mpRows}
+          <tr class="hd"><td colspan="2"><b>Total</b></td><td class="c"><b>${Math.round(noSum*10)/10}</b></td><td></td><td></td><td class="c"><b>${Math.round(totSum*10)/10}</b></td><td></td></tr>
         </table>
         <table class="st" style="margin-top:8px">
           <tr class="hd"><th>Plant &amp; Equipment</th><th class="c">No.</th><th class="c">From</th><th class="c">To</th><th class="c">Total Hours</th><th>Remarks</th></tr>
-          ${eq.map(r=>row({role:r.name,no:r.no,from:r.from,to:r.to,total:r.total,remarks:r.remarks},mpc)).join("") || '<tr><td colspan="6">&nbsp;</td></tr>'}
+          ${eqRows}
         </table>
         <table class="st" style="margin-top:8px">
           <tr class="hd"><th>Material / Tools</th><th class="c">Qty</th><th class="c">Unit</th><th>Remarks</th></tr>
-          ${mt.map(r=>row(r,mtc)).join("") || '<tr><td colspan="4">&nbsp;</td></tr>'}
+          ${mtRows}
         </table>
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
-          <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${esc2(d.conformed_by_party)}</td></tr>
-          <tr class="signrow"><td>${esc2(d.prepared_by_name)}</td><td></td></tr>
+          <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
+          <tr class="signrow"><td>${e(d.prepared_by_name)}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
         </table>`;
       if(PHOTOS.length){
         html+=`<div style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
-        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${esc2(p.caption)}</div><img src="${esc2(p.url)}" crossorigin="anonymous"></div>`).join("");
+        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><img src="${e(p.url)}" crossorigin="anonymous"></div>`).join("");
         html+=`</div>`;
       }
-      html+=`</div>`;
-      return html;
+      return html+`</div>`;
     }
-    function downloadPdf(){
-      const site=SITES.find(s=>s.id===document.getElementById("site").value);
-      const sname=(site?site.site_name:"site").replace(/[^a-z0-9]/gi,"_");
-      const el=document.getElementById("sheet");
-      el.innerHTML=buildSheet(); el.classList.add("show");
-      vmmsDownloadPdf("sheet", `DPR_${sname}_${document.getElementById("date").value}`, {landscape:false});
-      setTimeout(()=>{ el.classList.remove("show"); }, 1500);
+    async function downloadPdf(){
+      const el=document.getElementById("sheet"); el.innerHTML=buildSheet();
+      await new Promise(r=>setTimeout(r,PHOTOS.length?700:250));   // let images paint
+      const site=SITES.find(s=>s.id===siteVal()); const sn=(site?site.site_name:"site").replace(/[^a-z0-9]/gi,"_");
+      vmmsDownloadPdf("sheet", `DPR_${sn}_${dateVal()}`, {landscape:false});
     }
 
     document.getElementById("site").addEventListener("change", load);
     document.getElementById("date").addEventListener("change", load);
+    initDrop();
     boot();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
