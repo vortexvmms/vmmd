@@ -1,6 +1,6 @@
-// VMMS auth.js — Phase 3
+// VCMS auth.js — Phase 3
 // Handles: login, session storage, token refresh, logout,
-// and authenticated calls to the VMMS backend.
+// and authenticated calls to the VCMS backend.
 
 const VMMS_SESSION_KEY = "vmms_session";
 
@@ -117,7 +117,7 @@ function vmmsClearRefCache(prefix) {
   if (changed) _refWrite(o);
 }
 
-// ---- call the VMMS backend with the session token ----
+// ---- call the VCMS backend with the session token ----
 // Retries once after a refresh if the token has expired.
 async function vmmsApi(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();

@@ -18,7 +18,7 @@ window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };
 window.isSupervisor = function (r) { return VMMS_TIER.supervisor.indexOf(r) !== -1; };
 window.isCoordinator = function (r) { return isFull(r) || isManager(r); };  // can broadcast messages
 
-// VMMS configuration
+// VCMS configuration
 window.VMMS_CONFIG = {
   BACKEND_URL: "https://vmms-backend-sg.onrender.com",
   SUPABASE_URL: "https://lqnbdemtgkermhaqfboh.supabase.co",
