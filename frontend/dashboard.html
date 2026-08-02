@@ -13,7 +13,32 @@
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     .print-only { display: none; }
+    body.dash { background: #F3F4F6; }
+    /* refreshed dashboard UI (same layout, cleaner styling) */
+    .dpanel { background:#fff; border:1px solid #E5E7EB; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    .stat { background:#fff; border:1px solid #E5E7EB; border-radius:14px; padding:14px;
+            transition:box-shadow .15s ease, transform .15s ease; }
+    .stat.tap { cursor:pointer; }
+    .stat.tap:hover { box-shadow:0 8px 20px rgba(0,0,0,.10); transform:translateY(-2px); }
+    .stat .dot { width:34px; height:34px; border-radius:10px; display:flex; align-items:center;
+                 justify-content:center; margin-bottom:10px; }
+    .stat .dot svg { stroke:#fff; }
+    .stat .v { font-size:26px; font-weight:800; line-height:1; color:#111827; }
+    .stat .l { font-size:12px; color:#6B7280; margin-top:6px; }
+    .sect { font-size:11px; font-weight:800; letter-spacing:.05em; color:#6B7280;
+            text-transform:uppercase; margin:22px 0 10px; }
+    table.dt { width:100%; font-size:14px; border-collapse:collapse; }
+    table.dt thead th { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#6B7280;
+                        background:#F9FAFB; padding:10px 12px; text-align:left; font-weight:700; }
+    table.dt thead th.r { text-align:right; }
+    table.dt tbody td { padding:10px 12px; border-top:1px solid #F1F1F1; }
+    table.dt tbody td.r { text-align:right; }
+    table.dt tbody tr:hover { background:#FAFAFA; }
+    table.dt tfoot td { padding:11px 12px; border-top:2px solid #D1D5DB; font-weight:800; color:#111827; }
+    table.dt tfoot td.r { text-align:right; }
     @media print {
+      .stat, .dpanel { box-shadow:none !important; }
+      .stat, .dpanel, tr { page-break-inside:avoid; }
       @page { size: A4 portrait; margin: 10mm; }
       body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
@@ -31,7 +56,7 @@
     }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
+<body class="dash bg-gray-50 min-h-screen flex flex-col">
 
   <header class="no-print bg-red-700 text-white p-4 shadow sticky top-0 z-10">
    <div class="flex items-center gap-3 max-w-5xl mx-auto w-full">
@@ -72,11 +97,11 @@
   <main class="flex-1 p-4 max-w-md md:max-w-5xl mx-auto w-full pb-10">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="cards"></div>
 
-    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">UPDATES FOR THIS DAY</h2>
+    <h2 class="sect">Updates for this day</h2>
     <div class="md:grid md:grid-cols-2 md:gap-3 space-y-3 md:space-y-0">
 
       <!-- MORNING: attendance marked -->
-      <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+      <div class="dpanel p-4">
         <p class="text-xs font-bold text-gray-600 mb-2">🌅 MORNING · attendance marked (present / absent)</p>
         <div class="flex items-start gap-2 mb-2">
           <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
@@ -93,7 +118,7 @@
       </div>
 
       <!-- EVENING: end times submitted -->
-      <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm p-4">
+      <div class="dpanel p-4">
         <p class="text-xs font-bold text-gray-600 mb-2">🌙 EVENING · end times submitted</p>
         <div class="flex items-start gap-2 mb-2">
           <span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">PENDING</span>
@@ -111,33 +136,22 @@
 
     </div>
 
-    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">SITE SUMMARY (MONTH TO SELECTED DATE)</h2>
-    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-200 text-gray-600 text-xs">
-          <tr>
-            <th class="text-left p-3">Site</th>
-            <th class="text-right p-3">On day</th>
-            <th class="text-right p-3">Normal h</th>
-            <th class="text-right p-3">OT h</th>
-          </tr>
+    <h2 class="sect">Site summary · month to date</h2>
+    <div class="dpanel" style="overflow:hidden">
+      <table class="dt">
+        <thead>
+          <tr><th>Site</th><th class="r">On day</th><th class="r">Normal h</th><th class="r">OT h</th></tr>
         </thead>
         <tbody id="sites"></tbody>
-        <tfoot id="sites-foot" class="border-t-2 border-gray-400 font-bold text-gray-800"></tfoot>
+        <tfoot id="sites-foot"></tfoot>
       </table>
     </div>
 
-    <h2 class="text-sm font-bold text-gray-500 mt-6 mb-2">LEAVE — MOST DAYS THIS MONTH (MC / AL / UL)</h2>
-    <div class="card bg-gray-100 border border-gray-300 rounded-xl shadow-sm overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-200 text-gray-600 text-xs">
-          <tr>
-            <th class="text-left p-3">Worker</th>
-            <th class="text-right p-3">MC</th>
-            <th class="text-right p-3">AL</th>
-            <th class="text-right p-3">UL</th>
-            <th class="text-right p-3">Total</th>
-          </tr>
+    <h2 class="sect">Leave — most days this month (MC / AL / UL)</h2>
+    <div class="dpanel" style="overflow:hidden">
+      <table class="dt">
+        <thead>
+          <tr><th>Worker</th><th class="r">MC</th><th class="r">AL</th><th class="r">UL</th><th class="r">Total</th></tr>
         </thead>
         <tbody id="leaders"></tbody>
       </table>
@@ -254,13 +268,25 @@
       else { list.innerHTML = ""; document.getElementById("d-empty").classList.remove("hidden"); }
     }
 
-    function card(label, value, opts = {}) {
-      const kindAttr = opts.kind ? ` data-kind="${opts.kind}"` : "";
-      const clickCls = opts.kind ? " cursor-pointer active:opacity-80 hover:shadow-md" : "";
-      const hint = opts.kind ? `<p class="text-[10px] text-gray-400 mt-1 no-print">tap for details ›</p>` : "";
-      return `<div class="card ${opts.bg || "bg-white"} border ${opts.border || "border-gray-200"} rounded-xl shadow-sm p-4${clickCls}"${kindAttr}>
-        <p class="text-2xl font-bold ${opts.accent || "text-gray-800"}">${value}</p>
-        <p class="text-xs text-gray-500 mt-1">${label}</p>${hint}</div>`;
+    const DASH_ICON = {
+      users:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><circle cx="17.5" cy="9" r="2.1"/><path d="M16 14.9c2.2.2 3.9 1.8 3.9 4"/>',
+      leave:'<path d="M10.5 19l1.8-3.7 6.5-1.9c1-.3 1.6.9.8 1.6l-4.6 4.9-1.8-.9-1.9 1z"/><path d="M3.5 12l2.7-.9 3.6 2.7"/>',
+      building:'<path d="M4 20V6l6-2 6 2v14"/><path d="M3 20h18"/><path d="M9 20v-4h2v4"/>',
+      clip:'<rect x="6" y="4.5" width="12" height="15" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M9 10h6M9 13h6M9 16h4"/>',
+      med:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/>',
+      sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M6.2 6.2l1.5 1.5M16.3 16.3l1.5 1.5M17.8 6.2l-1.5 1.5M6.2 17.8l1.5-1.5"/>',
+      minus:'<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/>',
+      clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+      bolt:'<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
+      sigma:'<path d="M7 4h10l-6.5 8L17 20H7"/>',
+    };
+    function card(label, value, m) {
+      m = m || {};
+      const tap = m.k ? " tap" : "";
+      const kattr = m.k ? ` data-kind="${m.k}"` : "";
+      const hint = m.k ? `<div class="l no-print" style="font-size:10px;color:#9CA3AF;margin-top:3px;">tap for details ›</div>` : "";
+      const dot = m.c ? `<div class="dot" style="background:${m.c}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-linecap="round" stroke-linejoin="round">${DASH_ICON[m.i] || ""}</svg></div>` : "";
+      return `<div class="stat${tap}"${kattr}>${dot}<div class="v">${value}</div><div class="l">${label}</div>${hint}</div>`;
     }
 
     function setToday() { document.getElementById("date").value = todayIso(); load(); }
@@ -298,16 +324,16 @@
       document.getElementById("p-user").textContent = ME ? ME.name : "—";
 
       const C = {
-        workers:  { bg:"bg-blue-100",    border:"border-blue-300",    kind:"workers" },
-        leave:    { bg:"bg-amber-100",   border:"border-amber-300",   accent:"text-amber-700", kind:"leave" },
-        sites:    { bg:"bg-indigo-100",  border:"border-indigo-300",  kind:"sites" },
-        alloc:    { bg:"bg-red-100",     border:"border-red-300",     accent:"text-red-700",   kind:"allocated" },
-        mc:       { bg:"bg-yellow-100",  border:"border-yellow-300",  accent:"text-yellow-700",kind:"mc" },
-        al:       { bg:"bg-sky-100",     border:"border-sky-300",     accent:"text-sky-700",   kind:"al" },
-        ul:       { bg:"bg-orange-100",  border:"border-orange-300",  accent:"text-orange-700",kind:"ul" },
-        nh:       { bg:"bg-emerald-100", border:"border-emerald-300", kind:"month_nh" },
-        ot:       { bg:"bg-rose-100",    border:"border-rose-300",    accent:"text-red-700",   kind:"month_ot" },
-        total:    { bg:"bg-teal-100",    border:"border-teal-400",    accent:"text-teal-800" },
+        workers: { c:"#2563EB", i:"users",    k:"workers" },
+        leave:   { c:"#D97706", i:"leave",    k:"leave" },
+        sites:   { c:"#4F46E5", i:"building", k:"sites" },
+        alloc:   { c:"#C00000", i:"clip",     k:"allocated" },
+        mc:      { c:"#CA8A04", i:"med",      k:"mc" },
+        al:      { c:"#0284C7", i:"sun",      k:"al" },
+        ul:      { c:"#EA580C", i:"minus",    k:"ul" },
+        nh:      { c:"#059669", i:"clock",    k:"month_nh" },
+        ot:      { c:"#E11D48", i:"bolt",     k:"month_ot" },
+        total:   { c:"#0D9488", i:"sigma",    k:null },
       };
       const monthTotal = (Number(d.month_normal_hours || 0) + Number(d.month_ot_hours || 0)).toFixed(1);
       document.getElementById("cards").innerHTML = d.scoped
@@ -349,32 +375,32 @@
       document.getElementById("e-remind").classList.toggle("hidden", !(canR && ePend.length));
 
       document.getElementById("sites").innerHTML = d.site_summary.map(s =>
-        `<tr class="border-t border-gray-200">
-           <td class="p-3 font-medium text-gray-800">${esc(s.site_name)}</td>
-           <td class="p-3 text-right">${s.today}</td>
-           <td class="p-3 text-right">${s.month_nh}</td>
-           <td class="p-3 text-right ${s.month_ot > 0 ? "text-red-700 font-bold" : ""}">${s.month_ot}</td>
+        `<tr>
+           <td style="font-weight:500;color:#111827">${esc(s.site_name)}</td>
+           <td class="r">${s.today}</td>
+           <td class="r">${s.month_nh}</td>
+           <td class="r" style="${s.month_ot > 0 ? 'color:#A32D2D;font-weight:700' : ''}">${s.month_ot}</td>
          </tr>`).join("");
 
       const tNh = d.site_summary.reduce((a, s) => a + s.month_nh, 0);
       const tOt = d.site_summary.reduce((a, s) => a + s.month_ot, 0);
       const tDay = d.site_summary.reduce((a, s) => a + s.today, 0);
       document.getElementById("sites-foot").innerHTML =
-        `<tr><td class="p-3">TOTAL</td>
-             <td class="p-3 text-right">${tDay}</td>
-             <td class="p-3 text-right">${Math.round(tNh * 10) / 10}</td>
-             <td class="p-3 text-right">${Math.round(tOt * 10) / 10}</td></tr>`;
+        `<tr><td>Total</td>
+             <td class="r">${tDay}</td>
+             <td class="r">${Math.round(tNh * 10) / 10}</td>
+             <td class="r">${Math.round(tOt * 10) / 10}</td></tr>`;
 
       // Leave leaderboard — who took the most MC / AL / UL this month
       const LL = d.leave_leaders || [];
       document.getElementById("leaders").innerHTML = LL.map((w, i) =>
-        `<tr class="border-t border-gray-200">
-           <td class="p-3 font-medium text-gray-800">${i + 1}. ${esc(w.name)}
-             <span class="text-xs text-gray-400">${esc(w.code)}</span></td>
-           <td class="p-3 text-right ${w.mc ? "text-yellow-700 font-bold" : "text-gray-400"}">${w.mc}</td>
-           <td class="p-3 text-right ${w.al ? "text-sky-700 font-bold" : "text-gray-400"}">${w.al}</td>
-           <td class="p-3 text-right ${w.ul ? "text-orange-700 font-bold" : "text-gray-400"}">${w.ul}</td>
-           <td class="p-3 text-right font-bold text-gray-900">${w.total}</td>
+        `<tr>
+           <td style="font-weight:500;color:#111827">${i + 1}. ${esc(w.name)}
+             <span style="font-size:12px;color:#9CA3AF">${esc(w.code)}</span></td>
+           <td class="r" style="${w.mc ? 'color:#B45309;font-weight:700' : 'color:#9CA3AF'}">${w.mc}</td>
+           <td class="r" style="${w.al ? 'color:#0369A1;font-weight:700' : 'color:#9CA3AF'}">${w.al}</td>
+           <td class="r" style="${w.ul ? 'color:#C2410C;font-weight:700' : 'color:#9CA3AF'}">${w.ul}</td>
+           <td class="r" style="font-weight:800;color:#111827">${w.total}</td>
          </tr>`).join("");
       document.getElementById("leaders-empty").classList.toggle("hidden", LL.length > 0);
     }
