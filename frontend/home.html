@@ -27,6 +27,17 @@
     .app-lbl { font-size:12.5px; color:#374151; line-height:1.25; max-width:82px; }
     .app-tile.locked { opacity:.4; }
     .app-tile.locked .app-lbl::after { content:""; }
+    /* ---- Sections ---- */
+    .sect { margin-top:22px; }
+    .sect:first-child { margin-top:8px; }
+    .sect-h { display:flex; align-items:center; gap:9px; margin:0 2px 12px; }
+    .sect-h .n { width:23px; height:23px; border-radius:50%; background:#C00000; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+    .sect-h .t { font-size:14px; font-weight:800; color:#111827; letter-spacing:.01em; }
+    .sect-h .soon { font-size:10px; font-weight:700; color:#9CA3AF; border:1px solid #E5E7EB; border-radius:999px; padding:2px 9px; margin-left:auto; }
+    .sect.soon .sect-h .n { background:#D1D5DB; }
+    .sect.soon .sect-h .t { color:#9CA3AF; }
+    .soon-note { color:#9CA3AF; font-size:12.5px; padding:2px 2px 4px; }
+    .util-row { display:flex; gap:22px; justify-content:center; margin-top:26px; padding-top:18px; border-top:1px solid #E5E7EB; }
   </style>
 </head>
 <body class="grid-home min-h-screen flex flex-col">
@@ -72,7 +83,7 @@
         </select>
       </div>
 
-      <div class="mt-6 app-grid" id="menu"></div>
+      <div class="mt-4" id="menu"></div>
     </div>
 
     <div id="noprofile" class="hidden panel p-6 mt-10 text-center">
@@ -154,29 +165,74 @@
       _default:'<circle cx="12" cy="12" r="8"/>',
     };
 
+    // ---- Home sections (grouped tiles). Tiles are shown only if the page is in the
+    //      user's allowed set (per-role menu, or per-user custom menu). "soon" sections
+    //      always render as a Coming-soon placeholder. ----
+    const SECTIONS = [
+      { title:"Manpower Management", pages:[
+          ["Workers","workers.html"], ["Sites","sites.html"], ["Daily Allocation","allocation.html"],
+          ["Request Manpower","request.html"], ["Attendance","attendance.html"], ["End-Time Verification","verify.html"],
+          ["Monthly Timesheet","timesheet.html"], ["Monthly Man-Hours","manhours.html"],
+          ["WhatsApp Messages","whatsapp.html"], ["Users & Access","users.html"] ] },
+      { title:"Site Progress", pages:[
+          ["Daily Progress Report","dpr.html"], ["DPR History","dprlist.html"],
+          ["Dashboard","dashboard.html"], ["Reports","reports.html"] ] },
+      { title:"Procurement Request", soon:true, pages:[] },
+      { title:"Safety", soon:true, pages:[] },
+      { title:"Equipments & Machineries", soon:true, pages:[] },
+    ];
+    const UTIL_PAGES = [["Settings","settings.html"], ["How to Use","help.html"]];
+
+    function tile(label, page) {
+      const el = document.createElement("a");
+      el.href = page; el.className = "app-tile"; el.title = label;
+      const color = COLORS[page] || "#6B7280";
+      const icon = ICONS[page] || ICONS._default;
+      const short = SHORT[label] || label;
+      el.innerHTML =
+        `<span class="app-ico" style="background:${color}">
+           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+         </span>
+         <span class="app-lbl">${esc(short)}</span>`;
+      return el;
+    }
+
     function renderMenu(role) {
       const menu = document.getElementById("menu");
       menu.innerHTML = "";
-      const src = ALLOWED
-        ? ALL_MENU.filter(([l, p, pg]) => pg === "help.html" || ALLOWED.indexOf(pg) !== -1)
-        : menuFor(role);
-      src.forEach(([label, phase, page]) => {
-        const unlocked = phase <= DONE_PHASE;
-        const el = document.createElement(unlocked ? "a" : "div");
-        if (unlocked) el.href = page;
-        el.className = "app-tile" + (unlocked ? "" : " locked");
-        el.title = label;
-        const color = COLORS[page] || "#6B7280";
-        const icon = ICONS[page] || ICONS._default;
-        const short = SHORT[label] || label;
-        el.innerHTML =
-          `<span class="app-ico" style="background:${color}">
-             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
-           </span>
-           <span class="app-lbl">${esc(short)}</span>`;
-        menu.appendChild(el);
+      const allowed = ALLOWED
+        ? new Set(ALLOWED.concat(["help.html"]))
+        : new Set(menuFor(role).map(m => m[2]));
+      SECTIONS.forEach((sec, i) => {
+        const tiles = sec.soon ? [] : sec.pages.filter(([l, pg]) => allowed.has(pg));
+        if (!sec.soon && tiles.length === 0) return;   // hide an empty live section for this role
+        const secEl = document.createElement("div");
+        secEl.className = "sect" + (sec.soon ? " soon" : "");
+        secEl.innerHTML =
+          `<div class="sect-h"><span class="n">${i + 1}</span><span class="t">${esc(sec.title)}</span>` +
+          (sec.soon ? '<span class="soon">Coming soon</span>' : '') + `</div>`;
+        if (sec.soon) {
+          const note = document.createElement("div");
+          note.className = "soon-note";
+          note.textContent = "This module will be available soon.";
+          secEl.appendChild(note);
+        } else {
+          const grid = document.createElement("div");
+          grid.className = "app-grid";
+          tiles.forEach(([label, pg]) => grid.appendChild(tile(label, pg)));
+          secEl.appendChild(grid);
+        }
+        menu.appendChild(secEl);
       });
+      // utility row (Settings / How to Use)
+      const utils = UTIL_PAGES.filter(([l, pg]) => allowed.has(pg));
+      if (utils.length) {
+        const row = document.createElement("div");
+        row.className = "util-row";
+        utils.forEach(([label, pg]) => row.appendChild(tile(label, pg)));
+        menu.appendChild(row);
+      }
     }
 
     async function load() {

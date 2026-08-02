@@ -49,10 +49,16 @@
     requireLogin();
     function fmtDMY(iso){ if(!iso) return ""; const p=iso.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
 
+    const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
+      const me=await r.json();
       const rs=await vmmsApi("/api/v1/sites");
-      const sites=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
+      let sites=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
+      // Supervisors only see their assigned sites (backend RLS scopes the list itself too).
+      if(DPR_SUP_ROLES.indexOf(me.role)!==-1){
+        sites=sites.filter(s=>(s.supervisors||[]).some(x=>x.user_id===me.user_id));
+      }
       document.getElementById("site").innerHTML='<option value="">All sites</option>'+sites.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       await load();
     }

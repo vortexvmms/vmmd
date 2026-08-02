@@ -56,11 +56,14 @@
     .st .c { text-align:center; }
     .st .hd { background:#f3f3f3; font-weight:bold; }
     .signrow td { border:1px solid #000; height:54px; vertical-align:bottom; padding:4px 6px; }
-    .pgrid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:start; }
+    .pgrid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
     .pcell { border:1px solid #000; }
     .pcell .cap { text-align:center; font-weight:bold; border-bottom:1px solid #000; padding:2px; }
-    /* keep the photo's native aspect ratio (4:3 landscape / 3:4 portrait) — never stretch */
-    .pcell img { width:100%; height:auto; display:block; }
+    /* fixed-height photo box; orientation decides the fit (class set at capture time) */
+    .pcell .imgwrap { height:172px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; }
+    .pcell .imgwrap img { display:block; }
+    .pcell .imgwrap img.ls { width:100%; height:100%; object-fit:cover; }                 /* landscape 4:3 → fill box */
+    .pcell .imgwrap img.pt { width:auto; height:100%; max-width:100%; object-fit:contain; } /* portrait 3:4 → fit, centered */
   </style>
 </head>
 <body class="dpr min-h-screen flex flex-col">
@@ -176,6 +179,7 @@
   <script>
     requireLogin();
     let ME=null, SITES=[], PROJECTS=[], PHOTOS=[];
+    const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     const DPR_LOGO="https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/branding/vortex-logo.png";
     (function(){ var _l=new Image(); _l.crossOrigin="anonymous"; _l.src=DPR_LOGO; })();  // preload so html2canvas has it ready
 
@@ -191,7 +195,14 @@
       setv("f-prep", ME.name||"");
       const rs=await vmmsApi("/api/v1/sites");
       SITES=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
-      document.getElementById("site").innerHTML=SITES.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
+      // Supervisors only see the sites they are assigned to; managers/admins see all.
+      // (The backend RLS enforces the same rule on save/read — this just keeps the dropdown clean.)
+      if(DPR_SUP_ROLES.indexOf(ME.role)!==-1){
+        SITES=SITES.filter(s=>(s.supervisors||[]).some(x=>x.user_id===ME.user_id));
+      }
+      document.getElementById("site").innerHTML=SITES.length
+        ? SITES.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("")
+        : '<option value="">No sites assigned to you</option>';
       document.getElementById("date").value=todayIso();
       // open a specific report from the history page (?site=&date=)
       const q=new URLSearchParams(location.search);
@@ -407,17 +418,28 @@
         </table>`;
       if(PHOTOS.length){
         html+=`<div style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
-        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><img src="${e(p.url)}" crossorigin="anonymous"></div>`).join("");
+        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}" crossorigin="anonymous"></div></div>`).join("");
         html+=`</div>`;
       }
       return html+`</div>`;
+    }
+    function waitSheetImages(root){
+      const imgs=[...root.querySelectorAll("img")];
+      return Promise.all(imgs.map(im=> (im.complete && im.naturalWidth) ? Promise.resolve()
+        : new Promise(res=>{ im.onload=()=>res(); im.onerror=()=>res(); setTimeout(res,4000); })));
     }
     async function downloadPdf(){
       const el=document.getElementById("sheet"), mask=document.getElementById("sheetmask");
       el.innerHTML=buildSheet();
       // bring the sheet on-screen (behind a white mask) so html2canvas captures real pixels
       mask.classList.add("on"); el.classList.add("cap");
-      await new Promise(r=>setTimeout(r,PHOTOS.length?800:300));   // let content + images paint
+      await waitSheetImages(el);                                   // logo + photos fully loaded
+      // auto-detect orientation: portrait (taller) → contain+centered; landscape → cover
+      el.querySelectorAll(".imgwrap img").forEach(img=>{
+        const w=img.naturalWidth||0, h=img.naturalHeight||0;
+        img.classList.add((w && h && h>w) ? "pt" : "ls");
+      });
+      await new Promise(r=>setTimeout(r,150));                     // let layout settle
       const site=SITES.find(s=>s.id===siteVal()); const sn=(site?site.site_name:"site").replace(/[^a-z0-9]/gi,"_");
       const hide=function(){ el.classList.remove("cap"); mask.classList.remove("on"); };
       setTimeout(hide, 15000); // safety: never leave the mask stuck
