@@ -60,7 +60,10 @@
     .st .hd { background:#f3f3f3; font-weight:bold; }
     .signrow td { border:1px solid #000; height:54px; vertical-align:bottom; padding:4px 6px; }
     .pgrid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-    .pcell { border:1px solid #000; }
+    /* keep each photo (caption + image) together — never split across a page break */
+    .pcell { border:1px solid #000; break-inside:avoid; page-break-inside:avoid; }
+    .dpr-sheet tr, .dpr-sheet .dpr-top { break-inside:avoid; page-break-inside:avoid; }
+    .dpr-sheet .pgrid-wrap { break-inside:auto; }
     .pcell .cap { text-align:center; font-weight:bold; border-bottom:1px solid #000; padding:2px; }
     /* fixed-height photo box; orientation decides the fit (class set at capture time) */
     .pcell .imgwrap { height:172px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; }
@@ -129,6 +132,11 @@
     </div>
 
     <h2 class="sect">Plant &amp; equipment</h2>
+    <div class="panel p-3" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <span class="text-sm text-gray-600">Copy plant &amp; materials from</span>
+      <input id="copydate" type="date" class="fld" style="max-width:170px;flex:0 1 auto">
+      <button type="button" class="addbtn" style="width:auto;padding:8px 16px" onclick="copyEquipMat()">Copy</button>
+    </div>
     <div class="panel p-3">
       <div class="tblwrap">
         <table class="edt">
@@ -395,6 +403,7 @@
 
     // ---- load / prefill / save ----
     async function load(){
+      const cd=document.getElementById("copydate"); if(cd && !cd.value) cd.value=prevDay(dateVal());
       const r=await vmmsApi(`/api/v1/dpr?date=${dateVal()}&site_id=${siteVal()}`);
       const d=r.ok?await r.json():{};
       const banner=document.getElementById("banner");
@@ -427,6 +436,21 @@
         if(d.manpower && d.manpower.length) renderMp(d.manpower);
         if(!silent) toast(`Pulled ${d.present||0} present worker(s) from attendance`, false, true);
       }catch(ex){ if(!silent) toast("Nothing to pull (mark attendance first).", true); }
+    }
+    function prevDay(iso){ if(!iso) return ""; const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()-1); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+    async function copyEquipMat(){
+      if(!siteVal()){ toast("Choose a site first"); return; }
+      const dt=document.getElementById("copydate").value;
+      if(!dt){ toast("Pick a date to copy from"); return; }
+      try{
+        const r=await vmmsApi(`/api/v1/dpr?date=${dt}&site_id=${siteVal()}`);
+        const d=r.ok?await r.json():{};
+        if(!d || !d.id){ toast("No report on that date for this site", true); return; }
+        const eq=Array.isArray(d.equipment)?d.equipment:[], mt=Array.isArray(d.materials)?d.materials:[];
+        if(!eq.length && !mt.length){ toast("That day has no plant / material rows", true); return; }
+        renderEq(eq); renderMt(mt);
+        toast(`Copied ${eq.length} plant + ${mt.length} material row(s)`, false, true);
+      }catch(ex){ toast("Copy failed", true); }
     }
     function collect(){
       return { site_id:siteVal(), report_date:dateVal(),
@@ -486,7 +510,7 @@
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
           <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
-          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}" crossorigin="anonymous" style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}</td><td></td></tr>
+          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}" crossorigin="anonymous" style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
         </table>`;
       if(PHOTOS.length){
