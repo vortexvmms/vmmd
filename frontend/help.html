@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#C00000">
-  <title>VMMS — How to Use</title>
+  <title>VCMS — How to Use</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
@@ -40,7 +40,7 @@
       "The 🔔 bell at the top-right shows your notifications; tap it to read them and to mark all as read.";
 
     const GETTING_STARTED = { h: "Getting started — phone & sign in", items: [
-      { step: "First time only: open Chrome, go to vortexvmms.github.io/vmmd, then Chrome menu (⋮) → \"Add to Home screen\" → Add. A red VMMS icon appears on your phone." },
+      { step: "First time only: open Chrome, go to vortexvmms.github.io/vmmd, then Chrome menu (⋮) → \"Add to Home screen\" → Add. A red VCMS icon appears on your phone." },
       { step: "Sign in with the email and password given by the office. You stay signed in on that phone." },
       { step: "The 🔔 bell (top-right) tells you what needs your attention — new requests, allocations, or leave. A red dot means unread." },
       { note: "Forgot your password? Only the Administrator can reset it — call the office. Never share your password." },
@@ -101,7 +101,7 @@
         { step: "For each worker who is moving, change the site dropdown on his row. The row turns yellow so you can see your changes." },
         { step: "Press Save All once. All changes are saved together." },
         { ex: "Yesterday Anbazhagan (VEW110) was at PCS. Tomorrow you want him at POKB. Find his row (or search his name), change his dropdown from PCS to POKB. If five more men move, change theirs too — then press Save All once. No switching sites." },
-        { note: "Choose \"— Not working —\" to drop a worker off the roster for the day. A worker can only be on one site a day; VMMS blocks double allocation." },
+        { note: "Choose \"— Not working —\" to drop a worker off the roster for the day. A worker can only be on one site a day; VCMS blocks double allocation." },
       ]},
       { h: "Daily Allocation — By Site (fill one site)", items: [
         { step: "Tap the By Site tab, then choose a site from the dropdown." },
@@ -142,7 +142,7 @@
         { step: "Choose the From and To dates, and a site (or All sites)." },
         { step: "Press Export Excel for a spreadsheet, or Print PDF for a printed copy." },
       ]},
-      { h: "How VMMS calculates hours", items: [
+      { h: "How VCMS calculates hours", items: [
         "Normal weekday (Mon–Fri): up to 8 h a day; 1 h lunch deducted.",
         "Finish by 12:00 noon: no lunch deduction.",
         "Saturday: normal until 12:00 (max 4 h); everything after lunch is OT.",
@@ -177,7 +177,7 @@
         { note: "New logins are still created in Supabase (Authentication) first, then given a role here — see the setup guide." },
       ]},
       { h: "Automatic 4 AM email report (Administrator)", items: [
-        "Every day at 4:00 AM (SGT) VMMS emails the previous day's report automatically — attendance verification plus the monthly attendance sheet, as PDF and Excel, with a full overview in the email body.",
+        "Every day at 4:00 AM (SGT) VCMS emails the previous day's report automatically — attendance verification plus the monthly attendance sheet, as PDF and Excel, with a full overview in the email body.",
         "It runs on its own; no one has to press anything. It is your daily payroll backup.",
         { note: "The Vortex logo prints in the header of the emailed reports." },
       ]},
@@ -199,7 +199,7 @@
       ]},
       { h: "Settings & admin tasks", items: [
         "Settings: check the OT rules and public-holiday calendar at the start of each year; \"+ Add holiday\" for gazetted dates.",
-        "New user logins are created in Supabase (Authentication), then linked to a VMMS role — see the setup guide.",
+        "New user logins are created in Supabase (Authentication), then linked to a VCMS role — see the setup guide.",
         "Only the Administrator can reset a password or re-open a closed month.",
         "Deactivate staff who leave (set inactive) instead of deleting, to keep the history.",
       ]},

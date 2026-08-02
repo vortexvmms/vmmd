@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#C00000">
-  <title>VMMS — Monthly Man-Hours</title>
+  <title>VCMS — Monthly Man-Hours</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
@@ -116,7 +116,7 @@
       if (!D) return;
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        ["VMMS Monthly Man-Hours", D.month, D.locked ? "CLOSED" : "OPEN"], [],
+        ["VCMS Monthly Man-Hours", D.month, D.locked ? "CLOSED" : "OPEN"], [],
         ["Site", "Attendance days", "Total workers", "Normal h", "OT h"],
         ...D.sites.map(s => [s.site, s.attendance_days, s.total_workers, s.nh, s.ot]),
         [], ["TOTAL", "", "", D.totals.nh, D.totals.ot]]), "Sites");

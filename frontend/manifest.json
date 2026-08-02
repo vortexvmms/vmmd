@@ -1,6 +1,6 @@
 {
-  "name": "Vortex Manpower Management System",
-  "short_name": "VMMS",
+  "name": "Vortex Construction Management Systems",
+  "short_name": "VCMS",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#FFFFFF",

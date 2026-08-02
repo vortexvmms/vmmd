@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#C00000">
-  <title>VMMS — Daily Progress Report</title>
+  <title>VCMS — Daily Progress Report</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
@@ -51,7 +51,10 @@
     .dpr-top .logo-spacer { flex:0 0 auto; width:100px; }
     .dpr-sheet .proj { text-align:center; font-weight:bold; font-size:12px; padding:3px 0; }
     table.st { border-collapse:collapse; width:100%; }
-    table.st td, table.st th { border:1px solid #000; padding:3px 5px; vertical-align:middle; }
+    /* line-height fills the row so single-line text is vertically centred in the
+       exported PDF too (html2canvas renders vertical-align:middle at the bottom). */
+    table.st td, table.st th { border:1px solid #000; padding:0 6px; line-height:22px; white-space:nowrap; }
+    table.st td.wrap, table.st th.wrap { white-space:normal; line-height:1.4; padding:4px 6px; }
     table.st th { background:#eee; font-weight:bold; text-align:center; }
     .st .c { text-align:center; }
     .st .hd { background:#f3f3f3; font-weight:bold; }
@@ -64,6 +67,9 @@
     .pcell .imgwrap img { display:block; }
     .pcell .imgwrap img.ls { width:100%; height:100%; object-fit:cover; }                 /* landscape 4:3 → fill box */
     .pcell .imgwrap img.pt { width:auto; height:100%; max-width:100%; object-fit:contain; } /* portrait 3:4 → fit, centered */
+    .sigbox { border:1px dashed #cbd5e1; border-radius:10px; height:150px; display:flex; align-items:center; justify-content:center; background:#fff; overflow:hidden; }
+    .sigpad { width:100%; height:150px; touch-action:none; cursor:crosshair; }
+    .sigimg { max-height:146px; max-width:100%; }
   </style>
 </head>
 <body class="dpr min-h-screen flex flex-col">
@@ -162,6 +168,22 @@
       <div><label class="lbl">Prepared by (Vortex)</label><input id="f-prep" class="fld"></div>
       <div><label class="lbl">Conformed by</label><input id="f-conf" class="fld" placeholder="POKB JV Representative"></div>
     </div>
+
+    <div class="panel p-4 mt-3">
+      <label class="lbl">Prepared-by signature</label>
+      <div class="sigbox">
+        <canvas id="sigpad" class="sigpad"></canvas>
+        <img id="sigimg" class="sigimg hidden" crossorigin="anonymous">
+      </div>
+      <div class="flex gap-2 mt-2 flex-wrap">
+        <button type="button" class="addbtn" onclick="sigUseDrawing()">Use drawing</button>
+        <button type="button" class="addbtn" onclick="sigClear()">Clear pad</button>
+        <label class="addbtn" style="cursor:pointer">Upload sign image
+          <input id="sigfile" type="file" accept="image/*" class="hidden" onchange="onSigFile(event)"></label>
+        <button type="button" class="addbtn" onclick="sigRemove()">Remove</button>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">Sign with finger/mouse then tap <b>Use drawing</b>, or upload a signature image.</p>
+    </div>
   </main>
 
   <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
@@ -178,7 +200,7 @@
 
   <script>
     requireLogin();
-    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[];
+    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="";
     const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     const DPR_LOGO="https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/branding/vortex-logo.png";
     (function(){ var _l=new Image(); _l.crossOrigin="anonymous"; _l.src=DPR_LOGO; })();  // preload so html2canvas has it ready
@@ -310,6 +332,52 @@
       if(!r.ok) throw new Error("upload "+r.status);
       return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
     }
+
+    // ---- signature: draw pad + upload image ----
+    let SIG_DREW=false, sigCtx=null;
+    function initSigPad(){
+      const c=document.getElementById("sigpad"); if(!c) return;
+      const ratio=window.devicePixelRatio||1, rect=c.getBoundingClientRect();
+      c.width=Math.max(300,rect.width)*ratio; c.height=150*ratio;
+      sigCtx=c.getContext("2d"); sigCtx.scale(ratio,ratio);
+      sigCtx.lineWidth=2.2; sigCtx.lineCap="round"; sigCtx.lineJoin="round"; sigCtx.strokeStyle="#111";
+      let drawing=false, lx=0, ly=0;
+      const pos=e=>{ const r=c.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+      c.addEventListener("pointerdown", e=>{ e.preventDefault(); drawing=true; [lx,ly]=pos(e); c.setPointerCapture(e.pointerId); });
+      c.addEventListener("pointermove", e=>{ if(!drawing) return; e.preventDefault(); const [x,y]=pos(e); sigCtx.beginPath(); sigCtx.moveTo(lx,ly); sigCtx.lineTo(x,y); sigCtx.stroke(); [lx,ly]=[x,y]; SIG_DREW=true; });
+      const end=()=>{ drawing=false; };
+      c.addEventListener("pointerup", end); c.addEventListener("pointerleave", end);
+    }
+    function sigClear(){ const c=document.getElementById("sigpad"); if(sigCtx && c) sigCtx.clearRect(0,0,c.width,c.height); SIG_DREW=false; }
+    async function sigUseDrawing(){
+      if(!SIG_DREW){ toast("Sign on the pad first"); return; }
+      const c=document.getElementById("sigpad");
+      const blob=await new Promise(res=>c.toBlob(res,"image/png"));
+      await uploadAndSetSig(blob);
+    }
+    async function onSigFile(e){ const f=e.target.files[0]; e.target.value=""; if(f) await uploadAndSetSig(f); }
+    async function uploadAndSetSig(fileOrBlob){
+      if(!siteVal()||!dateVal()){ toast("Choose site & date first"); return; }
+      toast("Uploading signature…");
+      try{ const url=await uploadSig(fileOrBlob); setSignature(url); toast("✓ Signature added", false, true); }
+      catch(ex){ toast("Signature upload failed", true); }
+    }
+    async function uploadSig(file){
+      const s=getSession(); const type=file.type||"image/png";
+      const path=`signatures/${siteVal()}/${dateVal()}_${Date.now()}_${Math.random().toString(36).slice(2,6)}.png`;
+      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
+        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:file });
+      if(!r.ok) throw new Error("upload "+r.status);
+      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+    }
+    function setSignature(url){
+      SIGNATURE_URL=url||"";
+      const img=document.getElementById("sigimg"), pad=document.getElementById("sigpad");
+      if(SIGNATURE_URL){ img.src=SIGNATURE_URL; img.classList.remove("hidden"); if(pad) pad.classList.add("hidden"); }
+      else { img.classList.add("hidden"); img.removeAttribute("src"); if(pad) pad.classList.remove("hidden"); sigClear(); }
+    }
+    function sigRemove(){ setSignature(""); }
+
     // copy-paste (laptop) + drag-drop
     document.addEventListener("paste", async (e)=>{
       const items=(e.clipboardData||{}).items||[]; const imgs=[];
@@ -335,9 +403,11 @@
         setv("f-desc",d.description); setv("f-prep",d.prepared_by_name||ME.name); setv("f-conf",d.conformed_by_party||"POKB JV Representative");
         renderMp(d.manpower); renderEq(d.equipment); renderMt(d.materials);
         PHOTOS=Array.isArray(d.photos)?d.photos.slice():[]; renderPhotos();
+        setSignature(d.signature_url||"");
       } else {
         banner.classList.add("hidden");
         renderMp([]); renderEq([]); renderMt([]); PHOTOS=[]; renderPhotos();
+        setSignature("");
         setv("f-jobdate",dateVal());
         await prefill(true);
       }
@@ -364,7 +434,8 @@
         manpower:readTable("mp",["name","role","no","from","to","total","remarks"]),
         equipment:readTable("eq",["name","no","from","to","total","remarks"]),
         materials:readTable("mt",["name","qty","unit","remarks"]),
-        photos:PHOTOS, prepared_by_name:val("f-prep"), conformed_by_party:val("f-conf"), status:"submitted" };
+        photos:PHOTOS, signature_url:SIGNATURE_URL||null,
+        prepared_by_name:val("f-prep"), conformed_by_party:val("f-conf"), status:"submitted" };
     }
     async function save(){
       const btn=document.getElementById("savebtn"); btn.disabled=true; btn.textContent="Saving…";
@@ -395,7 +466,7 @@
           <tr><td style="width:15%"><b>To:</b></td><td style="width:32%">${e(d.to_party)}</td><td style="width:14%"><b>Attention:</b></td><td style="width:22%">${e(d.attention)}</td><td style="width:17%"><b>Date:</b> ${dmy(d.report_date)}</td></tr>
           <tr><td><b>Location:</b></td><td>${e(d.location)}</td><td><b>Item of Work:</b></td><td colspan="2">${e(d.item_of_work)}</td></tr>
           <tr><td colspan="5"><b>Description of Works:</b></td></tr>
-          <tr><td colspan="5" style="white-space:pre-wrap">${e(d.description)}</td></tr>
+          <tr><td colspan="5" class="wrap" style="white-space:pre-wrap">${e(d.description)}</td></tr>
         </table>
         <table class="st" style="margin-top:8px">
           <tr class="hd"><th>Name</th><th>Role / Trade</th><th class="c">No.</th><th class="c">From</th><th class="c">To</th><th class="c">Total Hours</th><th>Remarks</th></tr>
@@ -413,7 +484,7 @@
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
           <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
-          <tr class="signrow"><td>${e(d.prepared_by_name)}</td><td></td></tr>
+          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}" crossorigin="anonymous" style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
         </table>`;
       if(PHOTOS.length){
@@ -440,15 +511,17 @@
         img.classList.add((w && h && h>w) ? "pt" : "ls");
       });
       await new Promise(r=>setTimeout(r,150));                     // let layout settle
-      const site=SITES.find(s=>s.id===siteVal()); const sn=(site?site.site_name:"site").replace(/[^a-z0-9]/gi,"_");
+      // filename = ITEM OF WORK_DATE  (fall back to "DPR" if item of work is blank)
+      const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,60);
       const hide=function(){ el.classList.remove("cap"); mask.classList.remove("on"); };
       setTimeout(hide, 15000); // safety: never leave the mask stuck
-      vmmsDownloadPdf("sheet", `DPR_${sn}_${dateVal()}`, {landscape:false, onePage:true, onDone:hide});
+      vmmsDownloadPdf("sheet", `${iow}_${dateVal()}`, {landscape:false, onePage:true, onDone:hide});
     }
 
     document.getElementById("site").addEventListener("change", load);
     document.getElementById("date").addEventListener("change", load);
     initDrop();
+    initSigPad();
     boot();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
