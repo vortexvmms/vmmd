@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.43.0")  # DPR: name-based manpower + project directory
+app = FastAPI(title="VMMS API", version="0.43.1")  # DPR: fix prefill NameError (groups)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2350,8 +2350,7 @@ async def dpr_prefill(date: str, site_id: str, user: dict = Depends(get_current_
             headers=supabase_headers(user["token"]))
         hrows = rh.json() if rh.status_code == 200 else []
         header = hrows[0] if hrows else {}
-        return {"manpower": manpower, "header": header,
-                "present": sum(g["no"] for g in groups.values())}
+        return {"manpower": manpower, "header": header, "present": len(manpower)}
 
 
 @app.post("/api/v1/dpr")
