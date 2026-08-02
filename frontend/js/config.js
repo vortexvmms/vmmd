@@ -212,6 +212,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
       el.classList.remove("pdfing");
       document.body.classList.remove("vmms-pdf");
       if (prevBtn && prevBtn.dataset._t) { prevBtn.textContent = prevBtn.dataset._t; prevBtn.disabled = false; }
+      if (typeof opts.onDone === "function") { try { opts.onDone(); } catch (e) {} }
     }
     function fail() { done(); alert("Could not build the PDF. Please try Print / PDF instead."); }
     var margin = opts.landscape ? 6 : 8;
