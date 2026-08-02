@@ -187,9 +187,11 @@
   </main>
 
   <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-3xl mx-auto flex gap-3">
-      <button onclick="save()" id="savebtn" class="flex-1 border-2 border-red-700 text-red-700 font-bold py-3 rounded-lg">Save</button>
-      <button onclick="downloadPdf()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Download PDF</button>
+    <div class="max-w-3xl mx-auto flex gap-2" style="flex-wrap:wrap">
+      <button onclick="save()" id="savebtn" style="flex:1;min-width:74px;border:2px solid #C00000;color:#C00000" class="font-bold py-3 rounded-lg text-sm">Save</button>
+      <button onclick="printSheet()" style="flex:1;min-width:88px;background:#C00000;color:#fff" class="font-bold py-3 rounded-lg text-sm">Print / PDF</button>
+      <button onclick="downloadPdf()" style="flex:1;min-width:88px;background:#374151;color:#fff" class="font-bold py-3 rounded-lg text-sm">Image PDF</button>
+      <button onclick="exportExcel()" style="flex:1;min-width:74px;background:#047857;color:#fff" class="font-bold py-3 rounded-lg text-sm">Excel</button>
     </div>
   </div>
 
@@ -516,6 +518,69 @@
       const hide=function(){ el.classList.remove("cap"); mask.classList.remove("on"); };
       setTimeout(hide, 15000); // safety: never leave the mask stuck
       vmmsDownloadPdf("sheet", `${iow}_${dateVal()}`, {landscape:false, onePage:true, onDone:hide});
+    }
+
+    // ---- Print / PDF (native browser render → correct vertical alignment, sharp text) ----
+    function printSheet(){
+      const styles=[...document.querySelectorAll("style")].map(s=>s.textContent).join("\n");
+      const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,60);
+      const w=window.open("","_dprprint");
+      if(!w){ toast("Allow pop-ups, then tap Print / PDF again"); return; }
+      w.document.open();
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${iow}_${dateVal()}</title>
+        <style>${styles}
+          body{margin:0;padding:8px;background:#fff;}
+          #sheet{position:static;left:auto;top:auto;width:760px;margin:0 auto;box-shadow:none;}
+          @page{size:A4 portrait;margin:8mm;}
+          @media print{ #sheet{width:100%;} }
+        </style>
+        <script>
+          window.addEventListener("load",function(){
+            document.querySelectorAll(".pcell .imgwrap img").forEach(function(im){
+              im.classList.add((im.naturalWidth&&im.naturalHeight&&im.naturalHeight>im.naturalWidth)?"pt":"ls"); });
+            setTimeout(function(){ window.focus(); window.print(); }, 450);
+          });
+        <\/script></head><body><div id="sheet">${buildSheet()}</div></body></html>`);
+      w.document.close();
+    }
+
+    // ---- Excel export (current report → one sheet; filename ITEM OF WORK_DATE) ----
+    async function loadXLSX(){ if(window.XLSX) return; await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
+    function reportAOA(d){
+      const dmy=v=>{ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; };
+      const mp=d.manpower||[], eq=d.equipment||[], mt=d.materials||[];
+      const noSum=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0), totSum=mp.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
+      const rows=[];
+      rows.push([d.project_title||""]);
+      rows.push(["DAILY WORK RECORD"]);
+      rows.push(["To:", d.to_party||"", "Attention:", d.attention||"", "Date:", dmy(d.report_date)]);
+      rows.push(["Location:", d.location||"", "Item of Work:", d.item_of_work||""]);
+      rows.push(["Description of Works:"]);
+      String(d.description||"").split("\n").forEach(l=>rows.push([l]));
+      rows.push([]);
+      rows.push(["Name","Role / Trade","No.","From","To","Total Hours","Remarks"]);
+      mp.forEach(r=>rows.push([r.name||"",r.role||"",r.no||"",r.from||"",r.to||"",r.total||"",r.remarks||""]));
+      rows.push(["Total","",Math.round(noSum*10)/10,"","",Math.round(totSum*10)/10,""]);
+      rows.push([]);
+      rows.push(["Plant & Equipment","No.","From","To","Total Hours","Remarks"]);
+      eq.forEach(r=>rows.push([r.name||"",r.no||"",r.from||"",r.to||"",r.total||"",r.remarks||""]));
+      rows.push([]);
+      rows.push(["Material / Tools","Qty","Unit","Remarks"]);
+      mt.forEach(r=>rows.push([r.name||"",r.qty||"",r.unit||"",r.remarks||""]));
+      rows.push([]);
+      rows.push(["Prepared By (Vortex)", d.prepared_by_name||"", "Conformed By", d.conformed_by_party||""]);
+      return rows;
+    }
+    async function exportExcel(){
+      try{
+        await loadXLSX();
+        const ws=XLSX.utils.aoa_to_sheet(reportAOA(collect()));
+        ws["!cols"]=[{wch:34},{wch:16},{wch:7},{wch:7},{wch:7},{wch:12},{wch:20}];
+        const wb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, (dateVal()||"Sheet1").slice(0,31));
+        const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,50);
+        XLSX.writeFile(wb, `${iow}_${dateVal()}.xlsx`);
+      }catch(ex){ toast("Excel export failed (no internet?)", true); }
     }
 
     document.getElementById("site").addEventListener("change", load);
