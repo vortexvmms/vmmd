@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.43.1")  # DPR: fix prefill NameError (groups)
+app = FastAPI(title="VMMS API", version="0.44.0")  # DPR: history/list endpoint
 
 app.add_middleware(
     CORSMiddleware,
@@ -2389,6 +2389,33 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
+
+
+@app.get("/api/v1/dpr/list")
+async def dpr_list(site_id: str = "", month: str = "", user: dict = Depends(get_current_user)):
+    """History of saved reports (RLS scopes supervisors to their own sites)."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    params = {"select": "id,site_id,report_date,project_title,prepared_by_name,updated_at,manpower,photos,sites(site_name)",
+              "order": "report_date.desc", "limit": "300"}
+    if site_id:
+        params["site_id"] = f"eq.{site_id}"
+    if month and len(month) == 7:
+        y, m = int(month[:4]), int(month[5:7])
+        start = f"{y:04d}-{m:02d}-01"
+        ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+        params["and"] = f"(report_date.gte.{start},report_date.lt.{ny:04d}-{nm:02d}-01)"
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/daily_reports", params=params,
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+        return [{"id": x["id"], "site_id": x["site_id"],
+                 "site_name": (x.get("sites") or {}).get("site_name", "?"),
+                 "report_date": x["report_date"], "project_title": x.get("project_title"),
+                 "prepared_by_name": x.get("prepared_by_name"),
+                 "manpower": len(x.get("manpower") or []),
+                 "photos": len(x.get("photos") or []),
+                 "updated_at": x.get("updated_at")} for x in rows]
 
 
 class ProjectIn(BaseModel):
