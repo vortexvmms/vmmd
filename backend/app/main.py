@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.41.0")  # dashboard: monthly MC/AL/UL leave leaderboard
+app = FastAPI(title="VMMS API", version="0.42.0")  # Daily Progress Report (Daily Work Record) module
 
 app.add_middleware(
     CORSMiddleware,
@@ -2266,3 +2266,136 @@ async def clear_notifications(user: dict = Depends(get_current_user)):
             params={"user_id": f"eq.{user['user_id']}"},
             headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"})
         return {"ok": True}
+
+
+# ================= Daily Progress Report (Daily Work Record) =================
+DPR_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # anyone who runs a site
+
+
+class DailyReport(BaseModel):
+    site_id: str
+    report_date: str
+    project_title: str | None = None
+    to_party: str | None = None
+    attention: str | None = None
+    location: str | None = None
+    item_of_work: str | None = None
+    date_job_carried: str | None = None
+    description: str | None = None
+    manpower: list[dict] = []
+    equipment: list[dict] = []
+    materials: list[dict] = []
+    photos: list[dict] = []
+    prepared_by_name: str | None = None
+    conformed_by_party: str | None = None
+    status: str | None = "submitted"
+
+
+def _nz_date(v):
+    """Empty string → None, so Postgres date columns don't choke."""
+    return v if (v and str(v).strip()) else None
+
+
+@app.get("/api/v1/dpr")
+async def get_dpr(date: str, site_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/daily_reports",
+            params={"site_id": f"eq.{site_id}", "report_date": f"eq.{date}", "select": "*"},
+            headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+        return rows[0] if rows else {}
+
+
+@app.get("/api/v1/dpr/prefill")
+async def dpr_prefill(date: str, site_id: str, user: dict = Depends(get_current_user)):
+    """Manpower grouped from that day's attendance (by worker trade), plus the
+    header fields from this site's most recent report so repeating fields carry over."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        ra = await client.get(
+            f"{REST}/allocations",
+            params={"work_date": f"eq.{date}", "site_id": f"eq.{site_id}",
+                    "status": "eq.allocated",
+                    "select": "id,workers(trade,name),"
+                              "attendance(present,start_time,end_time,end_next_day,normal_hours,ot_hours)"},
+            headers=supabase_headers(user["token"]))
+        arows = ra.json() if ra.status_code == 200 else []
+
+        groups: dict[str, dict] = {}
+        for a in arows:
+            att = a.get("attendance")
+            if not att or not att.get("present"):
+                continue
+            w = a.get("workers") or {}
+            trade = (w.get("trade") or "").strip() or "General worker"
+            g = groups.setdefault(trade, {"role": trade, "no": 0, "from": 8, "to": None,
+                                          "total": 0.0, "remarks": "", "_from_set": False})
+            g["no"] += 1
+            g["total"] += float(att.get("normal_hours") or 0) + float(att.get("ot_hours") or 0)
+            st = (att.get("start_time") or "08:00")[:5]
+            sh = int(st.split(":")[0])
+            g["from"] = sh if not g["_from_set"] else min(g["from"], sh)
+            g["_from_set"] = True
+            en = (att.get("end_time") or "")[:5]
+            if en:
+                eh = int(en.split(":")[0]) + (24 if att.get("end_next_day") else 0)
+                g["to"] = eh if g["to"] is None else max(g["to"], eh)
+        manpower = []
+        for g in groups.values():
+            g.pop("_from_set", None)
+            g["total"] = round(g["total"], 1)
+            manpower.append(g)
+        manpower.sort(key=lambda x: x["role"].lower())
+
+        # header carry-over from the latest report at this site
+        rh = await client.get(
+            f"{REST}/daily_reports",
+            params={"site_id": f"eq.{site_id}", "order": "report_date.desc", "limit": "1",
+                    "select": "project_title,to_party,attention,location,item_of_work,conformed_by_party"},
+            headers=supabase_headers(user["token"]))
+        hrows = rh.json() if rh.status_code == 200 else []
+        header = hrows[0] if hrows else {}
+        return {"manpower": manpower, "header": header,
+                "present": sum(g["no"] for g in groups.values())}
+
+
+@app.post("/api/v1/dpr")
+async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    payload = {
+        "site_id": body.site_id,
+        "report_date": body.report_date,
+        "project_title": body.project_title,
+        "to_party": body.to_party,
+        "attention": body.attention,
+        "location": body.location,
+        "item_of_work": body.item_of_work,
+        "date_job_carried": _nz_date(body.date_job_carried),
+        "description": body.description,
+        "manpower": body.manpower or [],
+        "equipment": body.equipment or [],
+        "materials": body.materials or [],
+        "photos": body.photos or [],
+        "prepared_by_name": body.prepared_by_name or user.get("name"),
+        "prepared_by": user["user_id"],
+        "conformed_by_party": body.conformed_by_party or "POKB JV Representative",
+        "status": body.status or "submitted",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/daily_reports",
+            params={"on_conflict": "site_id,report_date"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "resolution=merge-duplicates,return=representation"},
+            json=payload)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500,
+                detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
+        rows = r.json()
+        return rows[0] if rows else {"ok": True}
