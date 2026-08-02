@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VMMS API", version="0.44.0")  # DPR: history/list endpoint
+app = FastAPI(title="VCMS API", version="0.45.0")  # DPR: signature_url; rename VMMS→VCMS
 
 app.add_middleware(
     CORSMiddleware,
@@ -2286,6 +2286,7 @@ class DailyReport(BaseModel):
     equipment: list[dict] = []
     materials: list[dict] = []
     photos: list[dict] = []
+    signature_url: str | None = None
     prepared_by_name: str | None = None
     conformed_by_party: str | None = None
     status: str | None = "submitted"
@@ -2371,6 +2372,7 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
         "equipment": body.equipment or [],
         "materials": body.materials or [],
         "photos": body.photos or [],
+        "signature_url": body.signature_url,
         "prepared_by_name": body.prepared_by_name or user.get("name"),
         "prepared_by": user["user_id"],
         "conformed_by_party": body.conformed_by_party or "POKB JV Representative",
