@@ -12,52 +12,26 @@
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
-    /* ---- Liquid-Glass home (iOS-style frosted cards on a Vortex-red gradient) ---- */
-    body.glass-home { min-height: 100vh; background: #A80000; }
-    /* fixed full-viewport gradient behind everything (avoids background-propagation quirks) */
-    body.glass-home::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      background: linear-gradient(165deg, #7E0000 0%, #A80000 28%, #C51E1E 52%, #E88585 78%, #F6E6E6 100%);
-    }
-    .glass {
-      background: rgba(255,255,255,0.60);
-      -webkit-backdrop-filter: blur(18px) saturate(140%);
-      backdrop-filter: blur(18px) saturate(140%);
-      border: 1px solid rgba(255,255,255,0.55);
-      box-shadow: 0 10px 34px rgba(70,0,0,0.20);
-      border-radius: 20px;
-    }
-    .glass-header {
-      background: rgba(110,0,0,0.42);
-      -webkit-backdrop-filter: blur(20px) saturate(140%);
-      backdrop-filter: blur(20px) saturate(140%);
-      border-bottom: 1px solid rgba(255,255,255,0.18);
-    }
-    .glass-tile {
-      background: rgba(255,255,255,0.56);
-      -webkit-backdrop-filter: blur(14px) saturate(140%);
-      backdrop-filter: blur(14px) saturate(140%);
-      border: 1px solid rgba(255,255,255,0.5);
-      box-shadow: 0 6px 20px rgba(70,0,0,0.15);
-      border-radius: 18px;
-      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
-    }
-    .glass-tile:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(70,0,0,0.24); background: rgba(255,255,255,0.72); }
-    .glass-tile:active { transform: translateY(0); }
-    .glass-tile.locked { opacity: .5; }
-    /* frosted look needs a fallback for browsers without backdrop-filter */
-    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-      .glass, .glass-tile { background: rgba(255,255,255,0.92); }
-      .glass-header { background: #8A0000; }
-    }
+    /* ---- Icon-grid home (option B) ---- */
+    body.grid-home { background: #F3F4F6; min-height: 100vh; }
+    .panel { background:#fff; border:1px solid #E5E7EB; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .app-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px 10px; }
+    @media (min-width:640px){ .app-grid{ grid-template-columns:repeat(4,1fr); gap:20px 12px; } }
+    @media (min-width:1024px){ .app-grid{ grid-template-columns:repeat(6,1fr); } }
+    .app-tile { display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;
+                text-decoration:none; -webkit-tap-highlight-color:transparent; }
+    .app-ico { width:60px; height:60px; border-radius:18px; display:flex; align-items:center; justify-content:center;
+               box-shadow:0 5px 12px rgba(0,0,0,.14); transition:transform .14s ease, box-shadow .14s ease; }
+    .app-tile:hover .app-ico { transform:translateY(-3px); box-shadow:0 10px 18px rgba(0,0,0,.2); }
+    .app-tile:active .app-ico { transform:translateY(0); }
+    .app-lbl { font-size:12.5px; color:#374151; line-height:1.25; max-width:82px; }
+    .app-tile.locked { opacity:.4; }
+    .app-tile.locked .app-lbl::after { content:""; }
   </style>
 </head>
-<body class="glass-home min-h-screen flex flex-col">
+<body class="grid-home min-h-screen flex flex-col">
 
-  <header class="glass-header text-white p-4 flex items-center justify-between md:px-8 sticky top-0 z-10">
+  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between md:px-8 sticky top-0 z-10">
     <div class="flex items-center gap-3">
       <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
            class="h-9 bg-white rounded-lg p-1" onerror="this.style.display='none'">
@@ -72,16 +46,16 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md md:max-w-4xl mx-auto w-full">
-    <div id="loading" class="text-center text-white mt-10">Checking your account…</div>
+    <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
 
     <div id="content" class="hidden">
-      <div class="glass p-5 mt-4">
+      <div class="panel p-5 mt-4">
         <p class="text-xl font-bold text-gray-900" id="greet">—</p>
-        <p class="text-sm text-gray-600" id="name">—</p>
+        <p class="text-sm text-gray-500" id="name">—</p>
         <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-700 text-white">—</span>
       </div>
 
-      <div id="switcher" class="hidden glass p-3 mt-3 flex items-center gap-2">
+      <div id="switcher" class="hidden panel p-3 mt-3 flex items-center gap-2">
         <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
         <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
           <option value="admin">Administrator</option>
@@ -98,10 +72,10 @@
         </select>
       </div>
 
-      <div class="mt-6 space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-3" id="menu"></div>
+      <div class="mt-6 app-grid" id="menu"></div>
     </div>
 
-    <div id="noprofile" class="hidden glass p-6 mt-10 text-center">
+    <div id="noprofile" class="hidden panel p-6 mt-10 text-center">
       <div class="text-4xl mb-3">⚠️</div>
       <p class="font-bold text-gray-800 mb-2">Login works, but no VMMS role is linked yet.</p>
       <p class="text-sm text-gray-500">Ask the administrator to link your account (Phase 3 guide, Step 3).</p>
@@ -109,7 +83,7 @@
     </div>
   </main>
 
-  <footer class="p-4 flex items-center justify-center text-xs text-gray-700">
+  <footer class="p-4 flex items-center justify-center text-xs text-gray-500">
     <span>Vortex Engineering Pte Ltd</span>
   </footer>
 
@@ -123,7 +97,6 @@
       logistics_sup:"Logistics Supervisor", payroll:"Payroll",
     };
 
-    // Every role maps to one of four access tiers.
     const ROLE_TIER = {
       admin:"full", general_manager:"full", operation_manager:"full", hr_assistant:"full",
       main_sup:"manager", wshc_lead:"manager",
@@ -131,7 +104,6 @@
       payroll:"payroll",
     };
 
-    // Menu per tier: [label, phase, page].
     const TIER_MENU = {
       full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
@@ -139,10 +111,45 @@
       payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
     };
     function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
-    // Full catalog so a custom per-user menu can include ANY section.
     const ALL_MENU = [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Request Manpower", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]];
-    const DONE_PHASE = 12; // raise this as phases complete
-    let ALLOWED = null;    // per-user section allow-list (null = the role's default menu)
+    const DONE_PHASE = 12;
+    let ALLOWED = null;
+
+    // Short, tidy labels under each icon (full label kept as tooltip)
+    const SHORT = {
+      "Daily Allocation":"Allocation", "Request Manpower (next day)":"Request",
+      "Request Manpower":"Request", "End-Time Verification":"End-Time",
+      "WhatsApp Messages":"WhatsApp", "WhatsApp (Site Update)":"WhatsApp", "WhatsApp Update":"WhatsApp",
+      "Monthly Timesheet":"Timesheet", "Monthly Man-Hours":"Man-Hours", "Users & Access":"Users",
+      "My Site — Attendance":"Attendance", "Dashboard (my sites)":"Dashboard", "Reports (my sites)":"Reports",
+    };
+
+    // Icon colour per page (rounded app-tile background)
+    const COLORS = {
+      "workers.html":"#2563EB", "sites.html":"#4F46E5", "allocation.html":"#C00000",
+      "request.html":"#C00000", "attendance.html":"#16A34A", "verify.html":"#0D9488",
+      "whatsapp.html":"#059669", "dashboard.html":"#7C3AED", "reports.html":"#D97706",
+      "timesheet.html":"#EA580C", "manhours.html":"#E11D48", "users.html":"#475569",
+      "settings.html":"#6B7280", "help.html":"#0EA5E9",
+    };
+    // Inline SVG glyph per page (stroke = white, set on the <svg>)
+    const ICONS = {
+      "workers.html":'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.7-5.2 5.5-5.2s5.5 1.9 5.5 5.2"/><circle cx="17.5" cy="9" r="2.3"/><path d="M16 14.8c2.4.2 4 2 4 4.2"/>',
+      "sites.html":'<path d="M4 20V6l6-2 6 2v14"/><path d="M3 20h18"/><path d="M9 20v-4h2v4"/><path d="M7 9h.5M7 12h.5M13 9h.5M13 12h.5"/>',
+      "allocation.html":'<rect x="6" y="4.5" width="12" height="15" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M9 10h6M9 13h6M9 16h4"/>',
+      "request.html":'<rect x="6" y="4.5" width="12" height="15" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M12 9.5v5M9.5 12h5"/>',
+      "attendance.html":'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+      "verify.html":'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+      "whatsapp.html":'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
+      "dashboard.html":'<path d="M5 20V11M10 20V5M15 20v-6M20 20v-9"/>',
+      "reports.html":'<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4"/><path d="M9.5 12h5M9.5 15h5"/>',
+      "timesheet.html":'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
+      "manhours.html":'<circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5"/><path d="M9.5 3.5h5"/>',
+      "users.html":'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/><path d="M9.5 12l1.8 1.8L15 10"/>',
+      "settings.html":'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/>',
+      "help.html":'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
+      _default:'<circle cx="12" cy="12" r="8"/>',
+    };
 
     function renderMenu(role) {
       const menu = document.getElementById("menu");
@@ -154,10 +161,17 @@
         const unlocked = phase <= DONE_PHASE;
         const el = document.createElement(unlocked ? "a" : "div");
         if (unlocked) el.href = page;
-        el.className = "glass-tile p-4 flex items-center justify-between " + (unlocked ? "" : "locked");
-        el.innerHTML = `<span class="font-medium text-gray-900">${label}</span>` +
-          (unlocked ? `<span class="text-red-700 font-bold text-lg">›</span>`
-                    : `<span class="text-xs text-gray-500">Phase ${phase}</span>`);
+        el.className = "app-tile" + (unlocked ? "" : " locked");
+        el.title = label;
+        const color = COLORS[page] || "#6B7280";
+        const icon = ICONS[page] || ICONS._default;
+        const short = SHORT[label] || label;
+        el.innerHTML =
+          `<span class="app-ico" style="background:${color}">
+             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+           </span>
+           <span class="app-lbl">${esc(short)}</span>`;
         menu.appendChild(el);
       });
     }
@@ -181,7 +195,6 @@
         document.getElementById("name").textContent = me.name;
         document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
 
-        // Only the Administrator can act as another role (a view switch on the menu).
         let viewRole = me.role;
         if (me.role === "admin") {
           viewRole = localStorage.getItem("vmms_view_role") || "admin";
