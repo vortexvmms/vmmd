@@ -2548,5 +2548,5 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
         import re as _re
         m = _re.search(r"<Code>([^<]+)</Code>", r.text or "")
         code = m.group(1) if m else (r.text or "")[:120]
-        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code}: {code})")
+        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code}: {code}) [bucket='{R2_BUCKET}' acct={R2_ACCOUNT_ID[:8]}.. base='{R2_PUBLIC_BASE}']")
     return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
