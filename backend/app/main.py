@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.49.0")  # R2 upload via backend proxy (CORS-free)
+app = FastAPI(title="VCMS API", version="0.50.0")  # R2 upload via backend proxy (CORS-free)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2545,8 +2545,5 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
     async with shared_client() as client:
         r = await client.put(put_url, content=body, headers={"Content-Type": content_type})
     if r.status_code not in (200, 201):
-        import re as _re
-        m = _re.search(r"<Code>([^<]+)</Code>", r.text or "")
-        code = m.group(1) if m else (r.text or "")[:120]
-        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code}: {code}) [bucket='{R2_BUCKET}' acct={R2_ACCOUNT_ID[:8]}.. base='{R2_PUBLIC_BASE}']")
+        raise HTTPException(status_code=502, detail="Photo storage upload failed")
     return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
