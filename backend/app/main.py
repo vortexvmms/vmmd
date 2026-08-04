@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.51.1")  # R2 upload via backend proxy (CORS-free)
+app = FastAPI(title="VCMS API", version="0.51.2")  # R2 upload via backend proxy (CORS-free)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2383,10 +2383,12 @@ async def push_pubkey():
 @app.post("/api/v1/push/subscribe")
 async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)):
     async with shared_client() as client:
+        # Save with the service role: the backend already authenticated the user and
+        # sets user_id explicitly, so this is safe and avoids RLS/token-expiry issues.
         r = await client.post(
             f"{REST}/push_subscriptions",
             params={"on_conflict": "endpoint"},
-            headers={**supabase_headers(user["token"]),
+            headers={**service_headers(),
                      "Prefer": "resolution=merge-duplicates,return=minimal"},
             json={"user_id": user["user_id"], "endpoint": body.endpoint,
                   "p256dh": body.p256dh, "auth": body.auth, "user_agent": body.user_agent})
@@ -2402,7 +2404,7 @@ async def push_unsubscribe(body: PushEp, user: dict = Depends(get_current_user))
         await client.delete(
             f"{REST}/push_subscriptions",
             params={"endpoint": f"eq.{body.endpoint}", "user_id": f"eq.{user['user_id']}"},
-            headers=supabase_headers(user["token"]))
+            headers=service_headers())
     return {"ok": True}
 
 
