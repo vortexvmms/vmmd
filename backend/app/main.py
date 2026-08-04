@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.51.2")  # R2 upload via backend proxy (CORS-free)
+app = FastAPI(title="VCMS API", version="0.52.0")  # admin broadcast push + settings notif tab
 
 app.add_middleware(
     CORSMiddleware,
@@ -2393,8 +2393,7 @@ async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)
             json={"user_id": user["user_id"], "endpoint": body.endpoint,
                   "p256dh": body.p256dh, "auth": body.auth, "user_agent": body.user_agent})
         if r.status_code not in (200, 201, 204):
-            raise HTTPException(status_code=500,
-                detail=f"Could not save subscription (db {r.status_code}: {(r.text or '')[:140]})")
+            raise HTTPException(status_code=500, detail="Could not save subscription.")
         return {"ok": True}
 
 
@@ -2414,6 +2413,52 @@ async def push_test(user: dict = Depends(get_current_user)):
         await send_web_push(client, [user["user_id"]], "VCMS test",
                             "Phone notifications are working.", "home.html")
     return {"ok": True}
+
+
+class BroadcastIn(BaseModel):
+    title: str
+    body: str | None = ""
+    target: str = "all"           # all | role | site
+    roles: list[str] | None = None
+    site_ids: list[str] | None = None
+    link: str | None = None
+
+
+@app.post("/api/v1/push/broadcast")
+async def push_broadcast(body: BroadcastIn, user: dict = Depends(get_current_user)):
+    """Admin-only: send a custom notification (bell + phone push) to everyone,
+    to selected roles, or to the supervisors of selected sites."""
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only administrators can send notifications.")
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Message title is required.")
+    if not SUPABASE_SERVICE_KEY:
+        raise HTTPException(status_code=503, detail="Service role not configured.")
+    async with shared_client() as client:
+        ids = set()
+        if body.target == "role" and body.roles:
+            ids.update(await _svc_user_ids(client, {"role": f"in.({','.join(body.roles)})"}))
+        elif body.target == "site" and body.site_ids:
+            r = await client.get(f"{REST}/site_supervisors",
+                                 params={"site_id": f"in.({','.join(body.site_ids)})",
+                                         "select": "user_id"},
+                                 headers=service_headers())
+            ids.update(u["user_id"] for u in (r.json() if r.status_code == 200 else []))
+        else:
+            ids.update(await _svc_user_ids(client, {}))   # all active users
+        ids = [i for i in ids if i]
+        if not ids:
+            return {"ok": True, "recipients": 0}
+        link = body.link or "home.html"
+        text = (body.body or "").strip()
+        rows = [{"user_id": uid, "kind": "broadcast", "title": title,
+                 "body": text, "link": link} for uid in ids]
+        await client.post(f"{REST}/notifications",
+                          headers={**service_headers(), "Prefer": "return=minimal"},
+                          json=rows)
+        await send_web_push(client, ids, title, text, link)
+        return {"ok": True, "recipients": len(ids)}
 
 
 # ================= Scheduled reminders (cron → push) =================
