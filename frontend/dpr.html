@@ -95,8 +95,9 @@
     <div class="panel p-4">
       <label class="lbl">Project directory</label>
       <div class="flex gap-2">
-        <select id="proj" class="fld" onchange="onProj()"><option value="">— choose a saved project —</option></select>
+        <select id="proj" class="fld" onchange="onProj()"><option value="">— choose saved item of work —</option></select>
         <button onclick="saveProject()" class="text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 whitespace-nowrap">Save as project</button>
+        <button id="delproj" onclick="deleteProject()" class="hidden text-xs font-bold text-white bg-red-700 rounded-lg px-3 whitespace-nowrap">Delete</button>
       </div>
       <div class="grid3 mt-3">
         <div><label class="lbl">Project</label><input id="f-project" class="fld" placeholder="Project title"></div>
@@ -188,14 +189,12 @@
         <canvas id="sigpad" class="sigpad"></canvas>
         <img id="sigimg" class="sigimg hidden" crossorigin="anonymous">
       </div>
-      <div class="flex gap-2 mt-2 flex-wrap">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
         <button type="button" class="addbtn" onclick="sigUseDrawing()">Use drawing</button>
         <button type="button" class="addbtn" onclick="sigClear()">Clear pad</button>
-        <label class="addbtn" style="cursor:pointer">Upload sign image
+        <label class="addbtn" style="cursor:pointer;text-align:center">Upload sign image
           <input id="sigfile" type="file" accept="image/*" class="hidden" onchange="onSigFile(event)"></label>
         <button type="button" class="addbtn" onclick="sigRemove()">Remove</button>
-      </div>
-      <div class="flex gap-2 mt-2 flex-wrap">
         <button type="button" class="addbtn" style="background:#fef2f2" onclick="useMySig()">Use my saved signature</button>
         <button type="button" class="addbtn" style="background:#fef2f2" onclick="saveMySig()">Save as my signature</button>
       </div>
@@ -242,6 +241,8 @@
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;} ME=await r.json();
       setv("f-prep", ME.name||"");
+      // only managers/office can delete directory entries
+      if(window.isCoordinator && isCoordinator(ME.role)) document.getElementById("delproj").classList.remove("hidden");
       const rs=await vmmsApi("/api/v1/sites");
       SITES=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
       // Supervisors only see the sites they are assigned to; managers/admins see all.
@@ -267,9 +268,15 @@
 
     async function loadProjects(){
       try{ const r=await vmmsApi("/api/v1/dpr/projects"); PROJECTS=r.ok?await r.json():[]; }catch(e){ PROJECTS=[]; }
-      // show the ITEM OF WORK in the directory (a project can have several) — fall back to title
+      renderProjOptions();
+    }
+    // Directory shows the ITEM OF WORK (a project can have several), scoped to the
+    // current site (legacy entries with no site show everywhere). Value = index in PROJECTS.
+    function renderProjOptions(){
+      const site=siteVal();
+      const vis=PROJECTS.map((p,i)=>({p,i})).filter(o=> !o.p.site_id || o.p.site_id===site);
       document.getElementById("proj").innerHTML='<option value="">— choose saved item of work —</option>'+
-        PROJECTS.map((p,i)=>`<option value="${i}">${esc(p.item_of_work||p.title||"(untitled)")}</option>`).join("");
+        vis.map(o=>`<option value="${o.i}">${esc(o.p.item_of_work||o.p.title||"(untitled)")}</option>`).join("");
     }
     function onProj(){
       const i=document.getElementById("proj").value; if(i==="") return;
@@ -279,10 +286,22 @@
     }
     async function saveProject(){
       const title=val("f-project"); if(!title){ toast("Enter a project title first"); return; }
+      if(!siteVal()){ toast("Choose a site first"); return; }
       try{
-        const r=await vmmsApi("/api/v1/dpr/projects",{method:"POST",body:JSON.stringify({title, to_party:val("f-to"), attention:val("f-attn"), location:val("f-loc"), item_of_work:val("f-item")})});
+        const r=await vmmsApi("/api/v1/dpr/projects",{method:"POST",body:JSON.stringify({title, to_party:val("f-to"), attention:val("f-attn"), location:val("f-loc"), item_of_work:val("f-item"), site_id:siteVal()})});
         if(!r.ok){ const e=await r.json(); throw new Error(e.detail||"Could not save"); }
         await loadProjects(); toast("Project saved to directory", false, true);
+      }catch(ex){ toast(ex.message, true); }
+    }
+    async function deleteProject(){
+      const v=document.getElementById("proj").value;
+      const p=(v!=="")?PROJECTS[+v]:null;
+      if(!p || !p.id){ toast("Choose a saved item of work to delete"); return; }
+      if(!confirm(`Delete "${p.item_of_work||p.title}" from the directory?`)) return;
+      try{
+        const r=await vmmsApi(`/api/v1/dpr/projects/${p.id}`,{method:"DELETE"});
+        if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.detail||"Could not delete"); }
+        await loadProjects(); toast("Deleted from directory", false, true);
       }catch(ex){ toast(ex.message, true); }
     }
 
@@ -354,11 +373,27 @@
       msg.textContent="";
     }
     async function onPhotos(e){ const f=[...e.target.files]; e.target.value=""; await handleUpload(f); }
+    // Shrink big phone photos before upload so reports (and the PDF) stay small.
+    async function compressImage(file, maxDim=1600, quality=0.72){
+      try{
+        if(!file.type || !file.type.startsWith("image/")) return file;
+        const bmp=await createImageBitmap(file);
+        let w=bmp.width, h=bmp.height;
+        const scale=Math.min(1, maxDim/Math.max(w,h));
+        w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
+        const c=document.createElement("canvas"); c.width=w; c.height=h;
+        c.getContext("2d").drawImage(bmp,0,0,w,h);
+        const blob=await new Promise(res=>c.toBlob(res,"image/jpeg",quality));
+        return (blob && blob.size < file.size) ? blob : file;   // keep whichever is smaller
+      }catch(e){ return file; }
+    }
     async function uploadPhoto(file, site, date){
-      const s=getSession(); const ext=(file.type.split("/")[1]||"png").replace(/[^a-z0-9]/gi,"");
+      const s=getSession();
+      const body=await compressImage(file);
+      const ext = body.type==="image/jpeg" ? "jpg" : ((file.type.split("/")[1]||"png").replace(/[^a-z0-9]/gi,""));
       const path=`${site}/${date}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
       const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":file.type||"application/octet-stream", "x-upsert":"true" }, body:file });
+        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":body.type||"image/jpeg", "x-upsert":"true" }, body });
       if(!r.ok) throw new Error("upload "+r.status);
       return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
     }
@@ -434,6 +469,7 @@
     async function load(){
       const cd=document.getElementById("copydate"); if(cd && !cd.value) cd.value=prevDay(dateVal());
       const cdd=document.getElementById("copydesc-date"); if(cdd && !cdd.value) cdd.value=prevDay(dateVal());
+      renderProjOptions();   // re-scope the directory to the selected site
       const r=await vmmsApi(`/api/v1/dpr?date=${dateVal()}&site_id=${siteVal()}`);
       const d=r.ok?await r.json():{};
       const banner=document.getElementById("banner");
@@ -612,43 +648,74 @@
       w.document.close();
     }
 
-    // ---- Excel export (current report → one sheet; filename ITEM OF WORK_DATE) ----
-    async function loadXLSX(){ if(window.XLSX) return; await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
-    function reportAOA(d){
-      const dmy=v=>{ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; };
-      const mp=d.manpower||[], eq=d.equipment||[], mt=d.materials||[];
-      const noSum=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0), totSum=mp.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
-      const rows=[];
-      rows.push([d.project_title||""]);
-      rows.push(["DAILY WORK RECORD"]);
-      rows.push(["To:", d.to_party||"", "Attention:", d.attention||"", "Date:", dmy(d.report_date)]);
-      rows.push(["Location:", d.location||"", "Item of Work:", d.item_of_work||""]);
-      rows.push(["Description of Works:"]);
-      String(d.description||"").split("\n").forEach(l=>rows.push([l]));
-      rows.push([]);
-      rows.push(["Name","Role / Trade","No.","From","To","Total Hours","Remarks"]);
-      mp.forEach(r=>rows.push([r.name||"",r.role||"",r.no||"",r.from||"",r.to||"",r.total||"",r.remarks||""]));
-      rows.push(["Total","",Math.round(noSum*10)/10,"","",Math.round(totSum*10)/10,""]);
-      rows.push([]);
-      rows.push(["Plant & Equipment","No.","From","To","Total Hours","Remarks"]);
-      eq.forEach(r=>rows.push([r.name||"",r.no||"",r.from||"",r.to||"",r.total||"",r.remarks||""]));
-      rows.push([]);
-      rows.push(["Material / Tools","Qty","Unit","Remarks"]);
-      mt.forEach(r=>rows.push([r.name||"",r.qty||"",r.unit||"",r.remarks||""]));
-      rows.push([]);
-      rows.push(["Prepared By (Vortex)", d.prepared_by_name||"", "Conformed By", d.conformed_by_party||""]);
-      return rows;
+    // ---- Excel export (ExcelJS: report layout, borders + embedded photos) ----
+    async function loadExcelJS(){ if(window.ExcelJS) return; await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
+    function xlDMY(v){ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; }
+    async function imgForXlsx(url){
+      try{
+        const blob=await (await fetch(url,{mode:"cors"})).blob();
+        const bmp=await createImageBitmap(blob);
+        let w=bmp.width,h=bmp.height; const sc=Math.min(1,1000/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+        const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        return { b64:c.toDataURL("image/jpeg",0.72).split(",")[1], ext:"jpeg", w, h };
+      }catch(e){ return null; }
     }
+    async function buildReportSheet(wb, d, name){
+      const THIN={style:"thin",color:{argb:"FF000000"}}, BORDER={top:THIN,left:THIN,bottom:THIN,right:THIN};
+      const ctr={horizontal:"center",vertical:"middle",wrapText:true}, HEAD={type:"pattern",pattern:"solid",fgColor:{argb:"FFEFEFEF"}};
+      const ws=wb.addWorksheet(String(name||"Report").slice(0,31).replace(/[\\/?*\[\]:]/g,"_"), {views:[{showGridLines:false}]});
+      ws.columns=[{width:26},{width:16},{width:6},{width:6},{width:6},{width:12},{width:20}];
+      const bd=(r1,r2,c1,c2)=>{ for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++) ws.getCell(r,c).border=BORDER; };
+      const M=(row,c1,c2)=>ws.mergeCells(row,c1,row,c2);
+      let R=1;
+      ws.getCell(R,1).value=d.project_title||""; ws.getCell(R,1).font={bold:true}; ws.getCell(R,1).alignment=ctr; M(R,1,7); R++;
+      ws.getCell(R,1).value="DAILY WORK RECORD"; ws.getCell(R,1).font={bold:true,size:13}; ws.getCell(R,1).alignment=ctr; M(R,1,7); bd(R,R,1,7); R++;
+      ws.getCell(R,1).value="To:"; ws.getCell(R,1).font={bold:true}; ws.getCell(R,2).value=d.to_party||""; M(R,2,3);
+      ws.getCell(R,4).value="Attention:"; ws.getCell(R,4).font={bold:true}; ws.getCell(R,5).value=d.attention||"";
+      ws.getCell(R,6).value="Date:"; ws.getCell(R,6).font={bold:true}; ws.getCell(R,7).value=xlDMY(d.report_date); bd(R,R,1,7); R++;
+      ws.getCell(R,1).value="Location:"; ws.getCell(R,1).font={bold:true}; ws.getCell(R,2).value=d.location||""; M(R,2,3);
+      ws.getCell(R,4).value="Item of Work:"; ws.getCell(R,4).font={bold:true}; ws.getCell(R,5).value=d.item_of_work||""; M(R,5,7); bd(R,R,1,7); R++;
+      ws.getCell(R,1).value="Description of Works:"; ws.getCell(R,1).font={bold:true}; M(R,1,7); bd(R,R,1,7); R++;
+      const desc=String(d.description||""); ws.getCell(R,1).value=desc; ws.getCell(R,1).alignment={vertical:"top",wrapText:true}; M(R,1,7); ws.getRow(R).height=Math.max(28,Math.min(140,14*(desc.split("\n").length+1))); bd(R,R,1,7); R+=2;
+      const mp=d.manpower||[]; ws.getRow(R).values=["Name","Role / Trade","No.","From","To","Total Hours","Remarks"]; ws.getRow(R).eachCell(c=>{c.font={bold:true};c.alignment=ctr;c.fill=HEAD;}); const mpS=R; R++;
+      mp.forEach(m=>{ ws.getRow(R).values=[m.name||"",m.role||"",m.no||"",m.from||"",m.to||"",m.total||"",m.remarks||""]; [3,4,5,6].forEach(c=>ws.getCell(R,c).alignment={horizontal:"center"}); R++; });
+      const noS=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0), toS=mp.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
+      ws.getRow(R).values=["Total","",Math.round(noS*10)/10,"","",Math.round(toS*10)/10,""]; ws.getCell(R,1).font={bold:true}; ws.getCell(R,3).font={bold:true}; ws.getCell(R,6).font={bold:true}; bd(mpS,R,1,7); R+=2;
+      const eq=d.equipment||[]; ws.getRow(R).values=["Plant & Equipment","No.","From","To","Total Hours","Remarks"]; ws.getRow(R).eachCell(c=>{c.font={bold:true};c.alignment=ctr;c.fill=HEAD;}); const eqS=R; R++;
+      (eq.length?eq:[{}]).forEach(m=>{ ws.getRow(R).values=[m.name||"",m.no||"",m.from||"",m.to||"",m.total||"",m.remarks||""]; R++; });
+      bd(eqS,R-1,1,6); R++;
+      const mt=d.materials||[]; ws.getRow(R).values=["Material / Tools","Qty","Unit","Remarks"]; ws.getRow(R).eachCell(c=>{c.font={bold:true};c.alignment=ctr;c.fill=HEAD;}); const mtS=R; R++;
+      (mt.length?mt:[{}]).forEach(m=>{ ws.getRow(R).values=[m.name||"",m.qty||"",m.unit||"",m.remarks||""]; R++; });
+      bd(mtS,R-1,1,4); R++;
+      ws.getCell(R,1).value="Prepared By (VORTEX) Representative"; ws.getCell(R,1).font={bold:true}; M(R,1,3); ws.getCell(R,4).value="Conformed By: "+(d.conformed_by_party||""); ws.getCell(R,4).font={bold:true}; M(R,4,7); bd(R,R,1,7); R++;
+      ws.getCell(R,1).value=(d.prepared_by_name||"")+(d.report_date?("    "+xlDMY(d.report_date)):""); M(R,1,3); M(R,4,7); ws.getRow(R).height=28; bd(R,R,1,7); R+=2;
+      const ph=Array.isArray(d.photos)?d.photos:[];
+      if(ph.length){
+        ws.getCell(R,1).value="Activity Photos"; ws.getCell(R,1).font={bold:true}; M(R,1,7); R++;
+        for(let i=0;i<ph.length;i+=2){
+          const cap=R;
+          ws.getCell(cap,1).value=ph[i].caption||""; ws.getCell(cap,1).font={bold:true}; ws.getCell(cap,1).alignment=ctr; M(cap,1,3);
+          if(ph[i+1]){ ws.getCell(cap,5).value=ph[i+1].caption||""; ws.getCell(cap,5).font={bold:true}; ws.getCell(cap,5).alignment=ctr; M(cap,5,7); }
+          R++;
+          const irow=R; ws.getRow(irow).height=120; const box={w:210,h:158};
+          const a=await imgForXlsx(ph[i].url); if(a){ const id=wb.addImage({base64:a.b64,extension:a.ext}); const s=Math.min(box.w/a.w,box.h/a.h); ws.addImage(id,{tl:{col:0.1,row:irow-1+0.05},ext:{width:Math.round(a.w*s),height:Math.round(a.h*s)}}); }
+          if(ph[i+1]){ const b=await imgForXlsx(ph[i+1].url); if(b){ const id2=wb.addImage({base64:b.b64,extension:b.ext}); const s2=Math.min(box.w/b.w,box.h/b.h); ws.addImage(id2,{tl:{col:4.1,row:irow-1+0.05},ext:{width:Math.round(b.w*s2),height:Math.round(b.h*s2)}}); } }
+          R++;
+        }
+      }
+      return ws;
+    }
+    function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500); }
     async function exportExcel(){
       try{
-        await loadXLSX();
-        const ws=XLSX.utils.aoa_to_sheet(reportAOA(collect()));
-        ws["!cols"]=[{wch:34},{wch:16},{wch:7},{wch:7},{wch:7},{wch:12},{wch:20}];
-        const wb=XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, (dateVal()||"Sheet1").slice(0,31));
+        await loadExcelJS(); toast("Building Excel…");
+        const wb=new ExcelJS.Workbook();
+        await buildReportSheet(wb, collect(), dateVal()||"Report");
+        const buf=await wb.xlsx.writeBuffer();
         const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,50);
-        XLSX.writeFile(wb, `${iow}_${dateVal()}.xlsx`);
-      }catch(ex){ toast("Excel export failed (no internet?)", true); }
+        dlBlob(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), `${iow}_${dateVal()}.xlsx`);
+        toast("✓ Excel ready", false, true);
+      }catch(ex){ toast("Excel export failed", true); }
     }
 
     document.getElementById("site").addEventListener("change", load);
