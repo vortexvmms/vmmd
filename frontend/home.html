@@ -83,6 +83,15 @@
         </select>
       </div>
 
+      <div id="pushcard" class="hidden panel p-4 mt-3 flex items-center gap-3">
+        <div class="flex-1">
+          <p class="font-bold text-gray-900 text-sm">Phone notifications</p>
+          <p id="pushmsg" class="text-xs text-gray-500">—</p>
+        </div>
+        <button id="pushtest" onclick="onPushTest()" class="hidden text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 py-2 whitespace-nowrap">Test</button>
+        <button id="pushbtn" onclick="onPushBtn()" class="hidden bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">Enable</button>
+      </div>
+
       <div class="mt-4" id="menu"></div>
     </div>
 
@@ -270,10 +279,42 @@
 
         document.getElementById("loading").classList.add("hidden");
         document.getElementById("content").classList.remove("hidden");
+        refreshPush();
       } catch (ex) {
         vmmsLogout();
       }
     }
+
+    async function refreshPush() {
+      const card = document.getElementById("pushcard"); if (!card || !window.vmmsPushStatus) return;
+      const st = await vmmsPushStatus();
+      const msg = document.getElementById("pushmsg"), btn = document.getElementById("pushbtn"), test = document.getElementById("pushtest");
+      card.classList.remove("hidden");
+      if (st === "unsupported") {
+        msg.textContent = "On iPhone: add VCMS to your Home Screen first, then open it from the icon to enable alerts.";
+        btn.classList.add("hidden"); test.classList.add("hidden");
+      } else if (st === "blocked") {
+        msg.textContent = "Notifications are blocked. Allow them for this site in your phone/browser settings, then reload.";
+        btn.classList.add("hidden"); test.classList.add("hidden");
+      } else if (st === "on") {
+        msg.textContent = "On — you'll get allocation, request & reminder alerts on this phone.";
+        btn.textContent = "Turn off"; btn.onclick = onPushOff; btn.classList.remove("hidden"); test.classList.remove("hidden");
+      } else {
+        msg.textContent = "Get allocation, request & reminder alerts on this phone.";
+        btn.textContent = "Enable"; btn.onclick = onPushBtn; btn.classList.remove("hidden"); test.classList.add("hidden");
+      }
+    }
+    async function onPushBtn() {
+      const btn = document.getElementById("pushbtn"); btn.disabled = true; const t = btn.textContent; btn.textContent = "…";
+      const r = await vmmsEnablePush(); btn.disabled = false; btn.textContent = t;
+      if (!r.ok) {
+        const m = { unsupported: "Not supported here. On iPhone, install VCMS to Home Screen first.", denied: "Permission was denied. Allow notifications in settings, then try again.", server_off: "Server push isn't switched on yet — the admin needs to add the VAPID keys.", save_failed: "Couldn't save. Try again." }[r.reason] || ("Couldn't enable: " + r.reason);
+        alert(m);
+      }
+      refreshPush();
+    }
+    async function onPushOff() { await vmmsDisablePush(); refreshPush(); }
+    async function onPushTest() { const ok = await vmmsTestPush(); alert(ok ? "Test notification sent — check your phone." : "Couldn't send the test."); }
     load();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
