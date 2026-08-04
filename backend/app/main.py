@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.47.0")  # DPR: project site_id + delete
+app = FastAPI(title="VCMS API", version="0.48.0")  # R2 photo storage (optional) + presign
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,6 +36,40 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
 # management (create login, reset password). Never sent to the frontend.
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 REST = f"{SUPABASE_URL}/rest/v1"
+
+# ---- Cloudflare R2 photo storage (optional; falls back to Supabase if unset) ----
+# Set these in Render env to send new photo uploads to R2 (10 GB free, no egress).
+import hashlib as _hl, hmac as _hm, datetime as _dt, urllib.parse as _up
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "").strip()
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
+R2_SECRET = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
+R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
+R2_PUBLIC_BASE = os.environ.get("R2_PUBLIC_BASE", "").strip().rstrip("/")
+R2_ENABLED = all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET, R2_BUCKET, R2_PUBLIC_BASE])
+
+def _r2_presign_put(key: str, expires: int = 600) -> str:
+    """SigV4 presigned PUT URL for R2 (host-only signed, unsigned payload)."""
+    host = f"{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    region, service = "auto", "s3"
+    now = _dt.datetime.utcnow()
+    amzdate = now.strftime("%Y%m%dT%H%M%SZ"); datestamp = now.strftime("%Y%m%d")
+    canon_uri = "/" + R2_BUCKET + "/" + _up.quote(key, safe="/~")
+    scope = f"{datestamp}/{region}/{service}/aws4_request"
+    q = {
+        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+        "X-Amz-Credential": f"{R2_ACCESS_KEY_ID}/{scope}",
+        "X-Amz-Date": amzdate,
+        "X-Amz-Expires": str(expires),
+        "X-Amz-SignedHeaders": "host",
+    }
+    canon_qs = "&".join(f"{_up.quote(k, safe='~')}={_up.quote(v, safe='~')}" for k, v in sorted(q.items()))
+    canon_req = f"PUT\n{canon_uri}\n{canon_qs}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
+    sts = f"AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{_hl.sha256(canon_req.encode()).hexdigest()}"
+    def _sign(k, m): return _hm.new(k, m.encode(), _hl.sha256).digest()
+    k_date = _sign(("AWS4" + R2_SECRET).encode(), datestamp)
+    k_sign = _sign(_sign(_sign(k_date, region), service), "aws4_request")
+    sig = _hm.new(k_sign, sts.encode(), _hl.sha256).hexdigest()
+    return f"https://{host}{canon_uri}?{canon_qs}&X-Amz-Signature={sig}"
 
 # ---- one shared HTTP client to Supabase ----------------------------------
 # Every call used to open a brand-new httpx client, which meant a fresh TLS
@@ -2469,3 +2503,24 @@ async def delete_project(project_id: str, user: dict = Depends(get_current_user)
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete project")
         return {"ok": True}
+
+
+class UploadUrlIn(BaseModel):
+    path: str
+    content_type: str | None = "image/jpeg"
+
+
+@app.post("/api/v1/storage/upload-url")
+async def storage_upload_url(body: UploadUrlIn, user: dict = Depends(get_current_user)):
+    """If R2 is configured, hand the browser a presigned PUT URL + the public URL.
+    Otherwise reply configured:false so the frontend falls back to Supabase."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if not R2_ENABLED:
+        return {"configured": False}
+    key = body.path.strip("/").replace("..", "")
+    if not key:
+        raise HTTPException(status_code=400, detail="Bad path")
+    return {"configured": True, "put_url": _r2_presign_put(key),
+            "public_url": f"{R2_PUBLIC_BASE}/{key}",
+            "content_type": body.content_type or "image/jpeg"}
