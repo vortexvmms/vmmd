@@ -1,0 +1,39 @@
+# VCMS — scheduled push reminders
+# Copy to  .github/workflows/reminders.yml
+#
+# SETUP:
+#   GitHub repo → Settings → Secrets and variables → Actions → New secret
+#      Name: REMINDER_TOKEN   Value: (the same value you put in Render's REMINDER_TOKEN env var)
+#
+# Times: GitHub cron is UTC. SGT = UTC + 8.
+#   08:30 SGT attendance reminder  = 00:30 UTC
+#   21:00 SGT end-time reminder    = 13:00 UTC
+# (GitHub may fire a few minutes late — fine for reminders.)
+name: VCMS reminders
+
+on:
+  schedule:
+    - cron: "30 0 * * *"    # 08:30 SGT — morning attendance
+    - cron: "0 13 * * *"     # 21:00 SGT — end-time submission
+  workflow_dispatch: {}       # manual test (runs both)
+
+jobs:
+  attendance:
+    if: github.event.schedule == '30 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nudge sites that haven't submitted attendance
+        run: |
+          curl -s -X POST \
+            -H "x-cron-token: ${{ secrets.REMINDER_TOKEN }}" \
+            "https://vmms-backend-sg.onrender.com/api/v1/reminders/attendance" || true
+
+  endtime:
+    if: github.event.schedule == '0 13 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nudge sites that haven't submitted end-times
+        run: |
+          curl -s -X POST \
+            -H "x-cron-token: ${{ secrets.REMINDER_TOKEN }}" \
+            "https://vmms-backend-sg.onrender.com/api/v1/reminders/endtime" || true
