@@ -111,8 +111,13 @@
         <div><label class="lbl">Date job carried out</label><input id="f-jobdate" type="date" class="fld"></div>
       </div>
       <div class="mt-3">
-        <label class="lbl">Description of works</label>
-        <textarea id="f-desc" class="fld" rows="4" placeholder="1) ...&#10;2) ...&#10;3) ..."></textarea>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label class="lbl" style="margin:0">Description of works</label>
+          <span style="flex:1"></span>
+          <input id="copydesc-date" type="date" class="fld" style="max-width:150px;padding:5px 8px">
+          <button type="button" class="addbtn" style="width:auto;padding:6px 12px" onclick="copyDescription()">Copy from date</button>
+        </div>
+        <textarea id="f-desc" class="fld mt-1" rows="4" placeholder="1) ...&#10;2) ...&#10;3) ..."></textarea>
       </div>
     </div>
 
@@ -190,6 +195,10 @@
           <input id="sigfile" type="file" accept="image/*" class="hidden" onchange="onSigFile(event)"></label>
         <button type="button" class="addbtn" onclick="sigRemove()">Remove</button>
       </div>
+      <div class="flex gap-2 mt-2 flex-wrap">
+        <button type="button" class="addbtn" style="background:#fef2f2" onclick="useMySig()">Use my saved signature</button>
+        <button type="button" class="addbtn" style="background:#fef2f2" onclick="saveMySig()">Save as my signature</button>
+      </div>
       <p class="text-xs text-gray-400 mt-1">Sign with finger/mouse then tap <b>Use drawing</b>, or upload a signature image.</p>
     </div>
   </main>
@@ -205,6 +214,7 @@
 
   <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
   <datalist id="wnames"></datalist>
+  <datalist id="trades"></datalist>
   <div id="sheetmask"></div>
   <div id="sheet"></div>
 
@@ -212,6 +222,13 @@
     requireLogin();
     let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="";
     const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
+    const SIG_KEY="vcms_my_signature";   // saved default signature URL (this browser)
+    // Role / Trade list — position-wise (management → engineers → supervisors → safety → operators → trades → worker)
+    const TRADES=["Project Manager","Construction Manager","Site Manager","Site Engineer","Site Supervisor",
+      "RES","REO","Confined Space Supervisor","Work At Height Supervisor","Lifting Supervisor",
+      "WSHC","WSHS","Confined Space Assessor","Confined Space Attendant","First Aider","Rescuer",
+      "Rigger Signalman","Banksman","Traffic Controller","Excavator Operator","Roller Operator",
+      "Lorrycrane Operator","Tipper Truck Driver","Driver","Welder","Fire Watchman","General Worker"];
     const DPR_LOGO="https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/branding/vortex-logo.png";
     (function(){ var _l=new Image(); _l.crossOrigin="anonymous"; _l.src=DPR_LOGO; })();  // preload so html2canvas has it ready
 
@@ -236,6 +253,7 @@
         ? SITES.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("")
         : '<option value="">No sites assigned to you</option>';
       document.getElementById("date").value=todayIso();
+      document.getElementById("trades").innerHTML=TRADES.map(t=>`<option value="${esc(t)}">`).join("");
       // open a specific report from the history page (?site=&date=)
       const q=new URLSearchParams(location.search);
       if(q.get("site") && SITES.some(s=>s.id===q.get("site"))) document.getElementById("site").value=q.get("site");
@@ -249,18 +267,20 @@
 
     async function loadProjects(){
       try{ const r=await vmmsApi("/api/v1/dpr/projects"); PROJECTS=r.ok?await r.json():[]; }catch(e){ PROJECTS=[]; }
-      document.getElementById("proj").innerHTML='<option value="">— choose a saved project —</option>'+
-        PROJECTS.map((p,i)=>`<option value="${i}">${esc(p.title)}</option>`).join("");
+      // show the ITEM OF WORK in the directory (a project can have several) — fall back to title
+      document.getElementById("proj").innerHTML='<option value="">— choose saved item of work —</option>'+
+        PROJECTS.map((p,i)=>`<option value="${i}">${esc(p.item_of_work||p.title||"(untitled)")}</option>`).join("");
     }
     function onProj(){
       const i=document.getElementById("proj").value; if(i==="") return;
       const p=PROJECTS[+i]; if(!p) return;
       setv("f-project",p.title); setv("f-to",p.to_party); setv("f-attn",p.attention); setv("f-loc",p.location);
+      if(p.item_of_work) setv("f-item",p.item_of_work);
     }
     async function saveProject(){
       const title=val("f-project"); if(!title){ toast("Enter a project title first"); return; }
       try{
-        const r=await vmmsApi("/api/v1/dpr/projects",{method:"POST",body:JSON.stringify({title, to_party:val("f-to"), attention:val("f-attn"), location:val("f-loc")})});
+        const r=await vmmsApi("/api/v1/dpr/projects",{method:"POST",body:JSON.stringify({title, to_party:val("f-to"), attention:val("f-attn"), location:val("f-loc"), item_of_work:val("f-item")})});
         if(!r.ok){ const e=await r.json(); throw new Error(e.detail||"Could not save"); }
         await loadProjects(); toast("Project saved to directory", false, true);
       }catch(ex){ toast(ex.message, true); }
@@ -269,7 +289,7 @@
     // ---- rows ----
     function mpRow(x={}){return `<tr>
       <td><input data-k="name" list="wnames" value="${esc(x.name||"")}"></td>
-      <td><input data-k="role" value="${esc(x.role||"")}"></td>
+      <td><input data-k="role" list="trades" value="${esc(x.role||"")}" placeholder="pick or type"></td>
       <td><input data-k="no" class="num" value="${x.no??1}" oninput="recalc(this)"></td>
       <td><input data-k="from" class="num" value="${x.from??""}" oninput="recalc(this)"></td>
       <td><input data-k="to" class="num" value="${x.to??""}" oninput="recalc(this)"></td>
@@ -387,6 +407,15 @@
       else { img.classList.add("hidden"); img.removeAttribute("src"); if(pad) pad.classList.remove("hidden"); sigClear(); }
     }
     function sigRemove(){ setSignature(""); }
+    function saveMySig(){
+      if(!SIGNATURE_URL){ toast("Add a signature first (draw or upload)"); return; }
+      try{ localStorage.setItem(SIG_KEY, SIGNATURE_URL); toast("✓ Saved as your default signature", false, true); }catch(e){ toast("Could not save"); }
+    }
+    function useMySig(){
+      let u=""; try{ u=localStorage.getItem(SIG_KEY)||""; }catch(e){}
+      if(!u){ toast("No saved signature yet — add one, then Save as my signature", true); return; }
+      setSignature(u); toast("✓ Signature applied", false, true);
+    }
 
     // copy-paste (laptop) + drag-drop
     document.addEventListener("paste", async (e)=>{
@@ -404,6 +433,7 @@
     // ---- load / prefill / save ----
     async function load(){
       const cd=document.getElementById("copydate"); if(cd && !cd.value) cd.value=prevDay(dateVal());
+      const cdd=document.getElementById("copydesc-date"); if(cdd && !cdd.value) cdd.value=prevDay(dateVal());
       const r=await vmmsApi(`/api/v1/dpr?date=${dateVal()}&site_id=${siteVal()}`);
       const d=r.ok?await r.json():{};
       const banner=document.getElementById("banner");
@@ -418,7 +448,8 @@
       } else {
         banner.classList.add("hidden");
         renderMp([]); renderEq([]); renderMt([]); PHOTOS=[]; renderPhotos();
-        setSignature("");
+        let mySig=""; try{ mySig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
+        setSignature(mySig);   // auto-fill your saved signature on a new report
         setv("f-jobdate",dateVal());
         await prefill(true);
       }
@@ -450,6 +481,19 @@
         if(!eq.length && !mt.length){ toast("That day has no plant / material rows", true); return; }
         renderEq(eq); renderMt(mt);
         toast(`Copied ${eq.length} plant + ${mt.length} material row(s)`, false, true);
+      }catch(ex){ toast("Copy failed", true); }
+    }
+    async function copyDescription(){
+      if(!siteVal()){ toast("Choose a site first"); return; }
+      const dt=document.getElementById("copydesc-date").value;
+      if(!dt){ toast("Pick a date to copy from"); return; }
+      try{
+        const r=await vmmsApi(`/api/v1/dpr?date=${dt}&site_id=${siteVal()}`);
+        const d=r.ok?await r.json():{};
+        if(!d || !d.id){ toast("No report on that date for this site", true); return; }
+        if(!(d.description||"").trim()){ toast("That day has no description", true); return; }
+        setv("f-desc", d.description);
+        toast("Description copied", false, true);
       }catch(ex){ toast("Copy failed", true); }
     }
     function collect(){
