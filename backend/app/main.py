@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.46.0")  # DPR: project item_of_work
+app = FastAPI(title="VCMS API", version="0.47.0")  # DPR: project site_id + delete
 
 app.add_middleware(
     CORSMiddleware,
@@ -2426,6 +2426,7 @@ class ProjectIn(BaseModel):
     attention: str | None = None
     location: str | None = None
     item_of_work: str | None = None
+    site_id: str | None = None
 
 
 @app.get("/api/v1/dpr/projects")
@@ -2449,8 +2450,22 @@ async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
             json={"title": body.title, "to_party": body.to_party, "attention": body.attention,
                   "location": body.location, "item_of_work": body.item_of_work,
-                  "created_by": user["user_id"]})
+                  "site_id": body.site_id, "created_by": user["user_id"]})
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
+
+
+@app.delete("/api/v1/dpr/projects/{project_id}")
+async def delete_project(project_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:   # only managers/office may delete directory entries
+        raise HTTPException(status_code=403, detail="Only managers can delete a saved project")
+    async with shared_client() as client:
+        r = await client.delete(
+            f"{REST}/dpr_projects",
+            params={"id": f"eq.{project_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete project")
+        return {"ok": True}
