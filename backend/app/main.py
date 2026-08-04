@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.45.0")  # DPR: signature_url; rename VMMS→VCMS
+app = FastAPI(title="VCMS API", version="0.46.0")  # DPR: project item_of_work
 
 app.add_middleware(
     CORSMiddleware,
@@ -2425,6 +2425,7 @@ class ProjectIn(BaseModel):
     to_party: str | None = None
     attention: str | None = None
     location: str | None = None
+    item_of_work: str | None = None
 
 
 @app.get("/api/v1/dpr/projects")
@@ -2447,7 +2448,8 @@ async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
             f"{REST}/dpr_projects",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
             json={"title": body.title, "to_party": body.to_party, "attention": body.attention,
-                  "location": body.location, "created_by": user["user_id"]})
+                  "location": body.location, "item_of_work": body.item_of_work,
+                  "created_by": user["user_id"]})
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()
