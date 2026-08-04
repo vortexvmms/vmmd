@@ -1,0 +1,55 @@
+# VCMS — automated daily database backup
+# ------------------------------------------------------------------
+# WHERE THIS GOES:  copy this file to  .github/workflows/backup-db.yml
+#
+# ONE-TIME SETUP (you do this, I never see the value):
+#   1. Supabase dashboard → Project Settings → Database → Connection string
+#      → choose "URI". Copy it (starts with postgresql://postgres:...).
+#   2. GitHub repo → Settings → Secrets and variables → Actions → New secret
+#      Name:  SUPABASE_DB_URL      Value: (paste the URI)
+#
+# WHAT IT DOES:
+#   - Runs every day 02:00 Singapore time (18:00 UTC).
+#   - Takes a full compressed dump of the whole database.
+#   - Saves it as a downloadable Actions "artifact", kept 90 days.
+#   - You (repo admin) can download any day's backup from the Actions tab.
+#
+# GOOD PRACTICE:  once a month, download one artifact and keep a copy on your
+# own laptop / Google Drive. That is your true off-site copy.
+# ------------------------------------------------------------------
+name: VCMS DB Backup
+
+on:
+  schedule:
+    - cron: "0 18 * * *"      # 02:00 SGT daily
+  workflow_dispatch: {}        # lets you also run it on-demand from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Dump database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          ts=$(date -u +%Y%m%d_%H%M)
+          # -Fc = compressed custom format (best for pg_restore)
+          pg_dump "$DB_URL" --no-owner --no-privileges -Fc -f "vcms_backup_${ts}.dump"
+          # also a plain .sql for easy reading / partial restores
+          pg_dump "$DB_URL" --no-owner --no-privileges -f "vcms_backup_${ts}.sql"
+          gzip "vcms_backup_${ts}.sql"
+          ls -lh vcms_backup_*
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcms-db-backup
+          path: |
+            vcms_backup_*.dump
+            vcms_backup_*.sql.gz
+          retention-days: 90
