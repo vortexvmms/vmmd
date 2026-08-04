@@ -11,6 +11,11 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <style>
+    .th-btn{border:1.5px solid #D1D5DB;border-radius:10px;padding:10px 6px;font-size:13px;font-weight:700;
+            background:#fff;color:#374151;cursor:pointer;text-align:center;}
+    .th-btn.sel{border-color:#C00000;background:#C00000;color:#fff;}
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
@@ -20,6 +25,18 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-10">
+
+    <!-- ============ DISPLAY / THEME (every user) ============ -->
+    <h2 class="text-sm font-bold text-gray-500 mb-2">DISPLAY</h2>
+    <div class="bg-white rounded-xl shadow p-4 mb-8">
+      <p class="font-bold text-gray-900 text-sm mb-1">Screen theme</p>
+      <p class="text-xs text-gray-500 mb-3">Saved on this phone. Use <b>Sunlight</b> outdoors — bright, high-contrast, large text. <b>Dark</b> suits night or indoor.</p>
+      <div id="theme-seg" class="grid grid-cols-3 gap-2">
+        <button data-th="light"   onclick="setTheme('light')"   class="th-btn">Light</button>
+        <button data-th="sun"     onclick="setTheme('sun')"     class="th-btn">☀ Sunlight</button>
+        <button data-th="dark"    onclick="setTheme('dark')"    class="th-btn">🌙 Dark</button>
+      </div>
+    </div>
 
     <!-- ============ NOTIFICATIONS (every user) ============ -->
     <h2 class="text-sm font-bold text-gray-500 mb-2">NOTIFICATIONS ON THIS PHONE</h2>
@@ -106,6 +123,15 @@
 
     let ME = null;
     const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+
+    /* ---------- Theme ---------- */
+    function markTheme() {
+      const cur = (window.vmmsGetTheme ? vmmsGetTheme() : "light");
+      document.querySelectorAll("#theme-seg .th-btn").forEach(b =>
+        b.classList.toggle("sel", b.getAttribute("data-th") === cur));
+    }
+    function setTheme(t) { if (window.vmmsSetTheme) vmmsSetTheme(t); markTheme(); }
+    markTheme();
 
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
