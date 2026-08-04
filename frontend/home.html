@@ -54,9 +54,11 @@
     .vhead-logout { flex:0 0 auto; background:#7F1D1D; color:#fff; font-size:13px; font-weight:700; padding:8px 16px; border-radius:9px; border:none; cursor:pointer; }
     .vhead-logout:hover { background:#601010; }
     @media (max-width:640px) {
-      .vhead-inner { flex-wrap:wrap; gap:9px; padding-right:56px; }
+      .vhead-inner { flex-wrap:wrap; gap:9px 10px; padding-right:14px; }
       .vhead-sub { display:none; }
-      .vhead-logout { order:2; margin-left:auto; }
+      .vhead-logo { height:40px; }
+      .vhead-title { font-size:34px; line-height:1; }   /* match the logo height on phones */
+      .vhead-logout { order:2; margin-left:auto; margin-right:52px; }  /* clear the floating bell */
       .vhead-greet { order:3; flex:1 1 100%; margin-left:0; max-width:none; }
     }
   </style>
