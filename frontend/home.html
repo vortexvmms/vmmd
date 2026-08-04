@@ -38,33 +38,47 @@
     .sect.soon .sect-h .t { color:#9CA3AF; }
     .soon-note { color:#9CA3AF; font-size:12.5px; padding:2px 2px 4px; }
     .util-row { display:flex; gap:22px; justify-content:center; margin-top:26px; padding-top:18px; border-top:1px solid #E5E7EB; }
+    /* ---- Header (self-contained, not reliant on Tailwind utilities) ---- */
+    .vhead { background:#C00000; color:#fff; position:sticky; top:0; z-index:10; box-shadow:0 1px 4px rgba(0,0,0,.18); }
+    .vhead-inner { max-width:72rem; margin:0 auto; padding:10px 64px 10px 14px; display:flex; align-items:center; gap:14px; }
+    .vhead-logo { height:42px; width:auto; background:#fff; border-radius:8px; padding:3px; flex:0 0 auto; display:block; }
+    .vhead-brand { flex:0 0 auto; line-height:1.12; }
+    .vhead-title { font-size:22px; font-weight:800; letter-spacing:.02em; }
+    .vhead-sub { font-size:11px; color:#FECACA; font-weight:600; margin-top:1px; }
+    .vhead-greet { margin-left:auto; background:#fff; color:#111827; border-radius:12px; padding:6px 8px 6px 12px;
+                   display:flex; align-items:center; gap:10px; max-width:390px; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+    .vhead-gtxt { min-width:0; }
+    .vhead-gtxt .g1 { font-weight:700; font-size:15px; line-height:1.15; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .vhead-gtxt .g2 { font-size:12px; color:#6B7280; margin:1px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .vhead-chip { flex:0 0 auto; background:#C00000; color:#fff; font-size:11px; font-weight:700; padding:4px 11px; border-radius:999px; white-space:nowrap; }
+    .vhead-logout { flex:0 0 auto; background:#7F1D1D; color:#fff; font-size:13px; font-weight:700; padding:8px 16px; border-radius:9px; border:none; cursor:pointer; }
+    .vhead-logout:hover { background:#601010; }
+    @media (max-width:640px) {
+      .vhead-inner { flex-wrap:wrap; gap:9px; padding-right:56px; }
+      .vhead-sub { display:none; }
+      .vhead-logout { order:2; margin-left:auto; }
+      .vhead-greet { order:3; flex:1 1 100%; margin-left:0; max-width:none; }
+    }
   </style>
 </head>
 <body class="grid-home min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white shadow sticky top-0 z-10">
-    <div class="max-w-md md:max-w-4xl mx-auto w-full px-3 py-2.5 flex items-center gap-2.5 flex-wrap">
-      <!-- Brand -->
-      <div class="flex items-center gap-2 shrink-0">
-        <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
-             class="h-10 bg-white rounded-lg p-1" onerror="this.style.display='none'">
-        <div class="leading-tight">
-          <div class="text-2xl font-extrabold tracking-wide">VCMS</div>
-          <div class="text-[10.5px] text-red-100 font-semibold">Vortex Construction Management System</div>
-        </div>
+  <header class="vhead">
+    <div class="vhead-inner">
+      <img class="vhead-logo" src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
+           onerror="this.style.display='none'">
+      <div class="vhead-brand">
+        <div class="vhead-title">VCMS</div>
+        <div class="vhead-sub">Vortex Construction Management System</div>
       </div>
-      <!-- Greeting card -->
-      <div id="hdr-greet" class="hidden bg-white text-gray-900 rounded-xl px-3.5 py-2 flex items-center gap-3 flex-1 min-w-[190px]">
-        <div class="min-w-0">
-          <p class="font-bold text-base md:text-lg truncate leading-tight" id="greet">—</p>
-          <p class="text-xs text-gray-500 truncate" id="name">—</p>
+      <div id="hdr-greet" class="vhead-greet hidden">
+        <div class="vhead-gtxt">
+          <p class="g1" id="greet">—</p>
+          <p class="g2" id="name">—</p>
         </div>
-        <span id="role-chip" class="ml-auto shrink-0 text-[11px] font-bold px-3 py-1 rounded-full bg-red-700 text-white">—</span>
+        <span id="role-chip" class="vhead-chip">—</span>
       </div>
-      <!-- Log Out (bell floats to its right) -->
-      <button onclick="vmmsLogout()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg shrink-0 mr-12">
-        Log Out
-      </button>
+      <button class="vhead-logout" onclick="vmmsLogout()">Log Out</button>
     </div>
   </header>
 
