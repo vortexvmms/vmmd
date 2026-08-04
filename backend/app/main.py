@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.51.0")  # R2 upload via backend proxy (CORS-free)
+app = FastAPI(title="VCMS API", version="0.51.1")  # R2 upload via backend proxy (CORS-free)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2367,7 +2367,17 @@ class PushEp(BaseModel):
 
 @app.get("/api/v1/push/pubkey")
 async def push_pubkey():
-    return {"enabled": PUSH_ENABLED, "public_key": VAPID_PUBLIC_KEY}
+    tbl = None
+    if SUPABASE_SERVICE_KEY:
+        try:
+            async with shared_client() as c:
+                r = await c.get(f"{REST}/push_subscriptions",
+                                params={"select": "id", "limit": "1"},
+                                headers=service_headers())
+                tbl = r.status_code
+        except Exception:
+            tbl = "err"
+    return {"enabled": PUSH_ENABLED, "public_key": VAPID_PUBLIC_KEY, "table": tbl}
 
 
 @app.post("/api/v1/push/subscribe")
@@ -2381,7 +2391,8 @@ async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)
             json={"user_id": user["user_id"], "endpoint": body.endpoint,
                   "p256dh": body.p256dh, "auth": body.auth, "user_agent": body.user_agent})
         if r.status_code not in (200, 201, 204):
-            raise HTTPException(status_code=500, detail="Could not save subscription")
+            raise HTTPException(status_code=500,
+                detail=f"Could not save subscription (db {r.status_code}: {(r.text or '')[:140]})")
         return {"ok": True}
 
 
