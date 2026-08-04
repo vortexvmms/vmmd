@@ -42,31 +42,37 @@
 </head>
 <body class="grid-home min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center justify-between md:px-8 sticky top-0 z-10">
-    <div class="flex items-center gap-3">
-      <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
-           class="h-9 bg-white rounded-lg p-1" onerror="this.style.display='none'">
-      <div>
-        <h1 class="text-xl font-bold">VCMS</h1>
-        <p class="text-red-100 text-sm" id="who">Loading…</p>
+  <header class="bg-red-700 text-white shadow sticky top-0 z-10">
+    <div class="max-w-md md:max-w-4xl mx-auto w-full px-3 py-2.5 flex items-center gap-2.5 flex-wrap">
+      <!-- Brand -->
+      <div class="flex items-center gap-2 shrink-0">
+        <img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
+             class="h-10 bg-white rounded-lg p-1" onerror="this.style.display='none'">
+        <div class="leading-tight">
+          <div class="text-2xl font-extrabold tracking-wide">VCMS</div>
+          <div class="text-[10.5px] text-red-100 font-semibold">Vortex Construction Management System</div>
+        </div>
       </div>
+      <!-- Greeting card -->
+      <div id="hdr-greet" class="hidden bg-white text-gray-900 rounded-xl px-3.5 py-2 flex items-center gap-3 flex-1 min-w-[190px]">
+        <div class="min-w-0">
+          <p class="font-bold text-base md:text-lg truncate leading-tight" id="greet">—</p>
+          <p class="text-xs text-gray-500 truncate" id="name">—</p>
+        </div>
+        <span id="role-chip" class="ml-auto shrink-0 text-[11px] font-bold px-3 py-1 rounded-full bg-red-700 text-white">—</span>
+      </div>
+      <!-- Log Out (bell floats to its right) -->
+      <button onclick="vmmsLogout()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg shrink-0 mr-12">
+        Log Out
+      </button>
     </div>
-    <button onclick="vmmsLogout()" class="bg-red-900 hover:bg-red-950 text-white text-sm font-bold px-4 py-2 rounded-lg mr-12">
-      Log Out
-    </button>
   </header>
 
   <main class="flex-1 p-4 max-w-md md:max-w-4xl mx-auto w-full">
     <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
 
     <div id="content" class="hidden">
-      <div class="panel p-5 mt-4">
-        <p class="text-xl font-bold text-gray-900" id="greet">—</p>
-        <p class="text-sm text-gray-500" id="name">—</p>
-        <span id="role-chip" class="inline-block mt-2 text-xs font-bold px-3 py-1 rounded-full bg-red-700 text-white">—</span>
-      </div>
-
-      <div id="switcher" class="hidden panel p-3 mt-3 flex items-center gap-2">
+      <div id="switcher" class="hidden panel p-3 mt-4 flex items-center gap-2">
         <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
         <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
           <option value="admin">Administrator</option>
@@ -83,13 +89,14 @@
         </select>
       </div>
 
-      <div id="pushcard" class="hidden panel p-4 mt-3 flex items-center gap-3">
+      <!-- One-time nudge: shows only while notifications are OFF. All on/off/test controls live in Settings. -->
+      <div id="pushcard" class="hidden panel p-4 mt-4 flex items-center gap-3 border-l-4 border-red-600">
         <div class="flex-1">
-          <p class="font-bold text-gray-900 text-sm">Phone notifications</p>
-          <p id="pushmsg" class="text-xs text-gray-500">—</p>
+          <p class="font-bold text-gray-900 text-sm">🔔 Turn on phone notifications</p>
+          <p id="pushmsg" class="text-xs text-gray-500 mt-0.5">—</p>
         </div>
-        <button id="pushtest" onclick="onPushTest()" class="hidden text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 py-2 whitespace-nowrap">Test</button>
         <button id="pushbtn" onclick="onPushBtn()" class="hidden bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">Enable</button>
+        <a id="pushsettings" href="settings.html" class="hidden text-xs font-bold text-red-700 whitespace-nowrap">Settings ›</a>
       </div>
 
       <div class="mt-4" id="menu"></div>
@@ -127,8 +134,8 @@
     const TIER_MENU = {
       full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["How to Use", 1, "help.html"]],
-      payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["How to Use", 1, "help.html"]],
+      supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
     };
     function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
     const ALL_MENU = [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Request Manpower", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]];
@@ -255,7 +262,7 @@
         if (!r.ok) throw new Error("NOT_SIGNED_IN");
         const me = await r.json();
 
-        document.getElementById("who").textContent = me.email || "";
+        document.getElementById("hdr-greet").classList.remove("hidden");
         const hr = new Date().getHours();
         const greet = hr < 12 ? "Good morning" : (hr < 17 ? "Good afternoon" : "Good evening");
         const first = (me.name || "").trim().split(/\s+/)[0] || "";
@@ -285,36 +292,38 @@
       }
     }
 
+    // Home only shows a nudge WHILE notifications are OFF. Once on, it hides —
+    // all turn-off / test controls live on the Settings page.
+    const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent);
     async function refreshPush() {
       const card = document.getElementById("pushcard"); if (!card || !window.vmmsPushStatus) return;
       const st = await vmmsPushStatus();
-      const msg = document.getElementById("pushmsg"), btn = document.getElementById("pushbtn"), test = document.getElementById("pushtest");
+      const msg = document.getElementById("pushmsg"), btn = document.getElementById("pushbtn"), setg = document.getElementById("pushsettings");
+      if (st === "on") { card.classList.add("hidden"); return; }   // already on → nothing to nudge
       card.classList.remove("hidden");
+      btn.classList.add("hidden"); setg.classList.add("hidden");
       if (st === "unsupported") {
-        msg.textContent = "On iPhone: add VCMS to your Home Screen first, then open it from the icon to enable alerts.";
-        btn.classList.add("hidden"); test.classList.add("hidden");
+        msg.textContent = IS_IOS
+          ? "On iPhone: add VCMS to your Home Screen (Share ▸ Add to Home Screen), then open it from that icon to enable alerts."
+          : "Open VCMS in Chrome to enable alerts on this phone.";
       } else if (st === "blocked") {
-        msg.textContent = "Notifications are blocked. Allow them for this site in your phone/browser settings, then reload.";
-        btn.classList.add("hidden"); test.classList.add("hidden");
-      } else if (st === "on") {
-        msg.textContent = "On — you'll get allocation, request & reminder alerts on this phone.";
-        btn.textContent = "Turn off"; btn.onclick = onPushOff; btn.classList.remove("hidden"); test.classList.remove("hidden");
+        msg.textContent = "Notifications are blocked for this site. Allow them in your browser settings, then reload.";
+        setg.classList.remove("hidden");
       } else {
-        msg.textContent = "Get allocation, request & reminder alerts on this phone.";
-        btn.textContent = "Enable"; btn.onclick = onPushBtn; btn.classList.remove("hidden"); test.classList.add("hidden");
+        msg.textContent = "Get allocation, manpower-request and reminder alerts on this phone.";
+        btn.classList.remove("hidden"); setg.classList.remove("hidden");
       }
     }
     async function onPushBtn() {
       const btn = document.getElementById("pushbtn"); btn.disabled = true; const t = btn.textContent; btn.textContent = "…";
       const r = await vmmsEnablePush(); btn.disabled = false; btn.textContent = t;
-      if (!r.ok) {
-        const m = { unsupported: "Not supported here. On iPhone, install VCMS to Home Screen first.", denied: "Permission was denied. Allow notifications in settings, then try again.", server_off: "Server push isn't switched on yet — the admin needs to add the VAPID keys.", save_failed: "Couldn't save. Try again." }[r.reason] || ("Couldn't enable: " + r.reason);
+      if (r.ok) { alert("Notifications are on. You can turn them off anytime in Settings."); }
+      else {
+        const m = { unsupported: IS_IOS ? "On iPhone, install VCMS to the Home Screen first, then open it from that icon." : "Open VCMS in Chrome to enable notifications.", denied: "Permission was denied. Allow notifications in your browser settings, then try again.", server_off: "Server push isn't switched on yet — contact the administrator.", save_failed: "Couldn't save. Try again." }[r.reason] || ("Couldn't enable: " + r.reason);
         alert(m);
       }
       refreshPush();
     }
-    async function onPushOff() { await vmmsDisablePush(); refreshPush(); }
-    async function onPushTest() { const ok = await vmmsTestPush(); alert(ok ? "Test notification sent — check your phone." : "Couldn't send the test."); }
     load();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
