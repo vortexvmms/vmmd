@@ -387,15 +387,29 @@
         return (blob && blob.size < file.size) ? blob : file;   // keep whichever is smaller
       }catch(e){ return file; }
     }
-    async function uploadPhoto(file, site, date){
+    // Store an image blob at <path>: Cloudflare R2 if configured, else Supabase. Returns public URL.
+    async function storeImage(blob, path){
+      const type=blob.type||"image/jpeg";
+      try{
+        const ur=await vmmsApi("/api/v1/storage/upload-url",{method:"POST",body:JSON.stringify({path, content_type:type})});
+        if(ur.ok){ const c=await ur.json();
+          if(c.configured && c.put_url){
+            const put=await fetch(c.put_url,{method:"PUT",headers:{"Content-Type":type},body:blob});
+            if(put.ok) return c.public_url;
+          }
+        }
+      }catch(e){ /* fall back to Supabase */ }
       const s=getSession();
+      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
+        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:blob });
+      if(!r.ok) throw new Error("upload "+r.status);
+      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+    }
+    async function uploadPhoto(file, site, date){
       const body=await compressImage(file);
       const ext = body.type==="image/jpeg" ? "jpg" : ((file.type.split("/")[1]||"png").replace(/[^a-z0-9]/gi,""));
       const path=`${site}/${date}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":body.type||"image/jpeg", "x-upsert":"true" }, body });
-      if(!r.ok) throw new Error("upload "+r.status);
-      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+      return storeImage(body, path);
     }
 
     // ---- signature: draw pad + upload image ----
@@ -428,12 +442,8 @@
       catch(ex){ toast("Signature upload failed", true); }
     }
     async function uploadSig(file){
-      const s=getSession(); const type=file.type||"image/png";
       const path=`signatures/${siteVal()}/${dateVal()}_${Date.now()}_${Math.random().toString(36).slice(2,6)}.png`;
-      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:file });
-      if(!r.ok) throw new Error("upload "+r.status);
-      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+      return storeImage(file, path);
     }
     function setSignature(url){
       SIGNATURE_URL=url||"";
