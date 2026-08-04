@@ -2545,5 +2545,8 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
     async with shared_client() as client:
         r = await client.put(put_url, content=body, headers={"Content-Type": content_type})
     if r.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code})")
+        import re as _re
+        m = _re.search(r"<Code>([^<]+)</Code>", r.text or "")
+        code = m.group(1) if m else (r.text or "")[:120]
+        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code}: {code})")
     return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
