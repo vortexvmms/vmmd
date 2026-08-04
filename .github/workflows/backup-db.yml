@@ -45,10 +45,14 @@ jobs:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           ts=$(date -u +%Y%m%d_%H%M)
+          # The runner's default pg_dump on PATH is v16; use the highest version we
+          # installed (v17) explicitly so it matches the Supabase server.
+          PGDUMP=$(ls /usr/lib/postgresql/*/bin/pg_dump | sort -V | tail -1)
+          echo "Using $PGDUMP"; "$PGDUMP" --version
           # -Fc = compressed custom format (best for pg_restore)
-          pg_dump "$DB_URL" --no-owner --no-privileges -Fc -f "vcms_backup_${ts}.dump"
+          "$PGDUMP" "$DB_URL" --no-owner --no-privileges -Fc -f "vcms_backup_${ts}.dump"
           # also a plain .sql for easy reading / partial restores
-          pg_dump "$DB_URL" --no-owner --no-privileges -f "vcms_backup_${ts}.sql"
+          "$PGDUMP" "$DB_URL" --no-owner --no-privileges     -f "vcms_backup_${ts}.sql"
           gzip "vcms_backup_${ts}.sql"
           ls -lh vcms_backup_*
 
