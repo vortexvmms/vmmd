@@ -350,3 +350,51 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
     load(); setInterval(load, 60000);
   });
 })();
+
+// ---- Web Push (phone notifications) ----
+function _vmmsB64ToU8(b64) {
+  var pad = '='.repeat((4 - b64.length % 4) % 4);
+  var s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  var raw = atob(s), arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+window.vmmsPushSupported = function () {
+  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+};
+window.vmmsPushStatus = async function () {
+  if (!vmmsPushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  try {
+    var reg = await navigator.serviceWorker.ready;
+    var s = await reg.pushManager.getSubscription();
+    return s ? 'on' : 'off';
+  } catch (e) { return 'off'; }
+};
+// Call from a user click. Returns {ok:true} or {ok:false, reason:'...'}.
+window.vmmsEnablePush = async function () {
+  try {
+    if (!vmmsPushSupported()) return { ok: false, reason: 'unsupported' };
+    var perm = await Notification.requestPermission();
+    if (perm !== 'granted') return { ok: false, reason: 'denied' };
+    var reg = await navigator.serviceWorker.ready;
+    var pk = await vmmsApi('/api/v1/push/pubkey');
+    var cfg = pk.ok ? await pk.json() : {};
+    if (!cfg.enabled || !cfg.public_key) return { ok: false, reason: 'server_off' };
+    var sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _vmmsB64ToU8(cfg.public_key) });
+    var j = sub.toJSON();
+    var r = await vmmsApi('/api/v1/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent }) });
+    if (!r.ok) return { ok: false, reason: 'save_failed' };
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
+};
+window.vmmsDisablePush = async function () {
+  try {
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if (sub) { try { await vmmsApi('/api/v1/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint }) }); } catch (_) {} await sub.unsubscribe(); }
+    return { ok: true };
+  } catch (e) { return { ok: false }; }
+};
+window.vmmsTestPush = async function () { try { await vmmsApi('/api/v1/push/test', { method: 'POST' }); return true; } catch (e) { return false; } };
