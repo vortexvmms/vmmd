@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.48.0")  # R2 photo storage (optional) + presign
+app = FastAPI(title="VCMS API", version="0.49.0")  # R2 upload via backend proxy (CORS-free)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2524,3 +2524,26 @@ async def storage_upload_url(body: UploadUrlIn, user: dict = Depends(get_current
     return {"configured": True, "put_url": _r2_presign_put(key),
             "public_url": f"{R2_PUBLIC_BASE}/{key}",
             "content_type": body.content_type or "image/jpeg"}
+
+
+@app.put("/api/v1/storage/upload")
+async def storage_upload(request: Request, path: str, content_type: str = "image/jpeg",
+                         user: dict = Depends(get_current_user)):
+    """Proxy a photo/signature upload to R2 server-side (no browser→S3 CORS needed).
+    Reads still come straight from the public R2 URL, so egress stays on R2."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if not R2_ENABLED:
+        raise HTTPException(status_code=501, detail="R2 not configured")
+    key = path.strip("/").replace("..", "")
+    if not key:
+        raise HTTPException(status_code=400, detail="Bad path")
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty body")
+    put_url = _r2_presign_put(key)
+    async with shared_client() as client:
+        r = await client.put(put_url, content=body, headers={"Content-Type": content_type})
+    if r.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail=f"R2 upload failed ({r.status_code})")
+    return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
