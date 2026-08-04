@@ -10,6 +10,8 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
 """
 import os
 import time
+import json as _json
+import asyncio
 from datetime import date as date_cls
 
 import httpx
@@ -17,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.50.0")  # R2 upload via backend proxy (CORS-free)
+app = FastAPI(title="VCMS API", version="0.51.0")  # R2 upload via backend proxy (CORS-free)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2226,7 +2228,8 @@ async def _svc_user_ids(client, params: dict) -> list[str]:
 
 
 async def notify(client, recipients, kind, title, body="", link=None):
-    """Insert one notification per recipient (deduped) + everyone notify_all."""
+    """Insert one notification per recipient (deduped) + everyone notify_all,
+    and also send a phone Web Push to those same recipients."""
     if not SUPABASE_SERVICE_KEY:
         return
     try:
@@ -2239,6 +2242,54 @@ async def notify(client, recipients, kind, title, body="", link=None):
         await client.post(f"{REST}/notifications",
                           headers={**service_headers(), "Prefer": "return=minimal"},
                           json=rows)
+        await send_web_push(client, list(ids), title, body, link)
+    except Exception:
+        pass
+
+
+# ---- Web Push (phone notifications) ----
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@vortex.sg").strip()
+PUSH_ENABLED = bool(VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY)
+
+
+async def send_web_push(client, user_ids, title, body="", link=None):
+    """Send a Web Push to every device of the given users; prune expired ones."""
+    if not (PUSH_ENABLED and SUPABASE_SERVICE_KEY and user_ids):
+        return
+    try:
+        ids = list({u for u in user_ids if u})
+        if not ids:
+            return
+        r = await client.get(f"{REST}/push_subscriptions",
+                             params={"user_id": f"in.({','.join(ids)})",
+                                     "select": "endpoint,p256dh,auth"},
+                             headers=service_headers())
+        subs = r.json() if r.status_code == 200 else []
+        if not subs:
+            return
+        payload = _json.dumps({"title": title, "body": body or "", "url": link or "home.html"})
+
+        def _send_one(s):
+            from pywebpush import webpush, WebPushException
+            try:
+                webpush({"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
+                        data=payload, vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": VAPID_SUBJECT}, ttl=3600)
+                return None
+            except WebPushException as e:
+                code = getattr(getattr(e, "response", None), "status_code", None)
+                return s["endpoint"] if code in (404, 410) else None
+            except Exception:
+                return None
+
+        results = await asyncio.gather(*[asyncio.to_thread(_send_one, s) for s in subs])
+        dead = [e for e in results if e]
+        if dead:
+            await client.delete(f"{REST}/push_subscriptions",
+                                params={"endpoint": f"in.({','.join(dead)})"},
+                                headers=service_headers())
     except Exception:
         pass
 
@@ -2300,6 +2351,129 @@ async def clear_notifications(user: dict = Depends(get_current_user)):
             params={"user_id": f"eq.{user['user_id']}"},
             headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"})
         return {"ok": True}
+
+
+# ================= Web Push subscriptions =================
+class PushSubIn(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+    user_agent: str | None = None
+
+
+class PushEp(BaseModel):
+    endpoint: str
+
+
+@app.get("/api/v1/push/pubkey")
+async def push_pubkey():
+    return {"enabled": PUSH_ENABLED, "public_key": VAPID_PUBLIC_KEY}
+
+
+@app.post("/api/v1/push/subscribe")
+async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/push_subscriptions",
+            params={"on_conflict": "endpoint"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={"user_id": user["user_id"], "endpoint": body.endpoint,
+                  "p256dh": body.p256dh, "auth": body.auth, "user_agent": body.user_agent})
+        if r.status_code not in (200, 201, 204):
+            raise HTTPException(status_code=500, detail="Could not save subscription")
+        return {"ok": True}
+
+
+@app.post("/api/v1/push/unsubscribe")
+async def push_unsubscribe(body: PushEp, user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        await client.delete(
+            f"{REST}/push_subscriptions",
+            params={"endpoint": f"eq.{body.endpoint}", "user_id": f"eq.{user['user_id']}"},
+            headers=supabase_headers(user["token"]))
+    return {"ok": True}
+
+
+@app.post("/api/v1/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        await send_web_push(client, [user["user_id"]], "VCMS test",
+                            "Phone notifications are working.", "home.html")
+    return {"ok": True}
+
+
+# ================= Scheduled reminders (cron → push) =================
+REMINDER_TOKEN = os.environ.get("REMINDER_TOKEN", "").strip()
+
+
+def _sgt_today():
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).date().isoformat()
+
+
+async def _pending_sites(client, mode: str):
+    """Site IDs with outstanding submissions today (mode: 'attendance' | 'endtime')."""
+    today = _sgt_today()
+    r = await client.get(
+        f"{REST}/allocations",
+        params={"work_date": f"eq.{today}", "status": "eq.allocated",
+                "select": "site_id,attendance(present,end_time,submitted_at)"},
+        headers=service_headers())
+    rows = r.json() if r.status_code == 200 else []
+    bad = set()
+    for a in rows:
+        sid = a.get("site_id")
+        att = a.get("attendance")
+        if isinstance(att, list):
+            att = att[0] if att else None
+        if mode == "attendance":
+            if not att or not att.get("submitted_at"):
+                bad.add(sid)
+        else:  # endtime
+            if not att or not att.get("submitted_at"):
+                bad.add(sid)
+            elif att.get("present") and not att.get("end_time"):
+                bad.add(sid)
+    bad.discard(None)
+    return bad
+
+
+async def _remind_sites(client, site_ids, title, body, link):
+    if not site_ids:
+        return
+    sites = {}
+    try:
+        r = await client.get(f"{REST}/sites",
+                             params={"id": f"in.({','.join(site_ids)})", "select": "id,site_name"},
+                             headers=service_headers())
+        sites = {s["id"]: s["site_name"] for s in (r.json() if r.status_code == 200 else [])}
+    except Exception:
+        pass
+    for sid in site_ids:
+        nm = sites.get(sid, "your site")
+        await notify_site_supervisors(client, [sid], "reminder", title, f"{body} — {nm}", link)
+
+
+@app.post("/api/v1/reminders/attendance")
+async def remind_attendance(request: Request):
+    if not REMINDER_TOKEN or request.headers.get("x-cron-token") != REMINDER_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    async with shared_client() as client:
+        sids = await _pending_sites(client, "attendance")
+        await _remind_sites(client, sids, "Attendance reminder",
+                            "Please mark & submit this morning's attendance", "attendance.html")
+    return {"reminded_sites": len(sids)}
+
+
+@app.post("/api/v1/reminders/endtime")
+async def remind_endtime(request: Request):
+    if not REMINDER_TOKEN or request.headers.get("x-cron-token") != REMINDER_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    async with shared_client() as client:
+        sids = await _pending_sites(client, "endtime")
+        await _remind_sites(client, sids, "End-time reminder",
+                            "Please submit today's end-times", "attendance.html")
+    return {"reminded_sites": len(sids)}
 
 
 # ================= Daily Progress Report (Daily Work Record) =================
