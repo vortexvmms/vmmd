@@ -390,14 +390,12 @@
     // Store an image blob at <path>: Cloudflare R2 if configured, else Supabase. Returns public URL.
     async function storeImage(blob, path){
       const type=blob.type||"image/jpeg";
+      // 1) R2 via the backend proxy (backend → R2 server-side; no browser→S3 CORS)
       try{
-        const ur=await vmmsApi("/api/v1/storage/upload-url",{method:"POST",body:JSON.stringify({path, content_type:type})});
-        if(ur.ok){ const c=await ur.json();
-          if(c.configured && c.put_url){
-            const put=await fetch(c.put_url,{method:"PUT",headers:{"Content-Type":type},body:blob});
-            if(put.ok) return c.public_url;
-          }
-        }
+        const s=getSession();
+        const url=`${VMMS_CONFIG.BACKEND_URL}/api/v1/storage/upload?path=${encodeURIComponent(path)}&content_type=${encodeURIComponent(type)}`;
+        const r=await fetch(url,{method:"PUT",headers:{"Authorization":"Bearer "+s.access_token,"Content-Type":type},body:blob});
+        if(r.ok){ const j=await r.json(); if(j.public_url) return j.public_url; }
       }catch(e){ /* fall back to Supabase */ }
       const s=getSession();
       const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
