@@ -169,11 +169,10 @@
     const LOGO_URL = "https://www.vortex.sg/images/Vortex-Logo_Type.png";
     function colGroup() {
       const N = DATA.days.length;
-      const lead = 3.2 + 15 + 8;           // S/N + Name/Desc + Position/Unit  (%)
-      const totalW = 4.2;
-      const dayW = ((100 - lead - totalW) / N).toFixed(3);
+      const snW = 3, nameW = 17, posW = 12, totalW = 4;   // wider Position so it fits one line
+      const dayW = ((100 - snW - nameW - posW - totalW) / N).toFixed(3);
       return `<colgroup>
-        <col style="width:3.2%"><col style="width:15%"><col style="width:8%">
+        <col style="width:${snW}%"><col style="width:${nameW}%"><col style="width:${posW}%">
         ${DATA.days.map(() => `<col style="width:${dayW}%">`).join("")}
         <col style="width:${totalW}%"></colgroup>`;
     }
@@ -211,9 +210,9 @@
           .pt{ font-size:12px; font-weight:800; margin:0; }
           .ps{ font-size:9px; color:#333; margin:1px 0 0; }
           table.rs{ border-collapse:collapse; width:100%; font-size:7px; table-layout:fixed; }
-          table.rs th, table.rs td{ border:0.4px solid #000; padding:1px 1px; text-align:center;
-                                     overflow:hidden; word-break:break-word; }
-          table.rs td.l, table.rs th.l{ text-align:left; white-space:normal; word-break:break-word; }
+          table.rs th, table.rs td{ border:0.2px solid #9AA0A6; padding:2.5px 2px; text-align:center;
+                                     overflow:hidden; white-space:nowrap; }
+          table.rs td.l, table.rs th.l{ text-align:left; }
           table.rs thead th{ background:#C00000; color:#fff; }
           table.rs tr.wk th{ background:#7F1D1D; color:#fff; }
           table.rs tfoot td{ background:#EEE; font-weight:700; }
