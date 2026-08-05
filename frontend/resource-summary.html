@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Resource Summary</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    .rs-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #E5E7EB; border-radius:10px; background:#fff; }
+    table.rs { border-collapse:collapse; font-family:Arial,'Arial Narrow',sans-serif; font-size:11px; white-space:nowrap; }
+    table.rs th, table.rs td { border:0.5px solid #9CA3AF; padding:2px 5px; text-align:center; }
+    table.rs td.l, table.rs th.l { text-align:left; }
+    table.rs thead th { background:#C00000; color:#fff; font-weight:700; position:sticky; top:0; }
+    table.rs tr.wk th { background:#7F1D1D; font-weight:600; }
+    table.rs tfoot td { background:#F3F4F6; font-weight:700; }
+    table.rs td.z { color:#C7CBD1; }
+    .rs-title { font-size:13px; font-weight:800; color:#111827; margin:18px 2px 3px; }
+    .rs-sub { font-size:11px; color:#6B7280; margin:0 2px 8px; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10 no-print">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold leading-tight">Resource Summary</h1>
+      <p class="text-red-100 text-xs">Monthly attendance, manpower, materials & plant</p>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-6xl mx-auto w-full">
+    <!-- Filters -->
+    <div class="bg-white rounded-xl shadow p-4 mb-4 no-print">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-bold text-gray-500 mb-1">Site</label>
+          <select id="f-site" class="w-full border border-gray-300 rounded-lg p-2 bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1">Month</label>
+          <input id="f-month" type="month" class="w-full border border-gray-300 rounded-lg p-2">
+        </div>
+        <div>
+          <button onclick="load()" class="w-full bg-red-700 text-white font-bold py-2 rounded-lg">Load</button>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button id="b-print" onclick="printAll()" class="hidden flex-1 bg-gray-800 text-white text-sm font-bold py-2 rounded-lg">Print / PDF</button>
+        <button id="b-xls" onclick="exportExcel()" class="hidden flex-1 bg-green-700 text-white text-sm font-bold py-2 rounded-lg">Export to Excel</button>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-2">PDF/Excel are A4 landscape, one sheet per page, matching the monthly summary template. Data is rolled up from this site's Daily Progress Reports for the month.</p>
+    </div>
+
+    <div id="msg" class="text-center text-gray-500 mt-8">Pick a site and month, then Load.</div>
+    <div id="out"></div>
+  </main>
+
+  <a href="home.html" class="no-print fixed bottom-5 right-5 w-12 h-12 rounded-full bg-red-700 text-white flex items-center justify-center shadow-lg" aria-label="Home">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+  </a>
+
+  <script>
+    requireLogin();
+    let ME = null, DATA = null, SITE_NAME = "";
+    const PROJECT_TITLE = "Vortex Engineering Pte Ltd";
+
+    function num(v) { return (v === 0 || v === "0" || v == null || v === "") ? "" : v; }
+
+    async function boot() {
+      const r = await vmmsApi("/api/v1/me");
+      if (!r.ok) { vmmsLogout(); return; }
+      ME = await r.json();
+      // month default = current
+      const d = new Date();
+      document.getElementById("f-month").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      // sites (RLS scopes supervisors to their own sites)
+      const rs = await vmmsApi("/api/v1/sites");
+      const sites = rs.ok ? await rs.json() : [];
+      const sel = document.getElementById("f-site");
+      sel.innerHTML = sites.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("")
+        || '<option value="">(no sites)</option>';
+    }
+
+    async function load() {
+      const site = document.getElementById("f-site").value;
+      const month = document.getElementById("f-month").value;
+      if (!site || !month) { alert("Pick a site and month."); return; }
+      SITE_NAME = document.getElementById("f-site").selectedOptions[0].textContent;
+      document.getElementById("msg").textContent = "Loading…";
+      document.getElementById("out").innerHTML = "";
+      const r = await vmmsApi(`/api/v1/resource-summary?site_id=${encodeURIComponent(site)}&month=${encodeURIComponent(month)}`);
+      if (!r.ok) { document.getElementById("msg").textContent = "Could not load (" + r.status + ")."; return; }
+      DATA = await r.json();
+      render();
+    }
+
+    function render() {
+      const empty = !DATA.report_count;
+      document.getElementById("msg").textContent = empty
+        ? "No Daily Progress Reports found for this site and month." : "";
+      document.getElementById("b-print").classList.toggle("hidden", empty);
+      document.getElementById("b-xls").classList.toggle("hidden", empty);
+      if (empty) { document.getElementById("out").innerHTML = ""; return; }
+      const out = document.getElementById("out");
+      out.innerHTML =
+        section("MONTHLY ATTENDANCE SHEET", attTable()) +
+        section("MONTHLY SUMMARY – MANPOWER", mpTable()) +
+        section("MONTHLY SUMMARY – MATERIALS & TOOLS", matTable()) +
+        section("MONTHLY SUMMARY – PLANT & EQUIPMENT", plantTable());
+    }
+
+    function section(label, tableHTML) {
+      const h = DATA.header || {};
+      return `<div class="rs-title">${esc(label)} — ${esc(DATA.month_label)}</div>
+        <div class="rs-sub">Location: ${esc(h.location || SITE_NAME)} &nbsp;|&nbsp; Item of Work: ${esc(h.item_of_work || "—")}</div>
+        <div class="rs-scroll"><table class="rs">${tableHTML}</table></div>`;
+    }
+
+    // ---- shared header (weekday letters + day numbers) ----
+    function headCols(leadCols) {
+      const wk = DATA.weekdays.map(w => `<th>${w}</th>`).join("");
+      const dn = DATA.days.map(d => `<th>${d}</th>`).join("");
+      return `<thead>
+        <tr class="wk">${leadCols.map(() => '<th></th>').join("")}${wk}<th></th></tr>
+        <tr>${leadCols.map(c => `<th class="${c.l ? 'l' : ''}">${c.t}</th>`).join("")}${dn}<th>Total</th></tr>
+      </thead>`;
+    }
+    function dayCells(days) {
+      return DATA.days.map(d => {
+        const v = days[String(d)];
+        return `<td class="${(v == null || v === "") ? 'z' : ''}">${num(v)}</td>`;
+      }).join("");
+    }
+
+    function attTable() {
+      const head = headCols([{ t: "S/N" }, { t: "Employee Name", l: true }, { t: "Position", l: true }]);
+      const body = DATA.attendance.map(r =>
+        `<tr><td>${r.sn}</td><td class="l">${esc(r.name)}</td><td class="l">${esc(r.position)}</td>${dayCells(r.days)}<td>${num(r.total)}</td></tr>`).join("");
+      return head + `<tbody>${body}</tbody>`;
+    }
+    function unitTable(rows, footDaily, extra) {
+      const head = headCols([{ t: "S/N" }, { t: "Description", l: true }, { t: "Unit" }]);
+      const body = rows.map(r =>
+        `<tr><td>${r.sn}</td><td class="l">${esc(r.description)}</td><td>${esc(r.unit || "")}</td>${dayCells(r.days)}<td>${num(r.total)}</td></tr>`).join("");
+      let foot = "";
+      if (footDaily) {
+        const grand = Object.values(footDaily).reduce((a, b) => a + (Number(b) || 0), 0);
+        foot += `<tr><td colspan="3" class="l">DAILY TOTAL</td>${dayCells(footDaily)}<td>${grand || ""}</td></tr>`;
+      }
+      foot += (extra || "");
+      return head + `<tbody>${body}</tbody>` + (foot ? `<tfoot>${foot}</tfoot>` : "");
+    }
+    function mpTable() {
+      const mp = DATA.manpower;
+      const mh = `<tr><td colspan="3" class="l">TOTAL MAN-HOURS (per DWR)</td>${dayCells(mp.manhours)}<td>${num(mp.manhours_total)}</td></tr>`;
+      return unitTable(mp.rows, mp.daily_total, mh);
+    }
+    function matTable() { return unitTable(DATA.materials.rows, DATA.materials.daily_total, ""); }
+    function plantTable() { return unitTable(DATA.plant.rows, DATA.plant.daily_total, ""); }
+
+    // ---------- PRINT (A4 landscape, one sheet per page) ----------
+    function printAll() {
+      const h = DATA.header || {};
+      const sub = (label) => `<div class="pt">${esc(label)} — ${esc(DATA.month_label)}</div>
+        <div class="ps">Location: ${esc(h.location || SITE_NAME)} &nbsp;|&nbsp; Item of Work: ${esc(h.item_of_work || "—")}</div>`;
+      const sheets = [
+        ["MONTHLY ATTENDANCE SHEET", attTable()],
+        ["MONTHLY SUMMARY – MANPOWER", mpTable()],
+        ["MONTHLY SUMMARY – MATERIALS & TOOLS", matTable()],
+        ["MONTHLY SUMMARY – PLANT & EQUIPMENT", plantTable()],
+      ].map(([lbl, tbl], i) =>
+        `<div class="sheet"><div class="ph">${esc(PROJECT_TITLE)}</div>${sub(lbl)}<table class="rs">${tbl}</table></div>`).join("");
+      const w = window.open("", "_blank");
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resource Summary ${esc(DATA.month_label)}</title>
+        <style>
+          @page { size:A4 landscape; margin:6mm; }
+          *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+          body{ font-family:Arial,'Arial Narrow',sans-serif; margin:0; }
+          .sheet{ page-break-after:always; }
+          .sheet:last-child{ page-break-after:auto; }
+          .ph{ font-size:10px; font-weight:700; margin:0 0 2px; }
+          .pt{ font-size:11px; font-weight:800; margin:0; }
+          .ps{ font-size:9px; color:#333; margin:0 0 4px; }
+          table.rs{ border-collapse:collapse; width:100%; font-size:7px; table-layout:fixed; }
+          table.rs th, table.rs td{ border:0.4px solid #000; padding:1px 1px; text-align:center; overflow:hidden; }
+          table.rs td.l, table.rs th.l{ text-align:left; }
+          table.rs thead th{ background:#C00000; color:#fff; }
+          table.rs tr.wk th{ background:#7F1D1D; color:#fff; }
+          table.rs tfoot td{ background:#Eee; font-weight:700; }
+          td.z{ color:#bbb; }
+        </style></head><body>${sheets}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(() => { w.print(); }, 350);
+    }
+
+    // ---------- EXCEL (4 sheets, landscape) ----------
+    async function exportExcel() {
+      const wb = new ExcelJS.Workbook();
+      const ctr = { horizontal: "center", vertical: "middle" };
+      const HEAD = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC00000" } };
+      const WK = { type: "pattern", pattern: "solid", fgColor: { argb: "FF7F1D1D" } };
+      const FOOT = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+      const h = DATA.header || {};
+      const days = DATA.days, N = days.length;
+
+      function build(sheetName, title, leads, rows, valuesFor, footRows) {
+        const ws = wb.addWorksheet(sheetName, {
+          pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 } },
+          views: [{ state: "frozen", xSplit: leads.length, ySplit: 4 }]
+        });
+        const totalCols = leads.length + N + 1;
+        ws.mergeCells(1, 1, 1, totalCols);
+        ws.getCell(1, 1).value = PROJECT_TITLE; ws.getCell(1, 1).font = { bold: true, size: 10 };
+        ws.mergeCells(2, 1, 2, totalCols);
+        ws.getCell(2, 1).value = `${title} — ${DATA.month_label}   |   Location: ${h.location || SITE_NAME}   |   Item of Work: ${h.item_of_work || "—"}`;
+        ws.getCell(2, 1).font = { bold: true, size: 9 };
+        // row 3: weekday letters (under day columns)
+        const wkRow = ws.getRow(3);
+        DATA.weekdays.forEach((w, i) => { const c = wkRow.getCell(leads.length + 1 + i); c.value = w; c.alignment = ctr; c.font = { color: { argb: "FFFFFFFF" }, bold: true, size: 8 }; c.fill = WK; });
+        // row 4: header
+        const hr = ws.getRow(4);
+        leads.forEach((l, i) => { const c = hr.getCell(i + 1); c.value = l.t; });
+        days.forEach((d, i) => { hr.getCell(leads.length + 1 + i).value = d; });
+        hr.getCell(totalCols).value = "Total";
+        hr.eachCell(c => { c.alignment = ctr; c.font = { color: { argb: "FFFFFFFF" }, bold: true, size: 8 }; c.fill = HEAD; });
+        // data
+        let R = 5;
+        rows.forEach(r => {
+          const row = ws.getRow(R);
+          const lead = valuesFor(r);
+          lead.forEach((v, i) => row.getCell(i + 1).value = v);
+          days.forEach((d, i) => { const v = r.days[String(d)]; if (v !== "" && v != null) row.getCell(leads.length + 1 + i).value = v; });
+          row.getCell(totalCols).value = (r.total === "" ? null : r.total);
+          row.eachCell(c => { c.alignment = ctr; c.font = { size: 8 }; c.border = thin(); });
+          if (lead[1] != null) row.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
+          R++;
+        });
+        (footRows || []).forEach(fr => {
+          const row = ws.getRow(R);
+          ws.mergeCells(R, 1, R, leads.length);
+          row.getCell(1).value = fr.label;
+          days.forEach((d, i) => { const v = fr.days[String(d)]; if (v !== "" && v != null) row.getCell(leads.length + 1 + i).value = v; });
+          if (fr.total != null) row.getCell(totalCols).value = fr.total;
+          row.eachCell(c => { c.alignment = ctr; c.font = { bold: true, size: 8 }; c.fill = FOOT; c.border = thin(); });
+          row.getCell(1).alignment = { horizontal: "left", vertical: "middle" };
+          R++;
+        });
+        // widths
+        ws.getColumn(1).width = 4;
+        ws.getColumn(2).width = 26;
+        if (leads.length >= 3) ws.getColumn(3).width = 10;
+        for (let i = 0; i < N; i++) ws.getColumn(leads.length + 1 + i).width = 3.4;
+        ws.getColumn(totalCols).width = 7;
+      }
+      function thin() { return { top: { style: "thin", color: { argb: "FF999999" } }, left: { style: "thin", color: { argb: "FF999999" } }, bottom: { style: "thin", color: { argb: "FF999999" } }, right: { style: "thin", color: { argb: "FF999999" } } }; }
+
+      build("Attendance", "MONTHLY ATTENDANCE SHEET",
+        [{ t: "S/N" }, { t: "Employee Name" }, { t: "Position" }],
+        DATA.attendance, r => [r.sn, r.name, r.position], []);
+
+      const mp = DATA.manpower;
+      build("Manpower", "MONTHLY SUMMARY – MANPOWER",
+        [{ t: "S/N" }, { t: "Description" }, { t: "Unit" }],
+        mp.rows, r => [r.sn, r.description, r.unit], [
+          { label: "DAILY TOTAL", days: mp.daily_total, total: mp.total },
+          { label: "TOTAL MAN-HOURS (per DWR)", days: mp.manhours, total: mp.manhours_total },
+        ]);
+
+      build("Materials", "MONTHLY SUMMARY – MATERIALS & TOOLS",
+        [{ t: "S/N" }, { t: "Description" }, { t: "Unit" }],
+        DATA.materials.rows, r => [r.sn, r.description, r.unit],
+        [{ label: "DAILY TOTAL", days: DATA.materials.daily_total, total: null }]);
+
+      build("Plant & Equipment", "MONTHLY SUMMARY – PLANT & EQUIPMENT",
+        [{ t: "S/N" }, { t: "Description" }, { t: "Unit" }],
+        DATA.plant.rows, r => [r.sn, r.description, r.unit],
+        [{ label: "DAILY TOTAL", days: DATA.plant.daily_total, total: null }]);
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Resource Summary_${SITE_NAME}_${DATA.month_label}.xlsx`.replace(/[\/\\:*?"<>|]/g, "-");
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+
+    boot();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
