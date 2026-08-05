@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.52.0")  # admin broadcast push + settings notif tab
+app = FastAPI(title="VCMS API", version="0.53.0")  # monthly resource summary (attendance/manpower/materials/plant)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2657,6 +2657,140 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
+
+
+def _rs_clean(v):
+    if isinstance(v, float):
+        return int(v) if v.is_integer() else round(v, 1)
+    return v
+
+
+def _rs_pos_rank(role):
+    r = (role or "").lower()
+    kws = ["manager", "engineer", "supervisor", "wshc", "rescuer", "first aid",
+           "confined", "lifting", "rigger", "signal", "banksman", "traffic",
+           "operator", "driver", "welder", "fire", "general"]
+    for i, kw in enumerate(kws):
+        if kw in r:
+            return i
+    return 90
+
+
+@app.get("/api/v1/resource-summary")
+async def resource_summary(site_id: str, month: str, user: dict = Depends(get_current_user)):
+    """Roll a month of DPRs for one site into the 4-sheet monthly summary:
+    (1) per-employee attendance hours, (2) manpower by position/day,
+    (3) materials & tools/day, (4) plant & equipment/day."""
+    import calendar
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    try:
+        y, m = month.split("-"); y, m = int(y), int(m)
+        ndays = calendar.monthrange(y, m)[1]
+    except Exception:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    start = f"{y:04d}-{m:02d}-01"
+    end = f"{y:04d}-{m:02d}-{ndays:02d}"
+    days = list(range(1, ndays + 1))
+    weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
+
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/daily_reports",
+            params={"site_id": f"eq.{site_id}",
+                    "and": f"(report_date.gte.{start},report_date.lte.{end})",
+                    "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
+                    "order": "report_date.asc"},
+            headers=supabase_headers(user["token"]))
+        reports = r.json() if r.status_code == 200 else []
+
+    att, mp_pos, mats, plant = {}, {}, {}, {}
+    manhours = {d: 0.0 for d in days}
+    header = {"project_title": "", "location": "", "item_of_work": ""}
+
+    for rep in reports:
+        try:
+            d = int(rep["report_date"].split("-")[2])
+        except Exception:
+            continue
+        for k in header:
+            if not header[k] and rep.get(k):
+                header[k] = rep[k]
+        for w in (rep.get("manpower") or []):
+            name = (w.get("name") or "").strip()
+            role = (w.get("role") or "").strip() or "-"
+            hrs = float(w.get("total") or 0)
+            no = int(w.get("no") or 1)
+            if name:
+                a = att.setdefault(name, {"position": role, "days": {}, "total": 0.0})
+                a["days"][d] = a["days"].get(d, 0.0) + hrs
+                a["total"] += hrs
+                if role != "-":
+                    a["position"] = role
+            p = mp_pos.setdefault(role, {"days": {}, "total": 0})
+            p["days"][d] = p["days"].get(d, 0) + no
+            p["total"] += no
+            manhours[d] += hrs
+        for e in (rep.get("equipment") or []):
+            name = (e.get("name") or "").strip()
+            if not name:
+                continue
+            no = float(e.get("no") or 0) or 1
+            pl = plant.setdefault(name, {"unit": "Nos", "days": {}, "total": 0.0})
+            pl["days"][d] = pl["days"].get(d, 0.0) + no
+            pl["total"] += no
+        for mt in (rep.get("materials") or []):
+            name = (mt.get("name") or "").strip()
+            if not name:
+                continue
+            unit = (mt.get("unit") or "").strip()
+            qty = float(mt.get("qty") or 0)
+            key = name + "||" + unit
+            mm = mats.setdefault(key, {"name": name, "unit": unit, "days": {}, "total": 0.0})
+            mm["days"][d] = mm["days"].get(d, 0.0) + qty
+            mm["total"] += qty
+
+    def daymap(dd):
+        return {str(k): _rs_clean(v) for k, v in dd.items() if v}
+
+    attendance = [{"sn": i, "name": n, "position": a["position"],
+                   "days": daymap(a["days"]), "total": _rs_clean(a["total"])}
+                  for i, (n, a) in enumerate(sorted(att.items(), key=lambda x: x[0].lower()), 1)]
+
+    mp_sorted = sorted(mp_pos.items(), key=lambda x: (_rs_pos_rank(x[0]), x[0].lower()))
+    manpower = [{"sn": i, "description": pos, "unit": "Nos",
+                 "days": daymap(v["days"]), "total": _rs_clean(v["total"])}
+                for i, (pos, v) in enumerate(mp_sorted, 1)]
+    mp_daily = {str(d): _rs_clean(sum(v["days"].get(d, 0) for v in mp_pos.values()))
+                for d in days if sum(v["days"].get(d, 0) for v in mp_pos.values())}
+    mp_daily_total = _rs_clean(sum(v["total"] for v in mp_pos.values()))
+    manhours_row = {str(d): _rs_clean(manhours[d]) for d in days if manhours[d]}
+    manhours_total = _rs_clean(sum(manhours.values()))
+
+    mats_sorted = sorted(mats.values(), key=lambda x: x["name"].lower())
+    materials = [{"sn": i, "description": v["name"], "unit": v["unit"],
+                  "days": daymap(v["days"]), "total": _rs_clean(v["total"])}
+                 for i, v in enumerate(mats_sorted, 1)]
+    mat_daily = {str(d): _rs_clean(sum(v["days"].get(d, 0) for v in mats.values()))
+                 for d in days if sum(v["days"].get(d, 0) for v in mats.values())}
+
+    plant_sorted = sorted(plant.items(), key=lambda x: x[0].lower())
+    plant_rows = [{"sn": i, "description": nm, "unit": v["unit"],
+                   "days": daymap(v["days"]), "total": _rs_clean(v["total"])}
+                  for i, (nm, v) in enumerate(plant_sorted, 1)]
+    plant_daily = {str(d): _rs_clean(sum(v["days"].get(d, 0) for v in plant.values()))
+                   for d in days if sum(v["days"].get(d, 0) for v in plant.values())}
+
+    return {
+        "month": month, "days": days, "weekdays": weekdays,
+        "month_label": f"{calendar.month_name[m].upper()} {y}",
+        "header": header, "report_count": len(reports),
+        "attendance": attendance,
+        "manpower": {"rows": manpower, "daily_total": mp_daily, "total": mp_daily_total,
+                     "manhours": manhours_row, "manhours_total": manhours_total},
+        "materials": {"rows": materials, "daily_total": mat_daily},
+        "plant": {"rows": plant_rows, "daily_total": plant_daily},
+    }
 
 
 @app.get("/api/v1/dpr/list")
