@@ -477,7 +477,8 @@
 
     // ---------- PRINT (A4 landscape, matches the PR template) ----------
     function bx(on){ return `<span class="box">${on?"✓":""}</span>`; }
-    function printPR(){
+    function imgAspect(url){ return new Promise(res=>{ const im=new Image(); im.onload=()=>res(im.naturalHeight>=im.naturalWidth?"port":"land"); im.onerror=()=>res("port"); im.src=url; }); }
+    async function printPR(){
       const d=collect();
       let mySig=""; try{ mySig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
       const items=d.items.length?d.items:[{}];
@@ -493,8 +494,10 @@
       let pad=""; for(let i=items.length;i<9;i++) pad+=`<tr><td class="c">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
       const total=document.getElementById("grand").textContent;
       const totalRow = anyPrice ? `<tr class="tot"><td colspan="5" class="r">Total</td><td class="r">${esc(total)}</td><td></td></tr>` : "";
-      const atts=(d.photos||[]).filter(p=>p.url).map((p,i)=>`
-        <div class="attpage">
+      const photos=(d.photos||[]).filter(p=>p.url);
+      const oris=await Promise.all(photos.map(p=>imgAspect(p.url)));
+      const atts=photos.map((p,i)=>`
+        <div class="attpage ${oris[i]==='port'?'attn-port':'attn-land'}">
           <div class="attcap">Attachment ${i+1}${p.caption?(" — "+esc(p.caption)):""} &nbsp;·&nbsp; P.R No ${esc(d.pr_no||"")}</div>
           <img src="${p.url}">
         </div>`).join("");
@@ -502,6 +505,8 @@
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>PR ${esc(d.pr_no||"")}</title>
       <style>
         @page{ size:A4 landscape; margin:10mm; }
+        @page portpage{ size:A4 portrait; margin:8mm; }
+        @page landpage{ size:A4 landscape; margin:8mm; }
         *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; }
         body{ font-family:Arial,'Arial Narrow',sans-serif; color:#000; font-size:12px; margin:0; }
         .hdr{ display:flex; align-items:flex-start; gap:16px; border-bottom:2px solid #000; padding-bottom:8px; }
@@ -523,8 +528,11 @@
         .sig-img{ height:42px; margin-bottom:2px; }
         .sigline{ border-top:1px solid #000; padding-top:3px; font-size:11px; }
         .attpage{ page-break-before:always; text-align:center; }
-        .attcap{ font-weight:700; font-size:12px; margin:0 0 6px; }
-        .attpage img{ max-width:100%; max-height:180mm; object-fit:contain; }
+        .attn-port{ page:portpage; } .attn-land{ page:landpage; }
+        .attcap{ font-weight:700; font-size:12px; margin:0 0 8px; }
+        .attpage img{ max-width:100%; object-fit:contain; }
+        .attn-port img{ max-height:262mm; }
+        .attn-land img{ max-height:178mm; }
       </style></head><body>
       <div class="hdr">
         <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
