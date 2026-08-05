@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.53.2")  # dpr history: item_of_work in list
+app = FastAPI(title="VCMS API", version="0.54.0")  # procurement: PR directory + PR requests
 
 app.add_middleware(
     CORSMiddleware,
@@ -2918,6 +2918,150 @@ async def delete_project(project_id: str, user: dict = Depends(get_current_user)
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete project")
         return {"ok": True}
+
+
+# ================= Procurement (Purchase Requisition) =================
+PR_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # who can raise a PR
+
+
+class PRDirIn(BaseModel):
+    site_name: str
+    project_code: str
+    project: str | None = None
+    pm_hod: str | None = None
+    manager_director: str | None = None
+    deliver_to: str | None = None
+
+
+@app.get("/api/v1/pr/directory")
+async def pr_directory_list(user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/pr_directory",
+                             params={"select": "*", "order": "site_name.asc,project_code.asc"},
+                             headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
+
+
+@app.post("/api/v1/pr/directory", status_code=201)
+async def pr_directory_add(body: PRDirIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can edit the PR directory")
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/pr_directory",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"site_name": body.site_name.strip(), "project_code": body.project_code.strip(),
+                  "project": body.project, "pm_hod": body.pm_hod,
+                  "manager_director": body.manager_director, "deliver_to": body.deliver_to,
+                  "created_by": user["user_id"]})
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Could not save directory entry ({r.status_code})")
+        rows = r.json()
+        return rows[0] if rows else {"ok": True}
+
+
+@app.delete("/api/v1/pr/directory/{entry_id}")
+async def pr_directory_delete(entry_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can delete a directory entry")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/pr_directory",
+                                params={"id": f"eq.{entry_id}"},
+                                headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete entry")
+        return {"ok": True}
+
+
+@app.get("/api/v1/pr/next-number")
+async def pr_next_number(user: dict = Depends(get_current_user)):
+    """Suggest the next PR No by incrementing the trailing digits of the most
+    recent PR. First-ever PR returns blank so the user types the starting number."""
+    import re as _re
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/purchase_requisitions",
+                             params={"select": "pr_no", "order": "created_at.desc", "limit": "1"},
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+    if not rows or not (rows[0].get("pr_no") or "").strip():
+        return {"next": "", "seed": True}
+    last = rows[0]["pr_no"].strip()
+    m = _re.search(r"^(.*?)(\d+)(\D*)$", last)
+    if not m:
+        return {"next": "", "seed": True, "last": last}
+    prefix, num, suffix = m.groups()
+    nxt = prefix + str(int(num) + 1).zfill(len(num)) + suffix
+    return {"next": nxt, "seed": False, "last": last}
+
+
+class PRIn(BaseModel):
+    pr_no: str | None = None
+    pr_date: str | None = None
+    category: str | None = None
+    urgency: str | None = None
+    delivery_mode: str | None = None
+    deliver_to: str | None = None
+    site_name: str | None = None
+    project_code: str | None = None
+    project: str | None = None
+    pm_hod: str | None = None
+    manager_director: str | None = None
+    requested_by_name: str | None = None
+    items: list[dict] = []
+    remarks: str | None = None
+    status: str | None = "submitted"
+
+
+@app.get("/api/v1/pr/list")
+async def pr_list(user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/purchase_requisitions",
+            params={"select": "id,pr_no,pr_date,site_name,project_code,project,requested_by_name,category,created_at",
+                    "order": "created_at.desc", "limit": "200"},
+            headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
+
+
+@app.get("/api/v1/pr/{pr_id}")
+async def pr_get(pr_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/purchase_requisitions",
+                             params={"id": f"eq.{pr_id}", "select": "*"},
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+        return rows[0] if rows else {}
+
+
+@app.post("/api/v1/pr")
+async def pr_save(body: PRIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    payload = {
+        "pr_no": (body.pr_no or "").strip(), "pr_date": _nz_date(body.pr_date),
+        "category": body.category, "urgency": body.urgency,
+        "delivery_mode": body.delivery_mode, "deliver_to": body.deliver_to,
+        "site_name": body.site_name, "project_code": body.project_code, "project": body.project,
+        "pm_hod": body.pm_hod, "manager_director": body.manager_director,
+        "requested_by_name": body.requested_by_name or user.get("name"),
+        "items": body.items or [], "remarks": body.remarks,
+        "status": body.status or "submitted", "created_by": user["user_id"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/purchase_requisitions",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=payload)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Could not save PR (db {r.status_code}: {r.text[:140]})")
+        rows = r.json()
+        return rows[0] if rows else {"ok": True}
 
 
 class UploadUrlIn(BaseModel):
