@@ -123,6 +123,15 @@
         <div><label class="fl">Requested By</label><input id="f-reqby" class="inp"></div>
       </div>
 
+      <!-- Reference photos / invoice attachments -->
+      <label class="fl mt-4">Reference photos / Invoice (optional)</label>
+      <div id="drop" class="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center text-xs text-gray-500">
+        Paste (Ctrl/⌘+V), drag &amp; drop, or
+        <label class="text-red-700 font-bold cursor-pointer">choose files<input id="ph-file" type="file" accept="image/*" multiple class="hidden"></label>.
+        Invoices &amp; references print after the PR for the procurement team.
+      </div>
+      <div id="ph-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2"></div>
+
       <div class="flex gap-2 mt-5">
         <button onclick="savePR()" class="flex-1 bg-red-700 text-white font-bold py-2.5 rounded-lg">Save</button>
         <button onclick="printPR()" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded-lg">Print / PDF</button>
@@ -140,7 +149,57 @@
 
   <script>
     requireLogin();
-    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"};
+    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[];
+    const SIG_KEY="vcms_my_signature";   // same saved signature as the DPR page
+    const LOGO_URL="https://www.vortex.sg/images/Vortex-Logo_Type.png";
+
+    // ---- image helpers (same R2 pipeline as DPR) ----
+    async function compressImage(file, maxDim=1600, quality=0.72){
+      try{
+        if(!file.type || !file.type.startsWith("image/")) return file;
+        const bmp=await createImageBitmap(file);
+        let w=bmp.width, h=bmp.height; const s=Math.min(1, maxDim/Math.max(w,h));
+        w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s));
+        const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",quality));
+        return (blob && blob.size<file.size)?blob:file;
+      }catch(e){ return file; }
+    }
+    async function storeImage(blob, path){
+      const type=blob.type||"image/jpeg";
+      try{
+        const s=getSession();
+        const url=`${VMMS_CONFIG.BACKEND_URL}/api/v1/storage/upload?path=${encodeURIComponent(path)}&content_type=${encodeURIComponent(type)}`;
+        const r=await fetch(url,{method:"PUT",headers:{"Authorization":"Bearer "+s.access_token,"Content-Type":type},body:blob});
+        if(r.ok){ const j=await r.json(); if(j.public_url) return j.public_url; }
+      }catch(e){}
+      const s=getSession();
+      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
+        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:blob });
+      if(!r.ok) throw new Error("upload "+r.status);
+      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+    }
+    async function addPhotoFile(file){
+      if(!file || !file.type || !file.type.startsWith("image/")) return;
+      const ph={url:"", caption:"", _up:true}; PR_PHOTOS.push(ph); renderPhotos();
+      try{
+        const blob=await compressImage(file);
+        const path=`pr/${(document.getElementById("f-prno").value||"tmp").replace(/[^a-z0-9]/gi,"_")}/${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`;
+        ph.url=await storeImage(blob, path); ph._up=false;
+      }catch(e){ PR_PHOTOS=PR_PHOTOS.filter(p=>p!==ph); toast("Upload failed"); }
+      renderPhotos();
+    }
+    function renderPhotos(){
+      const g=document.getElementById("ph-grid");
+      g.innerHTML=PR_PHOTOS.map((p,i)=>`
+        <div style="position:relative;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;background:#fff">
+          <div style="height:88px;background:#F3F4F6;display:flex;align-items:center;justify-content:center">
+            ${p.url?`<img src="${p.url}" style="width:100%;height:88px;object-fit:cover">`:`<span style="font-size:11px;color:#9CA3AF">Uploading…</span>`}
+          </div>
+          <input value="${esc(p.caption||"")}" oninput="PR_PHOTOS[${i}].caption=this.value" placeholder="Caption / Invoice no." style="width:100%;border:none;border-top:1px solid #eee;font-size:11px;padding:4px">
+          <button onclick="PR_PHOTOS.splice(${i},1);renderPhotos()" style="position:absolute;top:3px;right:3px;background:#C00000;color:#fff;border:none;border-radius:9999px;width:20px;height:20px;font-weight:700;cursor:pointer">×</button>
+        </div>`).join("");
+    }
     function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),2400); }
     function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
     function pick(group,btn){ SEL[group]=btn.getAttribute("data-v"); const wrap=btn.parentElement; [...wrap.children].forEach(b=>b.classList.toggle("on", b===btn)); }
@@ -160,6 +219,13 @@
       addItem();
       await nextNumber();
       await loadRecent();
+      // photo inputs
+      document.getElementById("ph-file").addEventListener("change", e=>{ [...e.target.files].forEach(addPhotoFile); e.target.value=""; });
+      const drop=document.getElementById("drop");
+      ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background="#FEF2F2";}));
+      ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background="";}));
+      drop.addEventListener("drop", e=>{ [...(e.dataTransfer.files||[])].forEach(addPhotoFile); });
+      window.addEventListener("paste", e=>{ [...(e.clipboardData.items||[])].forEach(x=>{ if(x.type&&x.type.startsWith("image/")) addPhotoFile(x.getAsFile()); }); });
     }
     async function nextNumber(){
       const r=await vmmsApi("/api/v1/pr/next-number"); const d=r.ok?await r.json():{};
@@ -230,7 +296,9 @@
         project:document.getElementById("f-project").value.trim(),
         pm_hod:SEL._pm||"", manager_director:SEL._md||"",
         requested_by_name:document.getElementById("f-reqby").value.trim(),
-        items:readItems(), remarks:document.getElementById("f-remarks").value.trim(), status:"submitted",
+        items:readItems(),
+        photos:PR_PHOTOS.filter(p=>p.url).map(p=>({url:p.url,caption:p.caption||""})),
+        remarks:document.getElementById("f-remarks").value.trim(), status:"submitted",
       };
     }
     async function savePR(){
@@ -246,7 +314,7 @@
       document.getElementById("f-code").innerHTML='<option value="">—</option>';
       document.getElementById("f-project").value=""; document.getElementById("f-deliverto").value="";
       document.getElementById("f-remarks").value=""; document.getElementById("items").innerHTML="";
-      SEL._pm=""; SEL._md=""; addItem(); nextNumber();
+      SEL._pm=""; SEL._md=""; PR_PHOTOS=[]; renderPhotos(); addItem(); nextNumber();
       document.getElementById("f-date").value=new Date().toISOString().slice(0,10);
       setSeg("cat","consumable"); setSeg("urg","normal"); setSeg("del","delivery");
       window.scrollTo(0,0);
@@ -276,79 +344,91 @@
       document.getElementById("f-reqby").value=d.requested_by_name||"";
       SEL._pm=d.pm_hod||""; SEL._md=d.manager_director||"";
       document.getElementById("items").innerHTML=""; (d.items&&d.items.length?d.items:[{}]).forEach(addItem);
+      PR_PHOTOS=(d.photos||[]).map(p=>({url:p.url,caption:p.caption||""})); renderPhotos();
       window.scrollTo(0,0); toast("Loaded — you can reprint or edit");
     }
 
-    // ---------- PRINT (A4 landscape) ----------
-    function chk(on){ return on ? "☒" : "☐"; }
+    // ---------- PRINT (A4 landscape, matches the PR template) ----------
+    function bx(on){ return `<span class="box">${on?"✓":""}</span>`; }
     function printPR(){
       const d=collect();
+      let mySig=""; try{ mySig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
       const items=d.items.length?d.items:[{}];
-      const rowsH=items.map(it=>`<tr>
-          <td class="c">${it.no||""}</td>
+      const anyPrice=items.some(it=>String(it.unit_price||"").trim()||String(it.amount||"").trim());
+      const rowsH=items.map((it,i)=>`<tr>
+          <td class="c">${it.no||i+1}</td>
           <td>${esc(it.description||"").replace(/\n/g,"<br>")}</td>
           <td class="c">${esc(it.qty||"")}</td>
           <td class="c">${esc(it.uom||"")}</td>
           <td class="r">${esc(it.unit_price||"")}</td>
           <td class="r">${esc(it.amount||"")}</td>
           <td>${esc(it.vendor||"")}</td></tr>`).join("");
-      // pad to at least 8 rows
-      let pad=""; for(let i=items.length;i<8;i++) pad+=`<tr><td class="c">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      let pad=""; for(let i=items.length;i<9;i++) pad+=`<tr><td class="c">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
       const total=document.getElementById("grand").textContent;
+      const totalRow = anyPrice ? `<tr class="tot"><td colspan="5" class="r">Total</td><td class="r">${esc(total)}</td><td></td></tr>` : "";
+      const atts=(d.photos||[]).filter(p=>p.url).map((p,i)=>`
+        <div class="attpage">
+          <div class="attcap">Attachment ${i+1}${p.caption?(" — "+esc(p.caption)):""} &nbsp;·&nbsp; P.R No ${esc(d.pr_no||"")}</div>
+          <img src="${p.url}">
+        </div>`).join("");
       const w=window.open("","_blank");
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>PR ${esc(d.pr_no||"")}</title>
       <style>
-        @page{ size:A4 landscape; margin:12mm; }
+        @page{ size:A4 landscape; margin:10mm; }
         *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; }
-        body{ font-family:Arial,'Arial Narrow',sans-serif; color:#000; font-size:11px; margin:0; }
-        .cats{ font-size:12px; line-height:1.7; }
-        .title{ text-align:center; font-size:20px; font-weight:800; letter-spacing:.03em; }
-        .top{ display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:6px; }
-        .prno{ font-size:13px; font-weight:800; }
-        .grid2{ display:flex; gap:20px; margin:3px 0; }
-        .lbl{ font-weight:700; }
-        table.pr{ width:100%; border-collapse:collapse; margin-top:8px; }
-        table.pr th, table.pr td{ border:0.6px solid #000; padding:4px 6px; vertical-align:top; }
-        table.pr th{ background:#eee; font-size:11px; }
+        body{ font-family:Arial,'Arial Narrow',sans-serif; color:#000; font-size:12px; margin:0; }
+        .hdr{ display:flex; align-items:flex-start; gap:16px; border-bottom:2px solid #000; padding-bottom:8px; }
+        .logo{ height:58px; width:auto; }
+        .cats{ font-size:13px; line-height:1.85; }
+        .title{ flex:1; text-align:center; font-size:22px; font-weight:800; letter-spacing:.04em; margin-top:16px; }
+        .prno{ font-size:14px; font-weight:800; white-space:nowrap; margin-top:16px; }
+        .box{ display:inline-block; width:14px; height:14px; border:1px solid #000; text-align:center; line-height:12px; font-size:11px; vertical-align:-2px; margin-right:6px; }
+        .u{ border-bottom:1px solid #000; padding:0 6px; font-weight:600; }
+        .row{ margin-top:7px; } .lbl{ font-weight:700; }
+        table.pr{ width:100%; border-collapse:collapse; margin-top:10px; }
+        table.pr th{ border:0.8px solid #000; background:#eee; padding:5px 6px; }
+        table.pr td{ border-left:0.8px solid #000; border-right:0.8px solid #000; padding:4px 6px; vertical-align:top; }
+        table.pr tbody tr:last-child td{ border-bottom:0.8px solid #000; }
+        table.pr tr.tot td{ border-top:0.8px solid #000; font-weight:700; }
         td.c{ text-align:center; } td.r{ text-align:right; }
-        .foot{ display:flex; justify-content:space-between; margin-top:26px; }
-        .sig{ width:30%; text-align:center; }
-        .sigline{ border-top:1px solid #000; margin-top:34px; padding-top:3px; font-size:10px; }
-        .rmk{ margin-top:6px; }
+        .foot{ display:flex; justify-content:space-between; margin-top:24px; }
+        .sig{ width:31%; text-align:center; }
+        .sig-img{ height:42px; margin-bottom:2px; }
+        .sigline{ border-top:1px solid #000; padding-top:3px; font-size:11px; }
+        .attpage{ page-break-before:always; text-align:center; }
+        .attcap{ font-weight:700; font-size:12px; margin:0 0 6px; }
+        .attpage img{ max-width:100%; max-height:180mm; object-fit:contain; }
       </style></head><body>
-      <div class="top">
-        <div class="cats">
-          ${chk(d.category==='asset')} Asset<br>
-          ${chk(d.category==='consumable')} Consumable<br>
-          ${chk(d.category==='rentals')} Rentals
-        </div>
-        <div style="flex:1;text-align:center"><div class="title">PURCHASE REQUISITION</div></div>
-        <div style="text-align:right"><div class="prno">P.R NO : ${esc(d.pr_no||"")}</div></div>
+      <div class="hdr">
+        <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+        <div class="cats">${bx(d.category==='asset')} Asset<br>${bx(d.category==='consumable')} Consumable<br>${bx(d.category==='rentals')} Rentals</div>
+        <div class="title">PURCHASE REQUISITION</div>
+        <div class="prno">P.R NO : ${esc(d.pr_no||"")}</div>
       </div>
-      <div class="grid2"><div><span class="lbl">Date:</span> ${fmtDMY(d.pr_date)}</div>
-        <div><span class="lbl">Project Code:</span> ${esc(d.project_code||"")}</div></div>
-      <div><span class="lbl">Project:</span> ${esc(d.project||"")}</div>
-      <div class="grid2" style="margin-top:4px">
-        <div>${chk(d.urgency==='urgent')} Urgent &nbsp;&nbsp; ${chk(d.urgency==='normal')} Normal</div>
-        <div>${chk(d.delivery_mode==='self')} Self Collection &nbsp;&nbsp; ${chk(d.delivery_mode==='delivery')} Delivery</div>
-        <div><span class="lbl">Delivery To :</span> ${esc(d.deliver_to||"")}</div>
+      <div class="row"><span class="lbl">Date:</span> <span class="u">${fmtDMY(d.pr_date)}</span>
+        &nbsp;&nbsp;&nbsp;&nbsp; <span class="lbl">Project Code:</span> <span class="u">${esc(d.project_code||"")}</span></div>
+      <div class="row"><span class="lbl">Project:</span> <span class="u" style="display:inline-block;min-width:82%">${esc(d.project||"")}</span></div>
+      <div class="row" style="display:flex;gap:70px">
+        <div><div>${bx(d.urgency==='urgent')} Urgent</div><div style="margin-top:5px">${bx(d.urgency==='normal')} Normal</div></div>
+        <div><div>${bx(d.delivery_mode==='self')} Self Collection</div>
+             <div style="margin-top:5px">${bx(d.delivery_mode==='delivery')} Delivery To : <span class="u">${esc(d.deliver_to||"")}</span></div></div>
       </div>
       <table class="pr">
-        <thead><tr><th style="width:34px">No.</th><th>Description</th><th style="width:60px">Qty</th>
-          <th style="width:66px">UOM</th><th style="width:90px">Unit Price</th><th style="width:100px">Amount</th>
+        <thead><tr><th style="width:34px">No.</th><th>Description</th><th style="width:58px">Qty</th>
+          <th style="width:66px">UOM</th><th style="width:88px">Unit Price</th><th style="width:98px">Amount</th>
           <th style="width:150px">Preferred Vendor</th></tr></thead>
-        <tbody>${rowsH}${pad}
-          <tr><td colspan="5" class="r" style="font-weight:700">Total</td><td class="r" style="font-weight:700">${esc(total)}</td><td></td></tr>
-        </tbody>
+        <tbody>${rowsH}${pad}${totalRow}</tbody>
       </table>
-      <div class="rmk"><span class="lbl">Remarks:</span> ${esc(d.remarks||"").replace(/\n/g,"<br>")}</div>
+      <div class="row"><span class="lbl">Remarks:</span> ${esc(d.remarks||"").replace(/\n/g,"<br>")}</div>
       <div class="foot">
-        <div class="sig"><div class="sigline">Requested By : ${esc(d.requested_by_name||"")}<br>Requester Name</div></div>
-        <div class="sig"><div class="sigline">Approved By<br>PM/HOD Signature${d.pm_hod?(" — "+esc(d.pm_hod)):""}</div></div>
-        <div class="sig"><div class="sigline">Manager / Director${d.manager_director?(" — "+esc(d.manager_director)):""}</div></div>
+        <div class="sig">${mySig?`<img class="sig-img" src="${mySig}">`:""}<div class="sigline">Requested By : ${esc(d.requested_by_name||"")}<br>Requester Name</div></div>
+        <div class="sig"><div class="sigline" style="margin-top:44px">Approved By${d.pm_hod?(" : "+esc(d.pm_hod)):""}<br>PM/HOD Signature</div></div>
+        <div class="sig"><div class="sigline" style="margin-top:44px">${d.manager_director?esc(d.manager_director):"&nbsp;"}<br>Manager / Director</div></div>
       </div>
+      ${atts}
+      <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});<\/script>
       </body></html>`);
-      w.document.close(); w.focus(); setTimeout(()=>w.print(),350);
+      w.document.close(); w.focus();
     }
 
     boot();
