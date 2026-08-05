@@ -19,31 +19,46 @@
     table.dt tbody td { padding:10px 12px; border-top:1px solid #F1F1F1; }
     table.dt tbody tr:hover { background:#FAFAFA; }
     .openbtn { font-size:12px; font-weight:700; color:#fff; background:#C00000; border-radius:8px; padding:6px 12px; text-decoration:none; white-space:nowrap; }
+    /* site tiles */
+    .stiles { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+    .stile { background:#fff; border:1px solid #E5E7EB; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+             padding:16px; cursor:pointer; text-align:left; transition:transform .12s, box-shadow .12s; display:flex; gap:12px; align-items:flex-start; }
+    .stile:hover { transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.12); }
+    .stile .ico { flex:0 0 auto; width:44px; height:44px; border-radius:12px; background:#0E7490; color:#fff; display:flex; align-items:center; justify-content:center; }
+    .stile .nm { font-weight:800; color:#111827; font-size:15px; line-height:1.2; }
+    .stile .meta { color:#6B7280; font-size:12px; margin-top:3px; }
+    .stile .cnt { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; color:#C00000; background:#FEE2E2; border-radius:999px; padding:3px 10px; }
   </style>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
     <div class="flex items-center gap-3 max-w-4xl mx-auto w-full">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1"><h1 class="text-lg font-bold">Daily Progress Report — History</h1><p class="text-red-100 text-xs" id="count">Loading…</p></div>
+      <a id="backbtn" href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold" id="title">Daily Progress Report — History</h1><p class="text-red-100 text-xs" id="count">Loading…</p></div>
       <a href="dpr.html" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">+ New</a>
     </div>
-    <div class="flex gap-2 mt-3 max-w-4xl mx-auto w-full">
-      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"><option value="">All sites</option></select>
-      <input id="month" type="month" class="rounded-lg p-2 text-gray-800 text-base">
-      <button onclick="load()" class="bg-red-900 text-white text-sm font-bold px-3 rounded-lg">Filter</button>
-      <button onclick="exportExcel()" style="background:#047857" class="text-white text-sm font-bold px-3 rounded-lg">Excel</button>
+    <!-- list-view toolbar (hidden on the tiles view) -->
+    <div id="toolbar" class="hidden flex gap-2 mt-3 max-w-4xl mx-auto w-full items-center">
+      <input id="dfilter" type="date" class="rounded-lg p-2 text-gray-800 text-sm">
+      <button onclick="clearDate()" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">All dates</button>
+      <span class="flex-1"></span>
+      <button onclick="exportExcel()" style="background:#047857" class="text-white text-sm font-bold px-3 py-2 rounded-lg">Excel</button>
     </div>
-    <p class="text-red-100 text-xs mt-1 max-w-4xl mx-auto w-full">Excel export: pick a site (project) → one workbook, one sheet per day.</p>
   </header>
 
   <main class="flex-1 p-4 max-w-4xl mx-auto w-full pb-10">
-    <div class="dpanel" style="overflow:hidden">
+    <!-- Level 1: site tiles -->
+    <div id="tilesView">
+      <div id="tiles" class="stiles"></div>
+      <p id="notiles" class="hidden text-center text-gray-400 p-6 text-sm">No reports yet.</p>
+    </div>
+    <!-- Level 2: per-site list -->
+    <div id="listView" class="hidden dpanel" style="overflow:hidden">
       <table class="dt">
-        <thead><tr><th>Date</th><th>Site</th><th>Project</th><th>Prepared by</th><th class="hidden sm:table-cell">Men</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Site</th><th class="hidden sm:table-cell">Item of Work</th><th class="hidden sm:table-cell">Prepared By</th><th>Total Men</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
-      <p id="empty" class="hidden text-center text-gray-400 p-6 text-sm">No reports found for this filter.</p>
+      <p id="empty" class="hidden text-center text-gray-400 p-6 text-sm">No reports found for this date.</p>
     </div>
   </main>
 
@@ -51,36 +66,72 @@
     requireLogin();
     function fmtDMY(iso){ if(!iso) return ""; const p=iso.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
 
-    const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
+    let ALLROWS=[], CUR_SITE=null;
+
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
-      const me=await r.json();
-      const rs=await vmmsApi("/api/v1/sites");
-      let sites=(rs.ok?await rs.json():[]).filter(s=>s.status==="active" && (s.site_name||"").toUpperCase()!=="HOME LEAVE");
-      // Supervisors only see their assigned sites (backend RLS scopes the list itself too).
-      if(DPR_SUP_ROLES.indexOf(me.role)!==-1){
-        sites=sites.filter(s=>(s.supervisors||[]).some(x=>x.user_id===me.user_id));
-      }
-      document.getElementById("site").innerHTML='<option value="">All sites</option>'+sites.map(s=>`<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
-      await load();
+      const rr=await vmmsApi("/api/v1/dpr/list");   // backend RLS already scopes supervisors to their sites
+      ALLROWS = rr.ok ? await rr.json() : [];
+      renderTiles();
     }
-    async function load(){
-      const site=document.getElementById("site").value, month=document.getElementById("month").value;
-      const q=[]; if(site) q.push("site_id="+site); if(month) q.push("month="+month);
-      const r=await vmmsApi("/api/v1/dpr/list"+(q.length?"?"+q.join("&"):""));
-      const list=r.ok?await r.json():[];
-      document.getElementById("count").textContent=`${list.length} report(s)`;
-      document.getElementById("empty").classList.toggle("hidden", list.length>0);
-      document.getElementById("rows").innerHTML=list.map(x=>`
+
+    // ---------- Level 1: site tiles ----------
+    function renderTiles(){
+      CUR_SITE=null;
+      document.getElementById("tilesView").classList.remove("hidden");
+      document.getElementById("listView").classList.add("hidden");
+      document.getElementById("toolbar").classList.add("hidden");
+      document.getElementById("title").textContent="Daily Progress Report — History";
+      const back=document.getElementById("backbtn"); back.href="home.html"; back.onclick=null;
+      // group by site
+      const g={};
+      ALLROWS.forEach(x=>{ const k=x.site_id; (g[k]=g[k]||{site_id:k,site_name:x.site_name,count:0,latest:""}); g[k].count++; if(x.report_date>g[k].latest) g[k].latest=x.report_date; });
+      const tiles=Object.values(g).sort((a,b)=> b.latest<a.latest?-1:1);
+      document.getElementById("count").textContent=`${ALLROWS.length} report(s) · ${tiles.length} site(s)`;
+      document.getElementById("notiles").classList.toggle("hidden", tiles.length>0);
+      document.getElementById("tiles").innerHTML=tiles.map(t=>`
+        <div class="stile" onclick="openSite('${t.site_id}')">
+          <span class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M15 3.5v3.5h3.5"/><path d="M9.5 12.5l1.4 1.4 3-3"/><path d="M9.5 16.5h5"/></svg></span>
+          <div style="min-width:0">
+            <div class="nm">${esc(t.site_name)}</div>
+            <div class="meta">Latest: ${fmtDMY(t.latest)}</div>
+            <span class="cnt">${t.count} report${t.count===1?"":"s"}</span>
+          </div>
+        </div>`).join("");
+    }
+
+    // ---------- Level 2: per-site list ----------
+    function openSite(siteId){
+      CUR_SITE=siteId;
+      const name=(ALLROWS.find(x=>x.site_id===siteId)||{}).site_name||"Site";
+      document.getElementById("tilesView").classList.add("hidden");
+      document.getElementById("listView").classList.remove("hidden");
+      document.getElementById("toolbar").classList.remove("hidden");
+      document.getElementById("title").textContent=name;
+      document.getElementById("dfilter").value="";
+      const back=document.getElementById("backbtn"); back.href="#"; back.onclick=(e)=>{e.preventDefault(); renderTiles();};
+      renderList();
+    }
+    function clearDate(){ document.getElementById("dfilter").value=""; renderList(); }
+    function renderList(){
+      const dfil=document.getElementById("dfilter").value;
+      let rows=ALLROWS.filter(x=>x.site_id===CUR_SITE);
+      if(dfil) rows=rows.filter(x=>x.report_date===dfil);
+      rows.sort((a,b)=> b.report_date<a.report_date?-1:1);
+      document.getElementById("count").textContent=`${rows.length} report(s)`;
+      document.getElementById("empty").classList.toggle("hidden", rows.length>0);
+      document.getElementById("rows").innerHTML=rows.map(x=>`
         <tr>
-          <td style="font-weight:600;color:#111827">${fmtDMY(x.report_date)}</td>
+          <td style="font-weight:600;color:#111827;white-space:nowrap">${fmtDMY(x.report_date)}</td>
           <td>${esc(x.site_name)}</td>
-          <td style="color:#6B7280">${esc(x.project_title||"—")}</td>
-          <td style="color:#6B7280">${esc(x.prepared_by_name||"—")}</td>
-          <td class="hidden sm:table-cell">${x.manpower}${x.photos?` · ${x.photos}📷`:""}</td>
+          <td class="hidden sm:table-cell" style="color:#6B7280">${esc(x.item_of_work||"—")}</td>
+          <td class="hidden sm:table-cell" style="color:#6B7280">${esc(x.prepared_by_name||"—")}</td>
+          <td style="font-weight:600">${x.manpower}</td>
           <td style="text-align:right"><a class="openbtn" href="dpr.html?site=${x.site_id}&date=${x.report_date}">Open / PDF</a></td>
         </tr>`).join("");
     }
+    // Re-filter when the date changes
+    document.addEventListener("change", (e)=>{ if(e.target && e.target.id==="dfilter") renderList(); });
     // ---- Export to Excel (ExcelJS): one workbook per site (project), one worksheet per day, with photos ----
     async function loadExcelJS(){ if(window.ExcelJS) return; await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
     function xlDMY(v){ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; }
@@ -140,15 +191,15 @@
     }
     function dlBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500); }
     async function exportExcel(){
-      const site=document.getElementById("site").value;
-      if(!site){ alert("Choose a site (project) first — the Excel workbook is one project per file."); return; }
-      const month=document.getElementById("month").value;
-      const q=["site_id="+site]; if(month) q.push("month="+month);
+      const site=CUR_SITE;
+      if(!site){ alert("Open a site first, then export."); return; }
+      const dfil=document.getElementById("dfilter").value;
       const btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent="Building…"; }
       try{
         await loadExcelJS();
-        const list=await (await vmmsApi("/api/v1/dpr/list?"+q.join("&"))).json();
-        if(!list.length){ alert("No reports to export for this filter."); return; }
+        let list=ALLROWS.filter(x=>x.site_id===site);
+        if(dfil) list=list.filter(x=>x.report_date===dfil);
+        if(!list.length){ alert("No reports to export for this date."); return; }
         const sorted=list.slice().sort((a,b)=> a.report_date<b.report_date?-1:1);
         const wb=new ExcelJS.Workbook(); const seen={};
         for(const it of sorted){
