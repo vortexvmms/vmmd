@@ -329,7 +329,7 @@
     }
     function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),2400); }
     function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
-    function pick(group,btn){ SEL[group]=btn.getAttribute("data-v"); const wrap=btn.parentElement; [...wrap.children].forEach(b=>b.classList.toggle("on", b===btn)); }
+    function pick(group,btn){ const v=btn.getAttribute("data-v"); SEL[group]=(SEL[group]===v)?"":v; const wrap=btn.parentElement; [...wrap.children].forEach(b=>b.classList.toggle("on", b.getAttribute("data-v")===SEL[group])); }
     function setSeg(group,val){ const map={cat:"seg-cat",urg:"seg-urg",del:"seg-del"}; SEL[group]=val; const wrap=document.getElementById(map[group]); [...wrap.children].forEach(b=>b.classList.toggle("on", b.getAttribute("data-v")===val)); }
 
     async function boot(){
@@ -483,15 +483,17 @@
       let mySig=""; try{ mySig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
       const items=d.items.length?d.items:[{}];
       const anyPrice=items.some(it=>String(it.unit_price||"").trim()||String(it.amount||"").trim());
-      const rowsH=items.map((it,i)=>`<tr>
-          <td class="c">${it.no||i+1}</td>
+      let sn=0;
+      const rowsH=items.map((it)=>{ const hasDesc=String(it.description||"").trim(); if(hasDesc) sn++;
+        return `<tr>
+          <td class="c">${hasDesc?sn:""}</td>
           <td>${esc(it.description||"").replace(/\n/g,"<br>")}</td>
           <td class="c">${esc(it.qty||"")}</td>
           <td class="c">${esc(it.uom||"")}</td>
           <td class="r">${esc(it.unit_price||"")}</td>
           <td class="r">${esc(it.amount||"")}</td>
-          <td>${esc(it.vendor||"")}</td></tr>`).join("");
-      let pad=""; for(let i=items.length;i<9;i++) pad+=`<tr><td class="c">${i+1}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+          <td>${esc(it.vendor||"")}</td></tr>`; }).join("");
+      let pad=""; for(let i=items.length;i<9;i++) pad+=`<tr><td class="c"></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
       const total=document.getElementById("grand").textContent;
       const totalRow = anyPrice ? `<tr class="tot"><td colspan="5" class="r">Total</td><td class="r">${esc(total)}</td><td></td></tr>` : "";
       const photos=(d.photos||[]).filter(p=>p.url);
@@ -554,11 +556,27 @@
           <th style="width:150px">Preferred Vendor</th></tr></thead>
         <tbody>${rowsH}${pad}${totalRow}</tbody>
       </table>
-      <div class="row"><span class="lbl">Remarks:</span> ${esc(d.remarks||"").replace(/\n/g,"<br>")}</div>
+      <div class="row"><span class="lbl">Remarks:</span></div>
+      <div style="margin-top:2px;white-space:pre-wrap;min-height:16px">${esc(d.remarks||"").replace(/\n/g,"<br>")}</div>
       <div class="foot">
-        <div class="sig">${mySig?`<img class="sig-img" src="${mySig}">`:""}<div class="sigline">Requested By : ${esc(d.requested_by_name||"")}<br>Requester Name</div></div>
-        <div class="sig"><div class="sigline" style="margin-top:44px">Approved By${d.pm_hod?(" : "+esc(d.pm_hod)):""}<br>PM/HOD Signature</div></div>
-        <div class="sig"><div class="sigline" style="margin-top:44px">${d.manager_director?esc(d.manager_director):"&nbsp;"}<br>Manager / Director</div></div>
+        <div style="flex:1.5;margin-right:44px">
+          <div style="display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid #000;padding-bottom:3px;min-height:42px">
+            <span style="font-weight:700;white-space:nowrap">Requested By :</span>
+            <span style="font-weight:600">${esc(d.requested_by_name||"")}</span>
+            ${mySig?`<img src="${mySig}" style="height:32px">`:""}
+            <span>&nbsp;/</span>
+          </div>
+          <div style="display:flex;font-size:10px;margin-top:3px">
+            <span style="width:52%;text-align:center">Requester Name</span>
+            <span style="width:48%;text-align:center">PM/HOD Signature</span>
+          </div>
+        </div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:flex-end;border-bottom:1px solid #000;padding-bottom:3px;min-height:42px">
+            <span style="font-weight:700;white-space:nowrap">Approved By :</span>
+          </div>
+          <div style="text-align:center;font-size:10px;margin-top:3px">Manager / Director</div>
+        </div>
       </div>
       ${atts}
       <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});<\/script>
