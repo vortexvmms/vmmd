@@ -148,8 +148,8 @@
     };
 
     const TIER_MENU = {
-      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
     };
@@ -165,7 +165,7 @@
       "WhatsApp Messages":"WhatsApp", "WhatsApp (Site Update)":"WhatsApp", "WhatsApp Update":"WhatsApp",
       "Monthly Timesheet":"Timesheet", "Monthly Man-Hours":"Man-Hours", "Users & Access":"Users",
       "My Site — Attendance":"Attendance", "Dashboard (my sites)":"Dashboard", "Reports (my sites)":"Reports",
-      "Daily Progress Report":"Progress", "DPR History":"DPR History",
+      "Daily Progress Report":"Progress", "DPR History":"DPR History", "Resource Summary":"Resources",
     };
 
     // Icon colour per page (rounded app-tile background)
@@ -175,6 +175,7 @@
       "whatsapp.html":"#059669", "dashboard.html":"#7C3AED", "reports.html":"#D97706",
       "timesheet.html":"#EA580C", "manhours.html":"#E11D48", "users.html":"#475569",
       "settings.html":"#6B7280", "help.html":"#0EA5E9", "dpr.html":"#0891B2", "dprlist.html":"#0E7490",
+      "resource-summary.html":"#B45309",
     };
     // Inline SVG glyph per page (stroke = white, set on the <svg>)
     const ICONS = {
@@ -194,6 +195,7 @@
       "help.html":'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
       "dpr.html":'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M15 3.5v3.5h3.5"/><path d="M9.5 12.5l1.4 1.4 3-3"/><path d="M9.5 16.5h5"/>',
       "dprlist.html":'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>',
+      "resource-summary.html":'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',
       _default:'<circle cx="12" cy="12" r="8"/>',
     };
 
@@ -205,10 +207,11 @@
           ["Workers","workers.html"], ["Sites","sites.html"], ["Daily Allocation","allocation.html"],
           ["Request Manpower","request.html"], ["Attendance","attendance.html"], ["End-Time Verification","verify.html"],
           ["Monthly Timesheet","timesheet.html"], ["Monthly Man-Hours","manhours.html"],
+          ["Dashboard","dashboard.html"], ["Reports","reports.html"],
           ["WhatsApp Messages","whatsapp.html"], ["Users & Access","users.html"] ] },
       { title:"Site Progress", pages:[
           ["Daily Progress Report","dpr.html"], ["DPR History","dprlist.html"],
-          ["Dashboard","dashboard.html"], ["Reports","reports.html"] ] },
+          ["Resource Summary","resource-summary.html"] ] },
       { title:"Procurement Request", soon:true, pages:[] },
       { title:"Safety", soon:true, pages:[] },
       { title:"Equipments & Machineries", soon:true, pages:[] },
