@@ -66,6 +66,20 @@ async function vmmsRefresh() {
   return true;
 }
 
+// ---- proactive refresh: renew the token BEFORE it expires ----
+// Supabase access tokens last ~1h. On a long-open page (e.g. filling a DPR for
+// 40 min then hitting Save) the token can lapse mid-session. We refresh when it
+// is within 2 min of expiry, single-flighted so parallel calls share one refresh.
+let _vmmsRefreshing = null;
+async function _vmmsEnsureFresh() {
+  const s = getSession();
+  if (!s || !s.refresh_token) return;
+  if (s.expires_at && Date.now() > (s.expires_at - 120000)) {
+    if (!_vmmsRefreshing) _vmmsRefreshing = vmmsRefresh().finally(() => { _vmmsRefreshing = null; });
+    try { await _vmmsRefreshing; } catch (_) {}
+  }
+}
+
 // ---- "server waking up" banner ----
 // The backend sleeps on the free tier and can take ~40s to wake on the
 // first request. Show a friendly banner so the app never looks frozen.
@@ -137,6 +151,9 @@ async function vmmsApi(path, options = {}) {
     if (pfx) vmmsClearRefCache(pfx);
   }
 
+  // Renew the token first if it is about to expire, so we never send a stale one.
+  await _vmmsEnsureFresh();
+
   const doFetch = async () => {
     const s = getSession();
     if (!s) throw new Error("NOT_SIGNED_IN");
@@ -171,6 +188,17 @@ async function vmmsApi(path, options = {}) {
       const ok = await vmmsRefresh();
       if (!ok) throw new Error("NOT_SIGNED_IN");
       r = await doFetch();
+    } else if (!r.ok) {
+      // The backend forwards the user token to the database and wraps an expired
+      // token as a 500/403 whose body says "JWT expired" (PostgREST PGRST303).
+      // Detect that, refresh once, and retry so the user never sees the error.
+      try {
+        const peek = await r.clone().text();
+        if (/JWT expired|PGRST303|token is expired/i.test(peek)) {
+          const ok = await vmmsRefresh();
+          if (ok) r = await doFetch();
+        }
+      } catch (_) {}
     }
     // Store fresh reference GETs for next time (read a clone so we don't
     // consume the body the caller still needs).
