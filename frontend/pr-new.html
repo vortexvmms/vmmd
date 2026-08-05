@@ -127,10 +127,11 @@
       <label class="fl mt-4">Reference photos / Invoice (optional)</label>
       <div id="drop" class="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center text-xs text-gray-500">
         Paste (Ctrl/⌘+V), drag &amp; drop, or
-        <label class="text-red-700 font-bold cursor-pointer">choose files<input id="ph-file" type="file" accept="image/*" multiple class="hidden"></label>.
-        Invoices &amp; references print after the PR for the procurement team.
+        <label class="text-red-700 font-bold cursor-pointer">choose files<input id="ph-file" type="file" accept="image/*,application/pdf,.pdf" multiple class="hidden"></label>.
+        Accepts PDF, PNG, JPEG — invoices &amp; references print after the PR for the procurement team.
       </div>
       <div id="ph-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2"></div>
+      <button id="importbtn" onclick="openImport()" class="hidden mt-2 w-full border border-red-300 text-red-700 font-bold text-sm py-2 rounded-lg">📄 Import items from invoice PDF</button>
 
       <div class="flex gap-2 mt-5">
         <button onclick="savePR()" class="flex-1 bg-red-700 text-white font-bold py-2.5 rounded-lg">Save</button>
@@ -149,7 +150,7 @@
 
   <script>
     requireLogin();
-    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[];
+    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[], PENDING_LINES=[];
     const SIG_KEY="vcms_my_signature";   // same saved signature as the DPR page
     const LOGO_URL="https://www.vortex.sg/images/Vortex-Logo_Type.png";
 
@@ -179,13 +180,139 @@
       if(!r.ok) throw new Error("upload "+r.status);
       return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
     }
+    // Load pdf.js on demand (to rasterise PDF invoices so they print inline).
+    let PDFJS_READY=null;
+    function loadPdfJs(){
+      if(window.pdfjsLib) return Promise.resolve();
+      if(PDFJS_READY) return PDFJS_READY;
+      PDFJS_READY=new Promise((res,rej)=>{ const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        s.onload=()=>{ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }catch(e){} res(); };
+        s.onerror=rej; document.head.appendChild(s); });
+      return PDFJS_READY;
+    }
+    async function pdfToBlobs(file, maxPages=12){
+      await loadPdfJs();
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const n=Math.min(pdf.numPages, maxPages); const out=[];
+      for(let i=1;i<=n;i++){
+        const page=await pdf.getPage(i);
+        let vp=page.getViewport({scale:1});
+        const scale=Math.min(2.2, 1600/Math.max(vp.width,vp.height));
+        vp=page.getViewport({scale});
+        const c=document.createElement("canvas"); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+        await page.render({canvasContext:c.getContext("2d"), viewport:vp}).promise;
+        const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.82));
+        out.push({blob, page:i, pages:pdf.numPages});
+      }
+      return out;
+    }
+    function _prPath(){ return `pr/${(document.getElementById("f-prno").value||"tmp").replace(/[^a-z0-9]/gi,"_")}/${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`; }
+
+    // ---- extract text lines from a digital (text-layer) PDF ----
+    async function extractPdfLines(file, maxPages=6){
+      await loadPdfJs();
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+      const out=[]; const n=Math.min(pdf.numPages, maxPages);
+      for(let p=1;p<=n;p++){
+        const page=await pdf.getPage(p);
+        const tc=await page.getTextContent();
+        const rows={};
+        tc.items.forEach(it=>{ if(!it.str||!it.str.trim()) return; const y=Math.round(it.transform[5]); (rows[y]=rows[y]||[]).push({x:it.transform[4], s:it.str}); });
+        Object.keys(rows).map(Number).sort((a,b)=>b-a).forEach(y=>{
+          const line=rows[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(" ").replace(/\s+/g," ").trim();
+          if(line) out.push(line);
+        });
+      }
+      return out;
+    }
+    const UOMS=["nos","no","pcs","pc","unit","units","set","sets","box","boxes","bag","bags","pair","pairs","dozen","doz","lot","lots","roll","rolls","ltr","litre","liter","l","kg","kgs","m","mtr","meter","metre","ton","tonne","pkt","packet","carton","ctn","each","ea","tin","tube","can","drum","sheet","sheets","nr","pack"];
+    function parseLine(line){
+      let toks=line.split(/\s+/), qty="", uom="", desc=line;
+      for(let i=0;i<toks.length;i++){
+        const num=toks[i].replace(/,/g,"");
+        if(/^\d+(\.\d+)?$/.test(num)){
+          const after=(toks[i+1]||"").toLowerCase().replace(/[^a-z]/g,"");
+          const before=(toks[i-1]||"").toLowerCase().replace(/[^a-z]/g,"");
+          if(UOMS.indexOf(after)!==-1){ qty=num; uom=toks[i+1]; toks.splice(i,2); desc=toks.join(" "); return {description:desc.trim()||line, qty, uom}; }
+          if(UOMS.indexOf(before)!==-1){ qty=num; uom=toks[i-1]; toks.splice(i-1,2); desc=toks.join(" "); return {description:desc.trim()||line, qty, uom}; }
+          if(!qty) qty=num;
+        }
+      }
+      return {description:line, qty, uom};
+    }
+    function looksHeader(line){ return /^(no\.?|s\/n|description|item|qty|quantity|uom|unit|price|amount|total|sub ?total|gst|vendor)\b/i.test(line.trim()); }
+
+    function openImport(){
+      if(!PENDING_LINES.length){ toast("No text found — this looks like a scanned PDF. Type items manually."); return; }
+      const rows=PENDING_LINES.filter(l=>!looksHeader(l)).map(parseLine);
+      let ov=document.getElementById("impmodal"); if(ov) ov.remove();
+      ov=document.createElement("div"); ov.id="impmodal";
+      ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-end;justify-content:center";
+      ov.innerHTML=`<div style="background:#fff;width:100%;max-width:660px;max-height:84vh;border-radius:16px 16px 0 0;display:flex;flex-direction:column">
+        <div style="padding:14px 16px;border-bottom:1px solid #eee;font-weight:800">Import items from invoice
+          <span style="font-weight:400;color:#6B7280;font-size:12px">— tick lines to add, edit before adding</span></div>
+        <div id="improws" style="overflow:auto;padding:6px 12px"></div>
+        <div style="padding:12px 16px;border-top:1px solid #eee;display:flex;gap:8px">
+          <button onclick="document.getElementById('impmodal').remove()" style="flex:1;border:1px solid #D1D5DB;border-radius:10px;padding:10px;font-weight:700;background:#fff">Cancel</button>
+          <button onclick="confirmImport()" style="flex:2;background:#C00000;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700">Add selected</button>
+        </div></div>`;
+      document.body.appendChild(ov);
+      document.getElementById("improws").innerHTML=rows.map((r,i)=>`
+        <div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid #F3F4F6">
+          <input type="checkbox" class="impchk" data-i="${i}" ${r.qty?"checked":""} style="width:18px;height:18px;flex:none">
+          <input class="impd" data-i="${i}" value="${esc(r.description)}" style="flex:1;min-width:0;border:1px solid #E5E7EB;border-radius:6px;padding:6px;font-size:13px">
+          <input class="impq" data-i="${i}" value="${esc(r.qty)}" placeholder="Qty" style="width:52px;border:1px solid #E5E7EB;border-radius:6px;padding:6px;font-size:13px;text-align:center">
+          <input class="impu" data-i="${i}" value="${esc(r.uom)}" placeholder="UOM" style="width:62px;border:1px solid #E5E7EB;border-radius:6px;padding:6px;font-size:13px;text-align:center">
+        </div>`).join("");
+    }
+    function confirmImport(){
+      const chks=[...document.querySelectorAll(".impchk")].filter(c=>c.checked);
+      if(!chks.length){ toast("Nothing ticked"); return; }
+      chks.forEach(c=>{ const i=c.getAttribute("data-i");
+        addItem({ description:document.querySelector(`.impd[data-i="${i}"]`).value,
+                  qty:document.querySelector(`.impq[data-i="${i}"]`).value,
+                  uom:document.querySelector(`.impu[data-i="${i}"]`).value }); });
+      // drop any leftover fully-empty rows (e.g. the initial blank one)
+      [...document.querySelectorAll("#items tr")].forEach(tr=>{ const g=k=>tr.querySelector(`[data-k="${k}"]`).value.trim();
+        if(!g("description")&&!g("qty")&&!g("amount")&&!g("uom")) tr.remove(); });
+      renumber(); sumAll();
+      document.getElementById("impmodal").remove();
+      toast("Items added — please review");
+    }
+
     async function addPhotoFile(file){
-      if(!file || !file.type || !file.type.startsWith("image/")) return;
+      if(!file) return;
+      const isPdf = file.type==="application/pdf" || /\.pdf$/i.test(file.name||"");
+      if(!isPdf && !(file.type && file.type.startsWith("image/"))) return;
+      const base=(file.name||"").replace(/\.[^.]+$/,"") || "Attachment";
+      if(isPdf){
+        try{
+          const pages=await pdfToBlobs(file);
+          for(const pg of pages){
+            const ph={url:"", caption: base + (pg.pages>1?` (p${pg.page})`:""), _up:true};
+            PR_PHOTOS.push(ph); renderPhotos();
+            ph.url=await storeImage(pg.blob, _prPath()); ph._up=false; renderPhotos();
+          }
+        }catch(e){ toast("Couldn't read that PDF"); }
+        // pull text lines (digital PDFs only) so items can be imported
+        try{
+          const lines=await extractPdfLines(file);
+          if(lines.length){
+            PENDING_LINES=lines;
+            const b=document.getElementById("importbtn");
+            b.textContent=`📄 Import items from invoice PDF (${lines.filter(l=>!looksHeader(l)).length} lines)`;
+            b.classList.remove("hidden");
+          }
+        }catch(e){}
+        return;
+      }
       const ph={url:"", caption:"", _up:true}; PR_PHOTOS.push(ph); renderPhotos();
       try{
         const blob=await compressImage(file);
-        const path=`pr/${(document.getElementById("f-prno").value||"tmp").replace(/[^a-z0-9]/gi,"_")}/${Date.now()}_${Math.random().toString(36).slice(2,6)}.jpg`;
-        ph.url=await storeImage(blob, path); ph._up=false;
+        ph.url=await storeImage(blob, _prPath()); ph._up=false;
       }catch(e){ PR_PHOTOS=PR_PHOTOS.filter(p=>p!==ph); toast("Upload failed"); }
       renderPhotos();
     }
@@ -314,7 +441,7 @@
       document.getElementById("f-code").innerHTML='<option value="">—</option>';
       document.getElementById("f-project").value=""; document.getElementById("f-deliverto").value="";
       document.getElementById("f-remarks").value=""; document.getElementById("items").innerHTML="";
-      SEL._pm=""; SEL._md=""; PR_PHOTOS=[]; renderPhotos(); addItem(); nextNumber();
+      SEL._pm=""; SEL._md=""; PR_PHOTOS=[]; renderPhotos(); PENDING_LINES=[]; document.getElementById("importbtn").classList.add("hidden"); addItem(); nextNumber();
       document.getElementById("f-date").value=new Date().toISOString().slice(0,10);
       setSeg("cat","consumable"); setSeg("urg","normal"); setSeg("del","delivery");
       window.scrollTo(0,0);
