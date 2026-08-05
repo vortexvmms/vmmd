@@ -52,8 +52,8 @@
         </div>
       </div>
       <div class="flex gap-2 mt-3">
-        <button id="b-print" onclick="printAll()" class="hidden flex-1 bg-gray-800 text-white text-sm font-bold py-2 rounded-lg">Print / PDF</button>
-        <button id="b-xls" onclick="exportExcel()" class="hidden flex-1 bg-green-700 text-white text-sm font-bold py-2 rounded-lg">Export to Excel</button>
+        <button id="b-print" onclick="printAll()" class="flex-1 bg-gray-800 text-white text-sm font-bold py-2 rounded-lg">Print / PDF</button>
+        <button id="b-xls" onclick="exportExcel()" class="flex-1 bg-green-700 text-white text-sm font-bold py-2 rounded-lg">⬇ Export to Excel</button>
       </div>
       <p class="text-[11px] text-gray-400 mt-2">PDF/Excel are A4 landscape, one sheet per page, matching the monthly summary template. Data is rolled up from this site's Daily Progress Reports for the month.</p>
     </div>
@@ -105,8 +105,6 @@
       const empty = !DATA.report_count;
       document.getElementById("msg").textContent = empty
         ? "No Daily Progress Reports found for this site and month." : "";
-      document.getElementById("b-print").classList.toggle("hidden", empty);
-      document.getElementById("b-xls").classList.toggle("hidden", empty);
       if (empty) { document.getElementById("out").innerHTML = ""; return; }
       const out = document.getElementById("out");
       out.innerHTML =
@@ -166,43 +164,70 @@
     function plantTable() { return unitTable(DATA.plant.rows, DATA.plant.daily_total, ""); }
 
     // ---------- PRINT (A4 landscape, one sheet per page) ----------
+    // Fixed column widths via <colgroup> so S/N, Name/Description, Position/Unit
+    // and every day column line up identically on all four sheets.
+    const LOGO_URL = "https://www.vortex.sg/images/Vortex-Logo_Type.png";
+    function colGroup() {
+      const N = DATA.days.length;
+      const lead = 3.2 + 15 + 8;           // S/N + Name/Desc + Position/Unit  (%)
+      const totalW = 4.2;
+      const dayW = ((100 - lead - totalW) / N).toFixed(3);
+      return `<colgroup>
+        <col style="width:3.2%"><col style="width:15%"><col style="width:8%">
+        ${DATA.days.map(() => `<col style="width:${dayW}%">`).join("")}
+        <col style="width:${totalW}%"></colgroup>`;
+    }
     function printAll() {
+      if (!DATA || !DATA.report_count) { alert("Load a site and month with data first."); return; }
       const h = DATA.header || {};
-      const sub = (label) => `<div class="pt">${esc(label)} — ${esc(DATA.month_label)}</div>
-        <div class="ps">Location: ${esc(h.location || SITE_NAME)} &nbsp;|&nbsp; Item of Work: ${esc(h.item_of_work || "—")}</div>`;
+      const cg = colGroup();
+      const sheetHead = (label) =>
+        `<div class="hd">
+           <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
+           <div class="hdt">
+             <div class="ph">${esc(PROJECT_TITLE)}</div>
+             <div class="pt">${esc(label)} — ${esc(DATA.month_label)}</div>
+             <div class="ps">Location: ${esc(h.location || SITE_NAME)} &nbsp;|&nbsp; Item of Work: ${esc(h.item_of_work || "—")}</div>
+           </div>
+         </div>`;
       const sheets = [
         ["MONTHLY ATTENDANCE SHEET", attTable()],
         ["MONTHLY SUMMARY – MANPOWER", mpTable()],
         ["MONTHLY SUMMARY – MATERIALS & TOOLS", matTable()],
         ["MONTHLY SUMMARY – PLANT & EQUIPMENT", plantTable()],
-      ].map(([lbl, tbl], i) =>
-        `<div class="sheet"><div class="ph">${esc(PROJECT_TITLE)}</div>${sub(lbl)}<table class="rs">${tbl}</table></div>`).join("");
+      ].map(([lbl, tbl]) =>
+        `<div class="sheet">${sheetHead(lbl)}<table class="rs">${cg}${tbl}</table></div>`).join("");
       const w = window.open("", "_blank");
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resource Summary ${esc(DATA.month_label)}</title>
         <style>
           @page { size:A4 landscape; margin:6mm; }
-          *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-          body{ font-family:Arial,'Arial Narrow',sans-serif; margin:0; }
+          *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; box-sizing:border-box; }
+          body{ font-family:Arial,'Arial Narrow',sans-serif; margin:0; color:#000; }
           .sheet{ page-break-after:always; }
           .sheet:last-child{ page-break-after:auto; }
-          .ph{ font-size:10px; font-weight:700; margin:0 0 2px; }
-          .pt{ font-size:11px; font-weight:800; margin:0; }
-          .ps{ font-size:9px; color:#333; margin:0 0 4px; }
+          .hd{ display:flex; align-items:center; gap:10px; margin:0 0 5px; }
+          .hd .logo{ height:34px; width:auto; }
+          .ph{ font-size:11px; font-weight:700; margin:0; }
+          .pt{ font-size:12px; font-weight:800; margin:0; }
+          .ps{ font-size:9px; color:#333; margin:1px 0 0; }
           table.rs{ border-collapse:collapse; width:100%; font-size:7px; table-layout:fixed; }
-          table.rs th, table.rs td{ border:0.4px solid #000; padding:1px 1px; text-align:center; overflow:hidden; }
-          table.rs td.l, table.rs th.l{ text-align:left; }
+          table.rs th, table.rs td{ border:0.4px solid #000; padding:1px 1px; text-align:center;
+                                     overflow:hidden; word-break:break-word; }
+          table.rs td.l, table.rs th.l{ text-align:left; white-space:normal; word-break:break-word; }
           table.rs thead th{ background:#C00000; color:#fff; }
           table.rs tr.wk th{ background:#7F1D1D; color:#fff; }
-          table.rs tfoot td{ background:#Eee; font-weight:700; }
+          table.rs tfoot td{ background:#EEE; font-weight:700; }
           td.z{ color:#bbb; }
         </style></head><body>${sheets}</body></html>`);
       w.document.close();
       w.focus();
-      setTimeout(() => { w.print(); }, 350);
+      setTimeout(() => { w.print(); }, 400);
     }
 
     // ---------- EXCEL (4 sheets, landscape) ----------
     async function exportExcel() {
+      if (!DATA || !DATA.report_count) { alert("Load a site and month with data first."); return; }
+      if (typeof ExcelJS === "undefined") { alert("Excel library didn't load — check your connection and reload."); return; }
       const wb = new ExcelJS.Workbook();
       const ctr = { horizontal: "center", vertical: "middle" };
       const HEAD = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC00000" } };
