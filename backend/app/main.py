@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.53.1")  # resource summary + role/material normalization
+app = FastAPI(title="VCMS API", version="0.53.2")  # dpr history: item_of_work in list
 
 app.add_middleware(
     CORSMiddleware,
@@ -2846,7 +2846,7 @@ async def dpr_list(site_id: str = "", month: str = "", user: dict = Depends(get_
     """History of saved reports (RLS scopes supervisors to their own sites)."""
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,site_id,report_date,project_title,prepared_by_name,updated_at,manpower,photos,sites(site_name)",
+    params = {"select": "id,site_id,report_date,project_title,item_of_work,prepared_by_name,updated_at,manpower,photos,sites(site_name)",
               "order": "report_date.desc", "limit": "300"}
     if site_id:
         params["site_id"] = f"eq.{site_id}"
@@ -2862,6 +2862,7 @@ async def dpr_list(site_id: str = "", month: str = "", user: dict = Depends(get_
         return [{"id": x["id"], "site_id": x["site_id"],
                  "site_name": (x.get("sites") or {}).get("site_name", "?"),
                  "report_date": x["report_date"], "project_title": x.get("project_title"),
+                 "item_of_work": x.get("item_of_work"),
                  "prepared_by_name": x.get("prepared_by_name"),
                  "manpower": len(x.get("manpower") or []),
                  "photos": len(x.get("photos") or []),
