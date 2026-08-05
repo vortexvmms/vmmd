@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.53.0")  # monthly resource summary (attendance/manpower/materials/plant)
+app = FastAPI(title="VCMS API", version="0.53.1")  # resource summary + role/material normalization
 
 app.add_middleware(
     CORSMiddleware,
@@ -2676,6 +2676,53 @@ def _rs_pos_rank(role):
     return 90
 
 
+# Keep summary rows from splitting when the same role/material is typed differently.
+_RS_ACRONYMS = {"wshc", "wshs", "csa", "res", "reo", "wah", "cs", "db", "ppe", "t"}
+_RS_ROLE_ALIAS = {
+    "cs supervisor": "Confined Space Supervisor",
+    "confined space supervisor": "Confined Space Supervisor",
+    "cs attendant": "Confined Space Attendant",
+    "confined space attendant": "Confined Space Attendant",
+    "cs assessor": "Confined Space Assessor",
+    "confined space assessor": "Confined Space Assessor",
+    "general worker": "General Worker", "gen worker": "General Worker", "worker": "General Worker",
+    "site supervisor": "Site Supervisor", "site engineer": "Site Engineer",
+    "project engineer": "Project Engineer", "project manager": "Project Manager",
+    "construction manager": "Construction Manager", "site manager": "Site Manager",
+    "wshc/csa and rescuer": "WSHC/CSA and Rescuer",
+    "first aider/rescuer": "First Aider/Rescuer", "first aider": "First Aider",
+    "rigger and signalman": "Rigger and Signalman", "rigger signalman": "Rigger and Signalman",
+    "rigger & signalman": "Rigger and Signalman", "rigger/signalman": "Rigger and Signalman",
+    "lifting supervisor": "Lifting Supervisor",
+    "traffic controller": "Traffic Controller",
+    "excavator operator": "Excavator Operator", "roller operator": "Roller Operator",
+    "lorrycrane operator": "Lorry Crane Operator", "lorry crane operator": "Lorry Crane Operator",
+    "tipper truck driver": "Tipper Truck Driver", "fire watchman": "Fire Watchman",
+    "fireman": "Fire Watchman",
+}
+
+
+def _rs_titlecase(s):
+    out = []
+    for w in s.split():
+        if "/" in w:
+            out.append("/".join(p.upper() if p.lower() in _RS_ACRONYMS else p.capitalize()
+                                for p in w.split("/")))
+        elif w.lower() in _RS_ACRONYMS:
+            out.append(w.upper())
+        else:
+            out.append(w.capitalize())
+    return " ".join(out)
+
+
+def _rs_norm_role(role):
+    r = " ".join((role or "").split())      # collapse internal whitespace
+    if not r:
+        return "-"
+    key = r.lower()
+    return _RS_ROLE_ALIAS.get(key) or _rs_titlecase(r)
+
+
 @app.get("/api/v1/resource-summary")
 async def resource_summary(site_id: str, month: str, user: dict = Depends(get_current_user)):
     """Roll a month of DPRs for one site into the 4-sheet monthly summary:
@@ -2718,7 +2765,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                 header[k] = rep[k]
         for w in (rep.get("manpower") or []):
             name = (w.get("name") or "").strip()
-            role = (w.get("role") or "").strip() or "-"
+            role = _rs_norm_role(w.get("role"))
             hrs = float(w.get("total") or 0)
             no = int(w.get("no") or 1)
             if name:
@@ -2732,20 +2779,21 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             p["total"] += no
             manhours[d] += hrs
         for e in (rep.get("equipment") or []):
-            name = (e.get("name") or "").strip()
+            name = " ".join((e.get("name") or "").split())
             if not name:
                 continue
             no = float(e.get("no") or 0) or 1
-            pl = plant.setdefault(name, {"unit": "Nos", "days": {}, "total": 0.0})
+            key = name.lower()
+            pl = plant.setdefault(key, {"name": name, "unit": "Nos", "days": {}, "total": 0.0})
             pl["days"][d] = pl["days"].get(d, 0.0) + no
             pl["total"] += no
         for mt in (rep.get("materials") or []):
-            name = (mt.get("name") or "").strip()
+            name = " ".join((mt.get("name") or "").split())
             if not name:
                 continue
             unit = (mt.get("unit") or "").strip()
             qty = float(mt.get("qty") or 0)
-            key = name + "||" + unit
+            key = name.lower() + "||" + unit.lower()
             mm = mats.setdefault(key, {"name": name, "unit": unit, "days": {}, "total": 0.0})
             mm["days"][d] = mm["days"].get(d, 0.0) + qty
             mm["total"] += qty
@@ -2774,10 +2822,10 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     mat_daily = {str(d): _rs_clean(sum(v["days"].get(d, 0) for v in mats.values()))
                  for d in days if sum(v["days"].get(d, 0) for v in mats.values())}
 
-    plant_sorted = sorted(plant.items(), key=lambda x: x[0].lower())
-    plant_rows = [{"sn": i, "description": nm, "unit": v["unit"],
+    plant_sorted = sorted(plant.values(), key=lambda v: v["name"].lower())
+    plant_rows = [{"sn": i, "description": v["name"], "unit": v["unit"],
                    "days": daymap(v["days"]), "total": _rs_clean(v["total"])}
-                  for i, (nm, v) in enumerate(plant_sorted, 1)]
+                  for i, v in enumerate(plant_sorted, 1)]
     plant_daily = {str(d): _rs_clean(sum(v["days"].get(d, 0) for v in plant.values()))
                    for d in days if sum(v["days"].get(d, 0) for v in plant.values())}
 
