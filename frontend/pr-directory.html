@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — PR Directory</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <style>
+    body.dl { background:#F3F4F6; }
+    table.dt { width:100%; font-size:13px; border-collapse:collapse; }
+    table.dt thead th { font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#6B7280; background:#F9FAFB; padding:9px 10px; text-align:left; font-weight:700; white-space:nowrap; }
+    table.dt tbody td { padding:9px 10px; border-top:1px solid #F1F1F1; vertical-align:top; }
+    .inp { border:1px solid #D1D5DB; border-radius:8px; padding:8px; width:100%; font-size:14px; }
+  </style>
+</head>
+<body class="dl min-h-screen flex flex-col">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-5xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold">PR Directory</h1><p class="text-red-100 text-xs" id="count">Loading…</p></div>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-5xl mx-auto w-full pb-10">
+    <div id="addcard" class="hidden bg-white rounded-xl shadow p-4 mb-4">
+      <p class="font-bold text-gray-900 text-sm mb-3">Add a project</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input id="a-site" class="inp" placeholder="Site Name *">
+        <input id="a-code" class="inp" placeholder="Project Code *">
+        <input id="a-proj" class="inp sm:col-span-2" placeholder="Project (title)">
+        <input id="a-pm" class="inp" placeholder="PM / HOD">
+        <input id="a-md" class="inp" placeholder="Manager / Director">
+        <input id="a-deliver" class="inp sm:col-span-2" placeholder="Default Delivery To (optional)">
+      </div>
+      <button onclick="addEntry()" class="mt-3 bg-red-700 text-white font-bold px-5 py-2 rounded-lg">Add to directory</button>
+    </div>
+
+    <div class="bg-white rounded-xl shadow" style="overflow:auto">
+      <table class="dt">
+        <thead><tr><th>Site Name</th><th>Project Code</th><th>Project</th><th>PM / HOD</th><th>Manager / Director</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" class="hidden text-center text-gray-400 p-6 text-sm">No projects in the directory yet.</p>
+    </div>
+  </main>
+
+  <div id="toast" class="hidden fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow"></div>
+
+  <script>
+    requireLogin();
+    let ME = null, CAN_EDIT = false;
+    function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),2400); }
+
+    async function boot(){
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
+      ME=await r.json(); CAN_EDIT=isCoordinator(ME.role);
+      if(CAN_EDIT) document.getElementById("addcard").classList.remove("hidden");
+      await load();
+    }
+    async function load(){
+      const r=await vmmsApi("/api/v1/pr/directory");
+      const rows=r.ok?await r.json():[];
+      document.getElementById("count").textContent=`${rows.length} project(s)`;
+      document.getElementById("empty").classList.toggle("hidden", rows.length>0);
+      document.getElementById("rows").innerHTML=rows.map(x=>`
+        <tr>
+          <td style="font-weight:600;color:#111827">${esc(x.site_name)}</td>
+          <td>${esc(x.project_code)}</td>
+          <td style="color:#374151">${esc(x.project||"—")}</td>
+          <td style="color:#6B7280">${esc(x.pm_hod||"—")}</td>
+          <td style="color:#6B7280">${esc(x.manager_director||"—")}</td>
+          <td style="text-align:right">${CAN_EDIT?`<button onclick="delEntry('${x.id}')" class="text-red-600 text-sm font-bold">Delete</button>`:""}</td>
+        </tr>`).join("");
+    }
+    async function addEntry(){
+      const site=document.getElementById("a-site").value.trim();
+      const code=document.getElementById("a-code").value.trim();
+      if(!site||!code){ toast("Site Name and Project Code are required"); return; }
+      const body={ site_name:site, project_code:code,
+        project:document.getElementById("a-proj").value.trim(),
+        pm_hod:document.getElementById("a-pm").value.trim(),
+        manager_director:document.getElementById("a-md").value.trim(),
+        deliver_to:document.getElementById("a-deliver").value.trim() };
+      const r=await vmmsApi("/api/v1/pr/directory",{method:"POST",body:JSON.stringify(body)});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||"Failed"); return; }
+      ["a-site","a-code","a-proj","a-pm","a-md","a-deliver"].forEach(id=>document.getElementById(id).value="");
+      toast("Added"); await load();
+    }
+    async function delEntry(id){
+      if(!confirm("Delete this project from the directory?")) return;
+      const r=await vmmsApi("/api/v1/pr/directory/"+id,{method:"DELETE"});
+      if(!r.ok){ toast("Failed"); return; }
+      toast("Deleted"); await load();
+    }
+    boot();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
