@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.54.0")  # procurement: PR directory + PR requests
+app = FastAPI(title="VCMS API", version="0.54.1")  # PR: attachments (invoice/ref photos)
 
 app.add_middleware(
     CORSMiddleware,
@@ -3011,6 +3011,7 @@ class PRIn(BaseModel):
     manager_director: str | None = None
     requested_by_name: str | None = None
     items: list[dict] = []
+    photos: list[dict] = []
     remarks: str | None = None
     status: str | None = "submitted"
 
@@ -3050,7 +3051,7 @@ async def pr_save(body: PRIn, user: dict = Depends(get_current_user)):
         "site_name": body.site_name, "project_code": body.project_code, "project": body.project,
         "pm_hod": body.pm_hod, "manager_director": body.manager_director,
         "requested_by_name": body.requested_by_name or user.get("name"),
-        "items": body.items or [], "remarks": body.remarks,
+        "items": body.items or [], "photos": body.photos or [], "remarks": body.remarks,
         "status": body.status or "submitted", "created_by": user["user_id"],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
