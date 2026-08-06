@@ -139,6 +139,11 @@
         <button onclick="savePR()" class="flex-1 bg-red-700 text-white font-bold py-2.5 rounded-lg">Save</button>
         <button onclick="printPR()" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded-lg">Print / PDF</button>
       </div>
+      <!-- shown only when an existing PR is opened -->
+      <div id="editbar" class="hidden flex gap-2 mt-2">
+        <button onclick="saveRevision()" class="flex-1 border border-red-300 text-red-700 font-bold py-2 rounded-lg text-sm">Save as Revision (R1)</button>
+        <button onclick="deleteCurrent()" class="flex-1 border border-gray-300 text-gray-700 font-bold py-2 rounded-lg text-sm">🗑 Delete this PR</button>
+      </div>
     </div>
 
     <!-- Recent PRs -->
@@ -152,7 +157,7 @@
 
   <script>
     requireLogin();
-    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[], PENDING_LINES=[], EDITING=false;
+    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[], PENDING_LINES=[], EDITING=false, CURRENT_ID=null;
     const SIG_KEY="vcms_my_signature";   // same saved signature as the DPR page
     const LOGO_URL="https://www.vortex.sg/images/Vortex-Logo_Type.png";
 
@@ -356,7 +361,7 @@
       window.addEventListener("paste", e=>{ [...(e.clipboardData.items||[])].forEach(x=>{ if(x.type&&x.type.startsWith("image/")) addPhotoFile(x.getAsFile()); }); });
     }
     // Per-site running number. Called only on a user-driven site change (not when loading an existing PR).
-    async function onSiteUser(){ EDITING=false; onSite(); await genNumber(); }
+    async function onSiteUser(){ onSite(); if(!CURRENT_ID) await genNumber(); }
     async function genNumber(){
       const site=document.getElementById("f-site").value;
       const pref=document.getElementById("prevref");
@@ -447,16 +452,40 @@
       const d=collect();
       if(!d.pr_no){ toast("Enter a P.R No"); return; }
       if(!d.items.length){ toast("Add at least one item"); return; }
-      const r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
+      let r;
+      if(CURRENT_ID) r=await vmmsApi("/api/v1/pr/"+CURRENT_ID,{method:"PATCH",body:JSON.stringify(d)});
+      else r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Save failed"); return; }
-      toast("PR saved"); EDITING=false; await loadRecent(); await genNumber();
+      toast(CURRENT_ID?"PR updated":"PR saved");
+      CURRENT_ID=null; document.getElementById("editbar").classList.add("hidden");
+      await loadRecent(); await genNumber();
     }
+    async function saveRevision(){
+      document.getElementById("f-prno").value=reviseNo(document.getElementById("f-prno").value);
+      CURRENT_ID=null;                       // insert as a new revision row
+      const d=collect();
+      if(!d.items.length){ toast("Add at least one item"); return; }
+      const r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Failed"); return; }
+      toast("Saved as revision "+d.pr_no);
+      document.getElementById("editbar").classList.add("hidden");
+      await loadRecent(); await genNumber();
+    }
+    async function deletePR(id, label){
+      if(!confirm("Delete PR "+(label||"")+"?\nThis cannot be undone.")) return;
+      const r=await vmmsApi("/api/v1/pr/"+id,{method:"DELETE"});
+      if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Delete failed"); return; }
+      toast("PR deleted");
+      if(CURRENT_ID===id) newBlank();
+      await loadRecent();
+    }
+    function deleteCurrent(){ if(CURRENT_ID) deletePR(CURRENT_ID, document.getElementById("f-prno").value); }
     function newBlank(){
       document.getElementById("f-prno").value=""; document.getElementById("f-site").value="";
       document.getElementById("f-code").innerHTML='<option value="">—</option>';
       document.getElementById("f-project").value=""; document.getElementById("f-deliverto").value="";
       document.getElementById("f-remarks").value=""; document.getElementById("items").innerHTML="";
-      SEL._pm=""; SEL._md=""; EDITING=false; PR_PHOTOS=[]; renderPhotos(); PENDING_LINES=[]; document.getElementById("importbtn").classList.add("hidden"); document.getElementById("prevref").textContent=""; addItem();
+      SEL._pm=""; SEL._md=""; CURRENT_ID=null; document.getElementById("editbar").classList.add("hidden"); PR_PHOTOS=[]; renderPhotos(); PENDING_LINES=[]; document.getElementById("importbtn").classList.add("hidden"); document.getElementById("prevref").textContent=""; addItem();
       document.getElementById("f-date").value=new Date().toISOString().slice(0,10);
       setSeg("cat","consumable"); setSeg("urg","normal"); setSeg("del","delivery");
       window.scrollTo(0,0);
@@ -465,24 +494,23 @@
     async function loadRecent(){
       const r=await vmmsApi("/api/v1/pr/list"); const list=r.ok?await r.json():[];
       document.getElementById("recent").innerHTML=list.slice(0,25).map(x=>`
-        <tr onclick="openPR('${x.id}')">
-          <td style="font-weight:700;color:#C00000">${esc(x.pr_no||"—")}</td>
-          <td>${fmtDMY(x.pr_date)}</td>
-          <td style="color:#374151">${esc(x.project||x.site_name||"—")}</td>
+        <tr>
+          <td onclick="openPR('${x.id}')" style="font-weight:700;color:#C00000;cursor:pointer">${esc(x.pr_no||"—")}</td>
+          <td onclick="openPR('${x.id}')" style="cursor:pointer">${fmtDMY(x.pr_date)}</td>
+          <td onclick="openPR('${x.id}')" style="color:#374151;cursor:pointer">${esc(x.project||x.site_name||"—")}</td>
           <td style="text-align:right;color:#6B7280">${esc(x.requested_by_name||"")}</td>
+          <td style="text-align:right;width:34px"><button onclick="event.stopPropagation();deletePR('${x.id}','${esc(x.pr_no||"")}')" title="Delete" style="color:#C00000;font-weight:700;border:none;background:none;cursor:pointer;font-size:15px">🗑</button></td>
         </tr>`).join("") || '<tr><td class="text-gray-400 p-4 text-sm">No saved PRs yet.</td></tr>';
     }
     async function openPR(id){
       const r=await vmmsApi("/api/v1/pr/"+id); if(!r.ok){toast("Could not open");return;}
       const d=await r.json();
-      EDITING=true;
+      CURRENT_ID=id;
+      document.getElementById("f-prno").value=d.pr_no||"";
       document.getElementById("f-date").value=(d.pr_date||"").slice(0,10);
       setSeg("cat",d.category||""); setSeg("urg",d.urgency||""); setSeg("del",d.delivery_mode||"");
       document.getElementById("f-site").value=d.site_name||""; onSite();   // populate code list, no renumber
       document.getElementById("f-code").value=d.project_code||""; onCode();
-      // editing an existing PR → bump to a revision (R1, R2, …)
-      document.getElementById("f-prno").value=reviseNo(d.pr_no||"");
-      document.getElementById("prevref").textContent="· revision of "+(d.pr_no||"");
       document.getElementById("f-project").value=d.project||"";
       document.getElementById("f-deliverto").value=d.deliver_to||"";
       document.getElementById("f-remarks").value=d.remarks||"";
@@ -490,7 +518,9 @@
       SEL._pm=d.pm_hod||""; SEL._md=d.manager_director||"";
       document.getElementById("items").innerHTML=""; (d.items&&d.items.length?d.items:[{}]).forEach(addItem);
       PR_PHOTOS=(d.photos||[]).map(p=>({url:p.url,caption:p.caption||""})); renderPhotos();
-      window.scrollTo(0,0); toast("Loaded — you can reprint or edit");
+      document.getElementById("prevref").textContent="· editing "+(d.pr_no||"")+" — Save updates it";
+      document.getElementById("editbar").classList.remove("hidden");
+      window.scrollTo(0,0); toast("Loaded — edit & Save, reprint, revise, or delete");
     }
 
     // ---------- PRINT (A4 landscape, matches the PR template) ----------
