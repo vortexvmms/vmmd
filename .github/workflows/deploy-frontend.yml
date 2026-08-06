@@ -1,3 +1,5 @@
+# Publishes the /frontend folder to GitHub Pages automatically
+# every time files are updated on the main branch.
 name: Deploy frontend to GitHub Pages
 
 on:
@@ -10,6 +12,9 @@ permissions:
   pages: write
   id-token: write
 
+# Allow one deployment at a time, but DO NOT cancel a running one.
+# Cancelling a Pages deploy mid-flight wedges the queue (deployment_queued
+# -> timeout). Queueing instead lets each deploy finish cleanly.
 concurrency:
   group: pages
   cancel-in-progress: false
