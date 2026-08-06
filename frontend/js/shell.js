@@ -76,6 +76,7 @@
         "body.vcms-shelled .vcms-pagebar .text-red-100{color:#6B7280!important;}}";
       var st = document.createElement("style"); st.id = "vcms-rail-css"; st.textContent = css; document.head.appendChild(st);
 
+      var _hr = new Date().getHours(), _gt = _hr<12?"Good morning":(_hr<17?"Good afternoon":"Good evening");
       var brand = document.createElement("header");
       brand.id = "vcms-brand";
       brand.innerHTML =
@@ -83,8 +84,7 @@
         '<div class="bt">VCMS</div>' +
         '<div class="bc">Vortex Construction Management System</div>' +
         '<div class="grow"></div>' +
-        '<div class="sw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="vcms-search" placeholder="Search pages…" autocomplete="off"><div class="res" id="vcms-res"></div></div>' +
-        '<div class="gc"><div><div class="g1">'+esc((me&&me.name?("Hi, "+(me.name.split(/\\s+/)[0])):"Signed in"))+'</div><div class="g2">'+esc(me&&me.name?me.name:"")+'</div></div><span class="chip">'+esc(ROLE_LABELS[role]||role)+'</span></div>' +
+        '<div class="gc"><div><div class="g1">'+esc(_gt)+'</div><div class="g2">'+esc(me&&me.name?me.name:"")+'</div></div><span class="chip">'+esc(ROLE_LABELS[role]||role)+'</span></div>' +
         (role==="admin"?'<select id="vcms-rswitch"></select>':"") +
         '<button class="lo" onclick="vmmsLogout()">Log Out</button>';
       document.body.insertBefore(brand, document.body.firstChild);
@@ -103,11 +103,6 @@
         sw.addEventListener("change", function(){ try{ localStorage.setItem("vmms_view_role", sw.value); }catch(e){} document.getElementById("vcms-rn").innerHTML = railHTML(sw.value); });
       }
       document.getElementById("vcms-rn").innerHTML = railHTML(viewRole);
-
-      var si = document.getElementById("vcms-search"), res = document.getElementById("vcms-res");
-      si.addEventListener("input", function(){ var q=si.value.trim().toLowerCase(); if(!q){ res.style.display="none"; return; } var m=NAVITEMS.filter(function(it){ return it[0].toLowerCase().indexOf(q)!==-1; }).slice(0,8); res.innerHTML=m.map(function(it){ return '<a href="'+it[1]+'">'+esc(it[0])+"</a>"; }).join("")||'<a style="color:#9CA3AF">No match</a>'; res.style.display="block"; });
-      si.addEventListener("keydown", function(e){ if(e.key==="Enter"){ var q=si.value.trim().toLowerCase(); var m=NAVITEMS.find(function(it){ return it[0].toLowerCase().indexOf(q)!==-1; }); if(m) location.href=m[1]; } });
-      document.addEventListener("click", function(e){ if(!e.target.closest("#vcms-brand .sw")) res.style.display="none"; });
 
       var ph = document.querySelector("body > header") || document.querySelector("header");
       if (ph && ph !== brand) ph.classList.add("vcms-pagebar");
