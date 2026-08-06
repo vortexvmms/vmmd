@@ -13,7 +13,7 @@
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
-    :root{ --brand:#C00000; --ink:#0F172A; --muted:#64748B; --line:#E5E7EB; --bg:#F1F3F6; --panel:#fff; }
+    :root{ --brand:#C00000; --ink:#1F2328; --muted:#6B7280; --line:#E7E5E1; --bg:#F6F5F2; --panel:#fff; }
     body.shell{ margin:0; background:var(--bg); color:var(--ink); font-family:Arial,system-ui,sans-serif; }
     .layout{ display:flex; min-height:100vh; }
     /* Sidebar */
@@ -21,12 +21,13 @@
     .side-brand{ display:flex; align-items:center; gap:9px; padding:14px 14px 12px; }
     .side-brand .logo{ width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; overflow:hidden; }
     .side-brand .logo img{ width:100%; height:100%; object-fit:contain; background:#fff; }
-    .side-brand .t{ font-weight:800; font-size:16px; } .side-brand .s{ font-size:11px; color:var(--muted); }
+    .side-brand .t{ font-weight:800; font-size:16px; line-height:1; } .side-brand .s{ font-size:10px; color:var(--muted); line-height:1.25; margin-top:2px; }
     .nav{ flex:1; overflow:auto; padding:4px 8px 16px; }
-    .nav .grp{ font-size:10.5px; font-weight:700; color:#94A3B8; letter-spacing:.06em; text-transform:uppercase; padding:12px 8px 5px; }
-    .nav a{ display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:9px; color:#334155; font-size:13.5px; text-decoration:none; margin:1px 0; }
-    .nav a:hover{ background:#F3F4F6; }
+    .nav .grp{ font-size:10.5px; font-weight:700; color:#9A968E; letter-spacing:.06em; text-transform:uppercase; padding:12px 8px 5px; }
+    .nav a{ display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:9px; color:#3A3D42; font-size:13.5px; text-decoration:none; margin:1px 0; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
+    .nav a:hover{ background:#fff; transform:translateX(3px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
     .nav a.on{ background:#FDE8E8; color:var(--brand); font-weight:700; }
+    .nav a.on:hover{ background:#FBDCDC; }
     .nav a svg{ width:18px; height:18px; flex:none; }
     /* Main */
     .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
@@ -43,8 +44,8 @@
     .kpi{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; border-left:4px solid var(--ac,#C00000); }
     .kpi .n{ font-size:28px; font-weight:800; letter-spacing:-.01em; } .kpi .l{ font-size:12px; color:var(--muted); }
     .qa{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-    .qa a{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; text-decoration:none; color:var(--ink); font-size:14px; font-weight:600; }
-    .qa a:hover{ border-color:#CBD5E1; } .qa a svg{ width:20px; height:20px; color:var(--brand); flex:none; }
+    .qa a{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; text-decoration:none; color:var(--ink); font-size:14px; font-weight:600; transition:transform .14s ease, box-shadow .14s ease; }
+    .qa a:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.10); } .qa a svg{ width:20px; height:20px; color:var(--brand); flex:none; }
     .two{ display:grid; grid-template-columns:1.3fr 1fr; gap:14px; }
     .panel{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
     .panel h3{ margin:0 0 12px; font-size:14px; font-weight:800; }
@@ -53,7 +54,8 @@
     .feed .ic{ width:30px; height:30px; border-radius:8px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; flex:none; }
     .feed .ic svg{ width:16px; height:16px; color:#64748B; }
     .alert{ display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:8px; }
-    .a-warn{ background:#FEF3C7; color:#92400E; } .a-info{ background:#DBEAFE; color:#1D4ED8; } .a-ok{ background:#DCFCE7; color:#166534; }
+    .a-warn{ background:#FBE4E4; color:#B42318; } .a-info{ background:#EFEDE9; color:#4B5563; } .a-ok{ background:#EFEDE9; color:#4B5563; }
+    .kpi{ transition:transform .14s ease, box-shadow .14s ease; } .kpi:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
     .greet{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
     .chip{ background:#FDE8E8; color:var(--brand); font-size:12px; font-weight:700; padding:4px 13px; border-radius:20px; }
     .backdrop{ display:none; }
@@ -74,7 +76,7 @@
     <aside class="side" id="side">
       <div class="side-brand">
         <div class="logo"><img src="icons/icon-192.png" onerror="this.parentNode.textContent='V'"></div>
-        <div><div class="t">VCMS</div><div class="s">Vortex</div></div>
+        <div><div class="t">VCMS</div><div class="s">Vortex Construction Management System</div></div>
       </div>
       <nav class="nav" id="nav"></nav>
     </aside>
@@ -96,9 +98,9 @@
 
         <div class="kpis" style="margin-top:14px">
           <div class="kpi" style="--ac:#C00000"><div class="n" id="k-men">–</div><div class="l">Manpower on site</div></div>
-          <div class="kpi" style="--ac:#2563EB"><div class="n" id="k-sites">–</div><div class="l">Active sites</div></div>
-          <div class="kpi" style="--ac:#D97706"><div class="n" id="k-pend">–</div><div class="l">Pending attendance</div></div>
-          <div class="kpi" style="--ac:#16A34A"><div class="n" id="k-pr">–</div><div class="l">Open PRs</div></div>
+          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-sites">–</div><div class="l">Active sites</div></div>
+          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-pend">–</div><div class="l">Pending attendance</div></div>
+          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-pr">–</div><div class="l">Open PRs</div></div>
         </div>
 
         <div style="font-size:12px;color:#94A3B8;font-weight:700;letter-spacing:.04em;margin:20px 2px 8px">QUICK ACTIONS</div>
