@@ -50,6 +50,18 @@ window.vmmsSetTheme = function (t) {
   document.documentElement.setAttribute("data-theme", t);
 };
 
+// ---- Light global polish (safe, non-breaking): crisper type + nicer scrollbars ----
+(function () {
+  if (document.getElementById("vcms-polish")) return;
+  var s = document.createElement("style"); s.id = "vcms-polish";
+  s.textContent =
+    "html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}" +
+    "@media(min-width:1024px){::-webkit-scrollbar{width:10px;height:10px}" +
+    "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}" +
+    "::-webkit-scrollbar-thumb:hover{background:#94A3B8}}";
+  (document.head || document.documentElement).appendChild(s);
+})();
+
 // ---- Role tiers (Rev 6) — shared by all pages ----
 window.VMMS_TIER = {
   full: ["admin", "general_manager", "operation_manager", "hr_assistant"],
