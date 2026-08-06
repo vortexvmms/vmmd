@@ -211,7 +211,8 @@
     </div>
   </main>
 
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
+  <style>@media(min-width:900px){ body.vcms-shelled #dprbar{ left:236px; } }</style>
+  <div id="dprbar" class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
     <div class="max-w-3xl mx-auto flex gap-2" style="flex-wrap:wrap">
       <button onclick="save()" id="savebtn" style="flex:1;min-width:74px;border:2px solid #C00000;color:#C00000" class="font-bold py-3 rounded-lg text-sm">Save</button>
       <button onclick="printSheet()" style="flex:1;min-width:88px;background:#C00000;color:#fff" class="font-bold py-3 rounded-lg text-sm">Print / PDF</button>
