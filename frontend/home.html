@@ -8,353 +8,176 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
   <link rel="stylesheet" href="css/app.css">
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
-    /* ---- Icon-grid home (option B) ---- */
-    body.grid-home { background: #F3F4F6; min-height: 100vh; }
-    .panel { background:#fff; border:1px solid #E5E7EB; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-    .app-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px 10px; }
-    @media (min-width:640px){ .app-grid{ grid-template-columns:repeat(4,1fr); gap:20px 12px; } }
-    @media (min-width:1024px){ .app-grid{ grid-template-columns:repeat(6,1fr); } }
-    .app-tile { display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;
-                text-decoration:none; -webkit-tap-highlight-color:transparent; }
-    .app-ico { width:60px; height:60px; border-radius:18px; display:flex; align-items:center; justify-content:center;
-               box-shadow:0 5px 12px rgba(0,0,0,.14); transition:transform .14s ease, box-shadow .14s ease; }
-    .app-tile:hover .app-ico { transform:translateY(-3px); box-shadow:0 10px 18px rgba(0,0,0,.2); }
-    .app-tile:active .app-ico { transform:translateY(0); }
-    .app-lbl { font-size:12.5px; color:#374151; line-height:1.25; max-width:82px; }
-    .app-tile.locked { opacity:.4; }
-    .app-tile.locked .app-lbl::after { content:""; }
-    /* ---- Sections ---- */
-    .sect { margin-top:22px; }
-    .sect:first-child { margin-top:8px; }
-    .sect-h { display:flex; align-items:center; gap:9px; margin:0 2px 12px; }
-    .sect-h .n { width:23px; height:23px; border-radius:50%; background:#C00000; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
-    .sect-h .t { font-size:14px; font-weight:800; color:#111827; letter-spacing:.01em; }
-    .sect-h .soon { font-size:10px; font-weight:700; color:#9CA3AF; border:1px solid #E5E7EB; border-radius:999px; padding:2px 9px; margin-left:auto; }
-    .sect.soon .sect-h .n { background:#D1D5DB; }
-    .sect.soon .sect-h .t { color:#9CA3AF; }
-    .soon-note { color:#9CA3AF; font-size:12.5px; padding:2px 2px 4px; }
-    .util-row { display:flex; gap:22px; justify-content:center; margin-top:26px; padding-top:18px; border-top:1px solid #E5E7EB; }
-    /* ---- Header (self-contained, not reliant on Tailwind utilities) ---- */
-    .vhead { background:#C00000; color:#fff; position:sticky; top:0; z-index:10; box-shadow:0 1px 4px rgba(0,0,0,.18); }
-    .vhead-inner { max-width:72rem; margin:0 auto; padding:10px 64px 10px 14px; display:flex; align-items:center; gap:14px; }
-    .vhead-logo { height:42px; width:auto; background:#fff; border-radius:8px; padding:3px; flex:0 0 auto; display:block; }
-    .vhead-brand { flex:0 0 auto; line-height:1.12; }
-    .vhead-title { font-size:22px; font-weight:800; letter-spacing:.02em; }
-    .vhead-sub { font-size:11px; color:#FECACA; font-weight:600; margin-top:1px; }
-    .vhead-greet { margin-left:auto; background:#fff; color:#111827; border-radius:12px; padding:6px 8px 6px 12px;
-                   display:flex; align-items:center; gap:10px; max-width:390px; box-shadow:0 1px 2px rgba(0,0,0,.12); }
-    .vhead-gtxt { min-width:0; }
-    .vhead-gtxt .g1 { font-weight:700; font-size:15px; line-height:1.15; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .vhead-gtxt .g2 { font-size:12px; color:#6B7280; margin:1px 0 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .vhead-chip { flex:0 0 auto; background:#C00000; color:#fff; font-size:11px; font-weight:700; padding:4px 11px; border-radius:999px; white-space:nowrap; }
-    .vhead-logout { flex:0 0 auto; background:#7F1D1D; color:#fff; font-size:13px; font-weight:700; padding:8px 16px; border-radius:9px; border:none; cursor:pointer; }
-    .vhead-logout:hover { background:#601010; }
-    @media (max-width:640px) {
-      .vhead-inner { flex-wrap:wrap; gap:9px 10px; padding-right:14px; }
-      .vhead-sub { display:none; }
-      .vhead-logo { height:40px; }
-      .vhead-title { font-size:34px; line-height:1; }   /* match the logo height on phones */
-      .vhead-logout { order:2; margin-left:auto; margin-right:52px; }  /* clear the floating bell */
-      .vhead-greet { order:3; flex:1 1 100%; margin-left:0; max-width:none; }
+    :root{ --brand:#C00000; --ink:#1F2328; --muted:#6B7280; --line:#E7E5E1; --bg:#F6F5F2; --panel:#fff; }
+    body.shell{ margin:0; background:var(--bg); color:var(--ink); font-family:Arial,system-ui,sans-serif; }
+    .layout{ display:flex; min-height:100vh; }
+    /* Sidebar */
+    .side{ width:210px; flex:none; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
+    .side-brand{ display:flex; align-items:center; gap:9px; padding:14px 14px 12px; }
+    .side-brand .logo{ width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; overflow:hidden; }
+    .side-brand .logo img{ width:100%; height:100%; object-fit:contain; background:#fff; }
+    .side-brand .t{ font-weight:800; font-size:16px; line-height:1; } .side-brand .s{ font-size:10px; color:var(--muted); line-height:1.25; margin-top:2px; }
+    .nav{ flex:1; overflow:auto; padding:4px 8px 16px; }
+    .nav .grp{ font-size:10.5px; font-weight:700; color:#9A968E; letter-spacing:.06em; text-transform:uppercase; padding:12px 8px 5px; }
+    .nav a{ display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:9px; color:#3A3D42; font-size:13.5px; text-decoration:none; margin:1px 0; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
+    .nav a:hover{ background:#fff; transform:translateX(3px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
+    .nav a.on{ background:#FDE8E8; color:var(--brand); font-weight:700; }
+    .nav a.on:hover{ background:#FBDCDC; }
+    .nav a svg{ width:18px; height:18px; flex:none; }
+    /* Main */
+    .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+    .top{ height:56px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; padding:0 18px 0 14px; position:sticky; top:0; z-index:20; }
+    .top .ttl{ font-size:17px; font-weight:800; }
+    .top .grow{ flex:1; }
+    .top .search{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:9px; padding:7px 11px; color:#94A3B8; font-size:13px; min-width:180px; }
+    .top .who{ display:flex; align-items:center; gap:9px; }
+    .top .av{ width:32px; height:32px; border-radius:50%; background:#DBEAFE; color:#1D4ED8; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; }
+    .burger{ display:none; background:none; border:none; font-size:22px; cursor:pointer; color:#334155; }
+    .content{ padding:20px; max-width:1180px; width:100%; margin:0 auto; }
+    /* cards */
+    .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .kpi{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; border-left:4px solid var(--ac,#C00000); }
+    .kpi .n{ font-size:28px; font-weight:800; letter-spacing:-.01em; } .kpi .l{ font-size:12px; color:var(--muted); }
+    .qa{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .qa a{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; text-decoration:none; color:var(--ink); font-size:14px; font-weight:600; transition:transform .14s ease, box-shadow .14s ease; }
+    .qa a:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.10); } .qa a svg{ width:20px; height:20px; color:var(--brand); flex:none; }
+    .two{ display:grid; grid-template-columns:1.3fr 1fr; gap:14px; }
+    .panel{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .panel h3{ margin:0 0 12px; font-size:14px; font-weight:800; }
+    .feed .row{ display:flex; gap:11px; padding:10px 0; border-top:1px solid #F1F5F9; }
+    .feed .row:first-child{ border-top:none; }
+    .feed .ic{ width:30px; height:30px; border-radius:8px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; flex:none; }
+    .feed .ic svg{ width:16px; height:16px; color:#64748B; }
+    .alert{ display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:8px; }
+    .a-warn{ background:#FBE4E4; color:#B42318; } .a-info{ background:#EFEDE9; color:#4B5563; } .a-ok{ background:#EFEDE9; color:#4B5563; }
+    .kpi{ transition:transform .14s ease, box-shadow .14s ease; } .kpi:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
+    .greet{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .chip{ background:#FDE8E8; color:var(--brand); font-size:12px; font-weight:700; padding:4px 13px; border-radius:20px; }
+    .backdrop{ display:none; }
+    @media (max-width:900px){
+      .side{ position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 30px rgba(0,0,0,.25); }
+      body.navopen .side{ transform:translateX(0); }
+      body.navopen .backdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; }
+      .burger{ display:block; }
+      .kpis{ grid-template-columns:repeat(2,1fr); } .qa{ grid-template-columns:repeat(2,1fr); } .two{ grid-template-columns:1fr; }
+      .top .search{ display:none; }
+      .content{ padding:14px; }
     }
   </style>
 </head>
-<body class="grid-home min-h-screen flex flex-col">
-
-  <header class="vhead">
-    <div class="vhead-inner">
-      <img class="vhead-logo" src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex"
-           onerror="this.style.display='none'">
-      <div class="vhead-brand">
-        <div class="vhead-title">VCMS</div>
-        <div class="vhead-sub">Vortex Construction Management System</div>
+<body class="shell">
+  <div class="backdrop" onclick="toggleNav(false)"></div>
+  <div class="layout">
+    <aside class="side" id="side">
+      <div class="side-brand">
+        <div class="logo"><img src="icons/icon-192.png" onerror="this.parentNode.textContent='V'"></div>
+        <div><div class="t">VCMS</div><div class="s">Vortex Construction Management System</div></div>
       </div>
-      <div id="hdr-greet" class="vhead-greet hidden">
-        <div class="vhead-gtxt">
-          <p class="g1" id="greet">—</p>
-          <p class="g2" id="name">—</p>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+
+    <div class="main">
+      <div class="top">
+        <button class="burger" onclick="toggleNav(true)" aria-label="Menu">☰</button>
+        <div class="ttl">Home</div>
+        <div class="grow"></div>
+        <div class="search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search</div>
+        <div class="who"><div class="av" id="av">–</div><button onclick="vmmsLogout()" style="background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer;color:#334155">Log out</button></div>
+      </div>
+
+      <div class="content">
+        <div class="greet">
+          <div><div style="font-size:20px;font-weight:800" id="greet">—</div><div style="font-size:13px;color:var(--muted)" id="subgreet"></div></div>
+          <span class="chip" id="rolechip">—</span>
         </div>
-        <span id="role-chip" class="vhead-chip">—</span>
-      </div>
-      <button class="vhead-logout" onclick="vmmsLogout()">Log Out</button>
-    </div>
-  </header>
 
-  <main class="flex-1 p-4 max-w-md md:max-w-4xl mx-auto w-full">
-    <div id="loading" class="text-center text-gray-500 mt-10">Checking your account…</div>
-
-    <div id="content" class="hidden">
-      <div id="switcher" class="hidden panel p-3 mt-4 flex items-center gap-2">
-        <span class="text-sm text-gray-600 whitespace-nowrap">Acting as:</span>
-        <select id="viewrole" class="border border-gray-300 rounded-lg p-2 text-sm bg-white flex-1">
-          <option value="admin">Administrator</option>
-          <option value="general_manager">General Manager</option>
-          <option value="operation_manager">Operation Manager</option>
-          <option value="hr_assistant">HR Assistant</option>
-          <option value="main_sup">Site Manager</option>
-          <option value="wshc_lead">WSHC Lead</option>
-          <option value="site_sup">Site Supervisor</option>
-          <option value="safety_sup">Safety Supervisor</option>
-          <option value="wshc">WSHC</option>
-          <option value="logistics_sup">Logistics Supervisor</option>
-          <option value="payroll">Payroll</option>
-        </select>
-      </div>
-
-      <!-- One-time nudge: shows only while notifications are OFF. All on/off/test controls live in Settings. -->
-      <div id="pushcard" class="hidden panel p-4 mt-4 flex items-center gap-3 border-l-4 border-red-600">
-        <div class="flex-1">
-          <p class="font-bold text-gray-900 text-sm">🔔 Turn on phone notifications</p>
-          <p id="pushmsg" class="text-xs text-gray-500 mt-0.5">—</p>
+        <div class="kpis" style="margin-top:14px">
+          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-men">–</div><div class="l">Manpower on site</div></div>
+          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-sites">–</div><div class="l">Active sites</div></div>
+          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-pend">–</div><div class="l">Pending attendance</div></div>
+          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-pr">–</div><div class="l">Open PRs</div></div>
         </div>
-        <button id="pushbtn" onclick="onPushBtn()" class="hidden bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">Enable</button>
-        <a id="pushsettings" href="settings.html" class="hidden text-xs font-bold text-red-700 whitespace-nowrap">Settings ›</a>
+
+        <div style="font-size:12px;color:#94A3B8;font-weight:700;letter-spacing:.04em;margin:20px 2px 8px">QUICK ACTIONS</div>
+        <div class="qa">
+          <a href="dpr.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M12 9.5v5M9.5 12h5"/></svg>New daily report</a>
+          <a href="pr-new.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/><path d="M18.5 4.5v4M16.5 6.5h4"/></svg>Raise PR</a>
+          <a href="allocation.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 10h6M9 13h6"/></svg>Allocate manpower</a>
+          <a href="attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Attendance</a>
+        </div>
+
+        <div class="two" style="margin-top:18px">
+          <div class="panel feed"><h3>Recent activity</h3><div id="feed"></div></div>
+          <div class="panel"><h3>Needs attention</h3><div id="alerts"></div></div>
+        </div>
       </div>
-
-      <div class="mt-4" id="menu"></div>
     </div>
-
-    <div id="noprofile" class="hidden panel p-6 mt-10 text-center">
-      <div class="text-4xl mb-3">⚠️</div>
-      <p class="font-bold text-gray-800 mb-2">Login works, but no VCMS role is linked yet.</p>
-      <p class="text-sm text-gray-500">Ask the administrator to link your account (Phase 3 guide, Step 3).</p>
-      <button onclick="vmmsLogout()" class="mt-5 bg-red-700 text-white font-bold px-6 py-2 rounded-lg">Back to Login</button>
-    </div>
-  </main>
-
-  <footer class="p-4 flex items-center justify-center text-xs text-gray-500">
-    <span>Vortex Engineering Pte Ltd</span>
-  </footer>
+  </div>
 
   <script>
     requireLogin();
+    function toggleNav(on){ document.body.classList.toggle("navopen", on); }
 
-    const ROLE_LABELS = {
-      admin:"Administrator", general_manager:"General Manager", operation_manager:"Operation Manager",
-      hr_assistant:"HR Assistant", main_sup:"Site Manager", wshc_lead:"WSHC Lead",
-      site_sup:"Site Supervisor", safety_sup:"Safety Supervisor", wshc:"WSHC",
-      logistics_sup:"Logistics Supervisor", payroll:"Payroll",
-    };
-
-    const ROLE_TIER = {
-      admin:"full", general_manager:"full", operation_manager:"full", hr_assistant:"full",
-      main_sup:"manager", wshc_lead:"manager",
-      site_sup:"supervisor", safety_sup:"supervisor", wshc:"supervisor", logistics_sup:"supervisor",
-      payroll:"payroll",
-    };
-
-    const TIER_MENU = {
-      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["Site Dashboard", 12, "site-dashboard.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["PR Dashboard", 12, "pr-dashboard.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["Site Dashboard", 12, "site-dashboard.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["PR Dashboard", 12, "pr-dashboard.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["New PR Request", 12, "pr-new.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-    };
-    function menuFor(role) { return TIER_MENU[ROLE_TIER[role] || "supervisor"] || []; }
-    const ALL_MENU = [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Request Manpower", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]];
-    const DONE_PHASE = 12;
-    let ALLOWED = null;
-
-    // Short, tidy labels under each icon (full label kept as tooltip)
-    const SHORT = {
-      "Daily Allocation":"Allocation", "Request Manpower (next day)":"Request",
-      "Request Manpower":"Request", "End-Time Verification":"End-Time",
-      "WhatsApp Messages":"WhatsApp", "WhatsApp (Site Update)":"WhatsApp", "WhatsApp Update":"WhatsApp",
-      "Monthly Timesheet":"Timesheet", "Monthly Man-Hours":"Man-Hours", "Users & Access":"Users",
-      "My Site — Attendance":"Attendance", "Dashboard (my sites)":"Dashboard", "Reports (my sites)":"Reports",
-      "Daily Progress Report":"Progress", "DPR History":"DPR History", "Resource Summary":"Resources",
-      "PR Directory":"PR Directory", "New PR Request":"New PR",
-      "PR Dashboard":"PR Board", "Site Dashboard":"Site Board",
-    };
-
-    // Icon colour per page (rounded app-tile background)
-    const COLORS = {
-      "workers.html":"#2563EB", "sites.html":"#4F46E5", "allocation.html":"#C00000",
-      "request.html":"#C00000", "attendance.html":"#16A34A", "verify.html":"#0D9488",
-      "whatsapp.html":"#059669", "dashboard.html":"#7C3AED", "reports.html":"#D97706",
-      "timesheet.html":"#EA580C", "manhours.html":"#E11D48", "users.html":"#475569",
-      "settings.html":"#6B7280", "help.html":"#0EA5E9", "dpr.html":"#0891B2", "dprlist.html":"#0E7490",
-      "resource-summary.html":"#B45309", "pr-directory.html":"#6D28D9", "pr-new.html":"#BE185D",
-      "pr-dashboard.html":"#9D174D", "site-dashboard.html":"#047857",
-    };
-    // Inline SVG glyph per page (stroke = white, set on the <svg>)
-    const ICONS = {
-      "workers.html":'<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.3 2.7-5.2 5.5-5.2s5.5 1.9 5.5 5.2"/><circle cx="17.5" cy="9" r="2.3"/><path d="M16 14.8c2.4.2 4 2 4 4.2"/>',
-      "sites.html":'<path d="M4 20V6l6-2 6 2v14"/><path d="M3 20h18"/><path d="M9 20v-4h2v4"/><path d="M7 9h.5M7 12h.5M13 9h.5M13 12h.5"/>',
-      "allocation.html":'<rect x="6" y="4.5" width="12" height="15" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M9 10h6M9 13h6M9 16h4"/>',
-      "request.html":'<rect x="6" y="4.5" width="12" height="15" rx="2"/><rect x="9" y="3" width="6" height="3" rx="1"/><path d="M12 9.5v5M9.5 12h5"/>',
-      "attendance.html":'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
-      "verify.html":'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-      "whatsapp.html":'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
-      "dashboard.html":'<path d="M5 20V11M10 20V5M15 20v-6M20 20v-9"/>',
-      "reports.html":'<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4"/><path d="M9.5 12h5M9.5 15h5"/>',
-      "timesheet.html":'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
-      "manhours.html":'<circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 1.5"/><path d="M9.5 3.5h5"/>',
-      "users.html":'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/><path d="M9.5 12l1.8 1.8L15 10"/>',
-      "settings.html":'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/>',
-      "help.html":'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
-      "dpr.html":'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M15 3.5v3.5h3.5"/><path d="M9.5 12.5l1.4 1.4 3-3"/><path d="M9.5 16.5h5"/>',
-      "dprlist.html":'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>',
-      "resource-summary.html":'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',
-      "pr-directory.html":'<path d="M4 5.5h6l2 2h8v11H4z"/><path d="M8 12h8M8 15h5"/>',
-      "pr-new.html":'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.4"/><circle cx="16" cy="19" r="1.4"/><path d="M6 6L5 3.5H3"/><path d="M18.5 4.5v4M16.5 6.5h4"/>',
-      "pr-dashboard.html":'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-4"/><path d="M3.5 20.5h17"/>',
-      "site-dashboard.html":'<path d="M12 3.5a8.5 8.5 0 108.5 8.5"/><path d="M12 12l4.5-3"/><path d="M12 12V4"/>',
-      _default:'<circle cx="12" cy="12" r="8"/>',
-    };
-
-    // ---- Home sections (grouped tiles). Tiles are shown only if the page is in the
-    //      user's allowed set (per-role menu, or per-user custom menu). "soon" sections
-    //      always render as a Coming-soon placeholder. ----
-    const SECTIONS = [
-      { title:"Manpower Management", pages:[
-          ["Workers","workers.html"], ["Sites","sites.html"], ["Daily Allocation","allocation.html"],
-          ["Request Manpower","request.html"], ["Attendance","attendance.html"], ["End-Time Verification","verify.html"],
-          ["Monthly Timesheet","timesheet.html"], ["Monthly Man-Hours","manhours.html"],
-          ["Dashboard","dashboard.html"], ["Reports","reports.html"],
-          ["WhatsApp Messages","whatsapp.html"], ["Users & Access","users.html"] ] },
-      { title:"Site Progress", pages:[
-          ["Daily Progress Report","dpr.html"], ["DPR History","dprlist.html"],
-          ["Resource Summary","resource-summary.html"], ["Site Dashboard","site-dashboard.html"] ] },
-      { title:"Procurement Request", pages:[
-          ["PR Directory","pr-directory.html"], ["New PR Request","pr-new.html"], ["PR Dashboard","pr-dashboard.html"] ] },
-      { title:"Safety", soon:true, pages:[] },
-      { title:"Equipments & Machineries", soon:true, pages:[] },
+    const NAV = [
+      { items:[["Home","home.html","home"]] },
+      { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"]] },
+      { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"],["Reports","reports.html","doc"]] },
+      { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
+      { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]] },
     ];
-    const UTIL_PAGES = [["Settings","settings.html"], ["How to Use","help.html"]];
-
-    function tile(label, page) {
-      const el = document.createElement("a");
-      el.href = page; el.className = "app-tile"; el.title = label;
-      const color = COLORS[page] || "#6B7280";
-      const icon = ICONS[page] || ICONS._default;
-      const short = SHORT[label] || label;
-      el.innerHTML =
-        `<span class="app-ico" style="background:${color}">
-           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
-         </span>
-         <span class="app-lbl">${esc(short)}</span>`;
-      return el;
+    const IC = {
+      home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', user:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',
+      bld:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>', cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
+      chk:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>', clk:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+      grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>', doc:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',
+      list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>', chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',
+      cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>', chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
+      shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',
+      help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
+    };
+    function renderNav(){
+      const cur=location.pathname.split("/").pop()||"home2.html";
+      document.getElementById("nav").innerHTML = NAV.map(sec=>
+        (sec.grp?`<div class="grp">${sec.grp}</div>`:"")+
+        sec.items.map(([label,href,ic])=>`<a href="${href}" class="${href===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(label)}</a>`).join("")
+      ).join("");
     }
 
-    function renderMenu(role) {
-      const menu = document.getElementById("menu");
-      menu.innerHTML = "";
-      const allowed = ALLOWED
-        ? new Set(ALLOWED.concat(["help.html"]))
-        : new Set(menuFor(role).map(m => m[2]));
-      SECTIONS.forEach((sec, i) => {
-        const tiles = sec.soon ? [] : sec.pages.filter(([l, pg]) => allowed.has(pg));
-        if (!sec.soon && tiles.length === 0) return;   // hide an empty live section for this role
-        const secEl = document.createElement("div");
-        secEl.className = "sect" + (sec.soon ? " soon" : "");
-        secEl.innerHTML =
-          `<div class="sect-h"><span class="n">${i + 1}</span><span class="t">${esc(sec.title)}</span>` +
-          (sec.soon ? '<span class="soon">Coming soon</span>' : '') + `</div>`;
-        if (sec.soon) {
-          const note = document.createElement("div");
-          note.className = "soon-note";
-          note.textContent = "This module will be available soon.";
-          secEl.appendChild(note);
-        } else {
-          const grid = document.createElement("div");
-          grid.className = "app-grid";
-          tiles.forEach(([label, pg]) => grid.appendChild(tile(label, pg)));
-          secEl.appendChild(grid);
-        }
-        menu.appendChild(secEl);
-      });
-      // utility row (Settings / How to Use)
-      const utils = UTIL_PAGES.filter(([l, pg]) => allowed.has(pg));
-      if (utils.length) {
-        const row = document.createElement("div");
-        row.className = "util-row";
-        utils.forEach(([label, pg]) => row.appendChild(tile(label, pg)));
-        menu.appendChild(row);
-      }
+    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
+    const ROLE_LABELS={admin:"Administrator",general_manager:"General Manager",operation_manager:"Operation Manager",hr_assistant:"HR Assistant",main_sup:"Site Manager",wshc_lead:"WSHC Lead",site_sup:"Site Supervisor",safety_sup:"Safety Supervisor",wshc:"WSHC",logistics_sup:"Logistics Supervisor",payroll:"Payroll"};
+
+    async function boot(){
+      renderNav();
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){ vmmsLogout(); return; }
+      const me=await r.json();
+      const first=(me.name||"").trim().split(/\s+/)[0]||"";
+      const hr=new Date().getHours(); const g=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
+      document.getElementById("greet").textContent=`${g}, ${first}`;
+      document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"})+" · here's your site overview";
+      document.getElementById("rolechip").textContent=ROLE_LABELS[me.role]||me.role;
+      document.getElementById("av").textContent=(me.name||"?").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
+
+      const ov=await (await vmmsApi("/api/v1/home-overview")).json();
+      document.getElementById("k-men").textContent=ov.manpower_on_site;
+      document.getElementById("k-sites").textContent=ov.active_sites;
+      document.getElementById("k-pend").textContent=ov.pending_attendance;
+      document.getElementById("k-pr").textContent=ov.open_prs;
+      const IF={dpr:IC.doc, pr:IC.cart};
+      document.getElementById("feed").innerHTML=(ov.feed||[]).map(f=>`
+        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${IF[f.kind]||IC.doc}</svg></div>
+          <div><div style="font-size:13.5px">${esc(f.title)}</div><div style="font-size:11.5px;color:#94A3B8">${esc(f.meta)}</div></div></div>`).join("")
+        || '<p style="color:#94A3B8;font-size:13px">No recent activity.</p>';
+      document.getElementById("alerts").innerHTML=(ov.alerts||[]).map(a=>`
+        <div class="alert ${a.level==="warn"?"a-warn":"a-info"}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">${a.level==="warn"?'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'}</svg>${esc(a.text)}</div>`).join("")
+        || '<div class="alert a-ok"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>All sites reporting — nothing outstanding.</div>';
     }
-
-    async function load() {
-      try {
-        const r = await vmmsApi("/api/v1/me");
-        if (r.status === 403) {
-          document.getElementById("loading").classList.add("hidden");
-          document.getElementById("noprofile").classList.remove("hidden");
-          return;
-        }
-        if (!r.ok) throw new Error("NOT_SIGNED_IN");
-        const me = await r.json();
-
-        document.getElementById("hdr-greet").classList.remove("hidden");
-        const hr = new Date().getHours();
-        const greet = hr < 12 ? "Good morning" : (hr < 17 ? "Good afternoon" : "Good evening");
-        const first = (me.name || "").trim().split(/\s+/)[0] || "";
-        document.getElementById("greet").textContent = `${greet}, ${first}`;
-        document.getElementById("name").textContent = me.name;
-        document.getElementById("role-chip").textContent = ROLE_LABELS[me.role] || me.role;
-
-        let viewRole = me.role;
-        if (me.role === "admin") {
-          viewRole = localStorage.getItem("vmms_view_role") || "admin";
-          const sw = document.getElementById("switcher");
-          const sel = document.getElementById("viewrole");
-          sel.value = viewRole;
-          sw.classList.remove("hidden");
-          sel.addEventListener("change", () => {
-            localStorage.setItem("vmms_view_role", sel.value);
-            renderMenu(sel.value);
-          });
-        }
-        renderMenu(viewRole);
-
-        document.getElementById("loading").classList.add("hidden");
-        document.getElementById("content").classList.remove("hidden");
-        refreshPush();
-      } catch (ex) {
-        vmmsLogout();
-      }
-    }
-
-    // Home only shows a nudge WHILE notifications are OFF. Once on, it hides —
-    // all turn-off / test controls live on the Settings page.
-    const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-    async function refreshPush() {
-      const card = document.getElementById("pushcard"); if (!card || !window.vmmsPushStatus) return;
-      const st = await vmmsPushStatus();
-      const msg = document.getElementById("pushmsg"), btn = document.getElementById("pushbtn"), setg = document.getElementById("pushsettings");
-      if (st === "on") { card.classList.add("hidden"); return; }   // already on → nothing to nudge
-      card.classList.remove("hidden");
-      btn.classList.add("hidden"); setg.classList.add("hidden");
-      if (st === "unsupported") {
-        msg.textContent = IS_IOS
-          ? "On iPhone: add VCMS to your Home Screen (Share ▸ Add to Home Screen), then open it from that icon to enable alerts."
-          : "Open VCMS in Chrome to enable alerts on this phone.";
-      } else if (st === "blocked") {
-        msg.textContent = "Notifications are blocked for this site. Allow them in your browser settings, then reload.";
-        setg.classList.remove("hidden");
-      } else {
-        msg.textContent = "Get allocation, manpower-request and reminder alerts on this phone.";
-        btn.classList.remove("hidden"); setg.classList.remove("hidden");
-      }
-    }
-    async function onPushBtn() {
-      const btn = document.getElementById("pushbtn"); btn.disabled = true; const t = btn.textContent; btn.textContent = "…";
-      const r = await vmmsEnablePush(); btn.disabled = false; btn.textContent = t;
-      if (r.ok) { alert("Notifications are on. You can turn them off anytime in Settings."); }
-      else {
-        const m = { unsupported: IS_IOS ? "On iPhone, install VCMS to the Home Screen first, then open it from that icon." : "Open VCMS in Chrome to enable notifications.", denied: "Permission was denied. Allow notifications in your browser settings, then try again.", server_off: "Server push isn't switched on yet — contact the administrator.", save_failed: "Couldn't save. Try again." }[r.reason] || ("Couldn't enable: " + r.reason);
-        alert(m);
-      }
-      refreshPush();
-    }
-    load();
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    boot();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
 </html>
