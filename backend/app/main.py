@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.54.2")  # PR: per-site running number + revisions
+app = FastAPI(title="VCMS API", version="0.55.0")  # PR: edit-in-place + delete
 
 app.add_middleware(
     CORSMiddleware,
@@ -3074,6 +3074,55 @@ async def pr_save(body: PRIn, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500, detail=f"Could not save PR (db {r.status_code}: {r.text[:140]})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
+
+
+@app.patch("/api/v1/pr/{pr_id}")
+async def pr_update(pr_id: str, body: PRIn, user: dict = Depends(get_current_user)):
+    """Edit an existing PR in place (correct a wrongly-raised one)."""
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    payload = {
+        "pr_no": (body.pr_no or "").strip(), "pr_date": _nz_date(body.pr_date),
+        "category": body.category, "urgency": body.urgency,
+        "delivery_mode": body.delivery_mode, "deliver_to": body.deliver_to,
+        "site_name": body.site_name, "project_code": body.project_code, "project": body.project,
+        "pm_hod": body.pm_hod, "manager_director": body.manager_director,
+        "requested_by_name": body.requested_by_name, "items": body.items or [],
+        "photos": body.photos or [], "remarks": body.remarks,
+        "status": body.status or "submitted",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    async with shared_client() as client:
+        r = await client.patch(f"{REST}/purchase_requisitions",
+            params={"id": f"eq.{pr_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=payload)
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail=f"Could not update PR ({r.status_code})")
+        rows = r.json() if r.text else []
+        return rows[0] if rows else {"ok": True}
+
+
+@app.delete("/api/v1/pr/{pr_id}")
+async def pr_delete(pr_id: str, user: dict = Depends(get_current_user)):
+    """Delete a PR. Managers can delete any; others only their own."""
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        chk = await client.get(f"{REST}/purchase_requisitions",
+                               params={"id": f"eq.{pr_id}", "select": "created_by"},
+                               headers=supabase_headers(user["token"]))
+        rows = chk.json() if chk.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=404, detail="PR not found")
+        if user["role"] not in COORDINATOR_ROLES and rows[0].get("created_by") != user["user_id"]:
+            raise HTTPException(status_code=403, detail="You can only delete PRs you raised")
+        r = await client.delete(f"{REST}/purchase_requisitions",
+                                params={"id": f"eq.{pr_id}"},
+                                headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete PR")
+        return {"ok": True}
 
 
 class UploadUrlIn(BaseModel):
