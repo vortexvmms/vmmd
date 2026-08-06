@@ -58,7 +58,12 @@ window.vmmsSetTheme = function (t) {
     "html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}" +
     "@media(min-width:1024px){::-webkit-scrollbar{width:10px;height:10px}" +
     "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}" +
-    "::-webkit-scrollbar-thumb:hover{background:#94A3B8}}";
+    "::-webkit-scrollbar-thumb:hover{background:#94A3B8}" +
+    // Use the empty desktop gutters: widen phone-width content containers to ~1024px.
+    // Excludes bottom-sheet modals (rounded-t-2xl) and pages that already opted into a
+    // wider desktop width (md:max-w-*). Login stays narrow (uses max-w-sm).
+    "[class~=\"max-w-md\"]:not([class*=\"md:max-w\"]):not([class*=\"rounded-t-2xl\"])" +
+    "{max-width:64rem !important;}}";
   (document.head || document.documentElement).appendChild(s);
 })();
 
