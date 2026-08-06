@@ -29,6 +29,11 @@
     .clamp2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .feed-item { padding:11px 14px; border-top:1px solid #F1F5F9; }
     .stale { color:#B91C1C; font-weight:700; } .fresh { color:#15803D; font-weight:700; }
+    /* self-contained responsive grids (don't depend on prebuilt Tailwind subset) */
+    .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .sitegrid { display:grid; grid-template-columns:1fr; gap:12px; }
+    @media (min-width:768px){ .sitegrid{ grid-template-columns:repeat(2,1fr); } }
+    @media (min-width:1024px){ .kpis{ grid-template-columns:repeat(4,1fr); } .sitegrid{ grid-template-columns:repeat(3,1fr); } }
   </style>
 </head>
 <body class="db min-h-screen flex flex-col">
@@ -45,7 +50,7 @@
   <main class="flex-1 p-4 wrap mx-auto w-full pb-12">
     <div id="msg" class="text-center text-gray-500 mt-8">Loading…</div>
     <div id="body" class="hidden">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="kpis">
         <div class="card kpi" style="--ac:#16A34A"><div class="n" id="k-men">—</div><div class="l">Manpower on site</div></div>
         <div class="card kpi" style="--ac:#2563EB"><div class="n" id="k-sites">—</div><div class="l">Active sites</div></div>
         <div class="card kpi" style="--ac:#7C3AED"><div class="n" id="k-dprs">—</div><div class="l">DPRs (period)</div></div>
@@ -58,7 +63,7 @@
       </div>
 
       <p class="sect-h mt-5 mb-2">SITES</p>
-      <div id="sites" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      <div id="sites" class="sitegrid"></div>
 
       <div class="card mt-5" style="overflow:hidden">
         <p class="sect-h p-3 border-b border-gray-100">Recent activity</p>

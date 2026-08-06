@@ -32,6 +32,12 @@
     .c-asset{ background:#EDE9FE; color:#6D28D9;} .c-consumable{ background:#DBEAFE; color:#1D4ED8;} .c-rentals{ background:#FEF3C7; color:#B45309;}
     .c-urgent{ background:#FEE2E2; color:#B91C1C;}
     .prno { font-weight:800; color:#C00000; }
+    /* self-contained responsive grids (don't depend on prebuilt Tailwind subset) */
+    .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .charts { display:grid; grid-template-columns:1fr; gap:16px; margin-top:16px; }
+    .only-d { display:none; } .only-m { display:block; }
+    @media (min-width:768px){ .only-d{ display:block; } .only-m{ display:none; } }
+    @media (min-width:1024px){ .kpis{ grid-template-columns:repeat(4,1fr); } .charts{ grid-template-columns:repeat(3,1fr); } }
     .lcard { border:1px solid #E5E7EB; border-radius:14px; padding:12px 14px; margin:10px; background:#fff; }
     .pbtn { display:inline-block; font-size:12px; font-weight:800; color:#fff; background:#111827; border-radius:9px; padding:8px 14px; text-decoration:none; }
   </style>
@@ -50,7 +56,7 @@
     <div id="msg" class="text-center text-gray-500 mt-8">Loading…</div>
     <div id="body" class="hidden">
       <!-- KPIs -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="kpis">
         <div class="card kpi" style="--ac:#C00000"><div class="n" id="k-value">—</div><div class="l">Total Value (SGD)</div><div class="s" id="k-value-s"></div></div>
         <div class="card kpi" style="--ac:#2563EB"><div class="n" id="k-count">—</div><div class="l">Total PRs</div></div>
         <div class="card kpi" style="--ac:#DC2626"><div class="n" id="k-urgent">—</div><div class="l">Urgent</div></div>
@@ -58,7 +64,7 @@
       </div>
 
       <!-- Charts: one row on desktop -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+      <div class="charts">
         <div class="card p-4"><p class="sect-h mb-2">By category</p><div class="chart-h"><canvas id="ch-cat"></canvas></div></div>
         <div class="card p-4"><p class="sect-h mb-2">Value by month (SGD)</p><div class="chart-h"><canvas id="ch-month"></canvas></div></div>
         <div class="card p-4"><p class="sect-h mb-2">Top sites by value</p><div class="chart-h"><canvas id="ch-site"></canvas></div></div>
@@ -71,14 +77,14 @@
           <input id="q" oninput="renderLog()" placeholder="Search…" class="border border-gray-300 rounded-lg p-2 text-sm w-64 max-w-full">
         </div>
         <!-- desktop table -->
-        <div class="hidden md:block" style="overflow:auto">
+        <div class="only-d" style="overflow:auto">
           <table class="log">
             <thead><tr><th>Date</th><th>PR No</th><th>Site</th><th>Category</th><th>Requested By</th><th style="text-align:right">Value</th><th>Description</th><th></th></tr></thead>
             <tbody id="log"></tbody>
           </table>
         </div>
         <!-- mobile cards -->
-        <div class="md:hidden" id="logm"></div>
+        <div class="only-m" id="logm"></div>
         <p id="logempty" class="hidden text-center text-gray-400 p-6 text-sm">No PRs for this filter.</p>
       </div>
     </div>
