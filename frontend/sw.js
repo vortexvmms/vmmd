@@ -1,8 +1,77 @@
-// VCMS service worker — minimal (network-first) + Web Push handlers.
-self.addEventListener('install', (e) => self.skipWaiting());
-self.addEventListener('activate', (e) => self.clients.claim());
-self.addEventListener('fetch', () => {}); // network-first for now
+// VCMS service worker
+// Strategy: network-first for app files (HTML/JS/CSS/JSON) fetched with
+// cache:'no-store' so a fresh deploy ALWAYS shows up on next load (no more
+// stale pages from the browser HTTP cache). Falls back to a cached copy when
+// offline. Images/icons are cache-first for speed. API calls to the backend
+// and Supabase (cross-origin) are never touched — they go straight to network.
 
+const CACHE = 'vcms-v2';
+
+self.addEventListener('install', (e) => self.skipWaiting());
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  let url;
+  try { url = new URL(req.url); } catch (_) { return; }
+
+  // Only manage same-origin GET requests. Everything else (POST, and all
+  // cross-origin calls like the FastAPI backend or Supabase) passes through
+  // to the network untouched and is never cached.
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  const isAppFile =
+    req.mode === 'navigate' || /\.(html|js|css|json)$/i.test(url.pathname);
+
+  if (isAppFile) {
+    // Network-first, bypassing the browser HTTP cache so deploys are instant.
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-store' });
+        if (fresh && fresh.ok) {
+          const cache = await caches.open(CACHE);
+          cache.put(req, fresh.clone());
+        }
+        return fresh;
+      } catch (err) {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        if (req.mode === 'navigate') {
+          const home = (await caches.match('home.html')) || (await caches.match('./'));
+          if (home) return home;
+        }
+        throw err;
+      }
+    })());
+    return;
+  }
+
+  // Static assets (images, icons, fonts): cache-first, refresh in background.
+  e.respondWith((async () => {
+    const cached = await caches.match(req);
+    if (cached) {
+      fetch(req)
+        .then((res) => { if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone())); })
+        .catch(() => {});
+      return cached;
+    }
+    const res = await fetch(req);
+    if (res && res.ok) {
+      const cache = await caches.open(CACHE);
+      cache.put(req, res.clone());
+    }
+    return res;
+  })());
+});
+
+// ---- Web Push (unchanged) ----
 // Show a notification when a push arrives (works even when the app is closed).
 self.addEventListener('push', function (e) {
   let d = { title: 'VCMS', body: '', url: 'home.html' };
