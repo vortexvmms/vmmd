@@ -1,0 +1,42 @@
+name: keep-alive
+
+# Keeps the free stack awake and unpaused, at $0 cost:
+#   - Render backend  -> pinged so it never sits 15 min idle (no cold starts)
+#   - Supabase project -> /api/v1/health checks the DB, so the project keeps
+#                         getting activity and never hits the 7-day auto-pause
+#
+# Runs every 10 minutes during Singapore working hours (06:00-22:00 SGT), every
+# day (weekends/holidays included, so Supabase never goes 7 days silent).
+# Public repo = unlimited GitHub Actions minutes, so this is free.
+#
+# Note: GitHub's scheduler is best-effort and can delay runs under load. That's
+# fine here - if a ping is a few minutes late the worst case is one cold start.
+
+on:
+  schedule:
+    - cron: '*/10 22-23 * * *'   # 06:00-07:59 SGT (UTC+8)
+    - cron: '*/10 0-13 * * *'    # 08:00-21:59 SGT (UTC+8)
+  workflow_dispatch:              # lets you run it manually from the Actions tab
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health (wakes Render + keeps Supabase active)
+        run: |
+          URL="https://vmms-backend-sg.onrender.com/api/v1/health"
+          # Retry to cover Render's ~1 min cold start after a sleep.
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /tmp/out.txt -w "%{http_code}" --max-time 90 "$URL" || echo 000)
+            echo "Attempt $i -> HTTP $code | $(cat /tmp/out.txt 2>/dev/null)"
+            if [ "$code" = "200" ]; then
+              echo "Backend awake and database reachable."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::warning::Backend did not return 200 after 6 attempts (may just be a slow cold start)."
