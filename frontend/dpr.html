@@ -64,13 +64,14 @@
     .pcell { border:1px solid #000; break-inside:avoid; page-break-inside:avoid; }
     .dpr-sheet tr, .dpr-sheet .dpr-top { break-inside:avoid; page-break-inside:avoid; }
     .dpr-sheet .pgrid-wrap { break-inside:auto; }
-    /* Native Print/PDF only: push the sign-off to the bottom of page 1 and start
-       the Activity Photos on a fresh page. (Ignored by the one-page Download PDF,
-       which renders in screen media, so that path is unchanged.) */
+    /* Native Print/PDF only: let content flow naturally so photos sit right below
+       the sign-off (no wasted blank pages), but never leave the "Activity Photos"
+       heading orphaned — keep it with its first photo. The sign-off block also
+       stays whole. (Ignored by the one-page Download PDF, which renders on screen.) */
     @media print {
-      .page1 { display:flex; flex-direction:column; min-height:262mm; }
-      .page1-spacer { flex:1 1 auto; }
-      .photos-block { page-break-before:always; break-before:page; }
+      .signoff { break-inside:avoid; page-break-inside:avoid; }
+      .photos-head { break-after:avoid; page-break-after:avoid; }
+      .photos-block { break-before:auto; page-break-before:auto; }
     }
     .pcell .cap { text-align:center; font-weight:bold; border-bottom:1px solid #000; padding:2px; }
     /* fixed-height photo box; orientation decides the fit (class set at capture time) */
@@ -613,7 +614,7 @@
         </table>
         </div></div>`;
       if(PHOTOS.length){
-        html+=`<div class="photos-block"><div style="font-weight:bold;margin:0 0 6px">Activity Photos</div><div class="pgrid">`;
+        html+=`<div class="photos-block"><div class="photos-head" style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
         html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}" crossorigin="anonymous"></div></div>`).join("");
         html+=`</div></div>`;
       }
