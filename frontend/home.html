@@ -61,14 +61,16 @@
     .tsec{ font-size:11px; font-weight:700; color:#9AA1AB; text-transform:uppercase; letter-spacing:.04em; margin:10px 0 5px; }
     .titem{ display:flex; gap:8px; align-items:flex-start; font-size:13px; padding:4px 0; } .titem .dot{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
     .tbtn{ display:block; text-align:center; background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:13px; padding:10px; border-radius:10px; margin-top:12px; }
-    .backdrop{ display:none; }
+    .backdrop{ display:none; } .mgreet{ display:none; }
     @media (max-width:1000px){ .home-wrap{ grid-template-columns:1fr; } .tasks{ position:static; } }
     @media (max-width:900px){
       .side{ position:fixed; left:0; top:0; height:100vh; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 30px rgba(0,0,0,.25); }
       body.navopen .side{ transform:translateX(0); } body.navopen .backdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; }
-      .burger{ display:block; } .brand .bs{ display:none; } .brand{ padding-right:56px; }
-      .hsearch, .gcard .g2, .brand-tag{ display:none; } .gcard{ padding:5px 8px; }
-      .kpis{ grid-template-columns:repeat(2,1fr); } .updates{ grid-template-columns:1fr; } .content{ padding:14px; }
+      .burger{ display:block; } .brand{ padding:0 52px 0 10px; gap:9px; height:54px; } .brand .bs{ display:none; } .brand .logo{ height:32px; } .brand .bt{ font-size:19px; }
+      .hsearch{ display:none; } .gcard{ display:none; } #rswitch{ display:none !important; } .logout{ padding:7px 12px; }
+      .side{ top:0; } .mgreet{ display:block; }
+      .kpis{ grid-template-columns:repeat(2,1fr); } .updates{ grid-template-columns:1fr; } .content{ padding:13px; }
+      .home-wrap{ gap:12px; }
     }
   </style>
 </head>
@@ -99,6 +101,11 @@
       <div class="content">
         <div class="home-wrap">
           <div>
+            <div class="mgreet" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:12px">
+              <div style="font-size:19px;font-weight:800" id="mgreet">—</div>
+              <div style="font-size:12.5px;color:#6B7280" id="mfull"></div>
+              <div style="margin-top:7px"><span class="chip" id="mchip"></span></div>
+            </div>
             <div class="SECT" id="subgreet"></div>
             <div class="kpis" id="kpis"></div>
             <div class="SECT" style="margin-top:18px">UPDATES FOR THIS DAY</div>
@@ -195,6 +202,9 @@
       document.getElementById("greet").textContent=`${g}, ${first}`;
       document.getElementById("fullname").textContent=ME.name||"";
       document.getElementById("rolechip").textContent=ROLE_LABELS[ME.role]||ME.role;
+      document.getElementById("mgreet").textContent=`${g}, ${first}`;
+      document.getElementById("mfull").textContent=ME.name||"";
+      document.getElementById("mchip").textContent=ROLE_LABELS[ME.role]||ME.role;
       document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"}).toUpperCase()+" · YOUR SITE OVERVIEW";
       loadTasks();
 
