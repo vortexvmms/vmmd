@@ -26,7 +26,8 @@
   </header>
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-24">
-    <div id="list" class="space-y-2"></div>
+    <style>.grid3{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:640px){.grid3{grid-template-columns:repeat(2,1fr)}}@media(min-width:1024px){.grid3{grid-template-columns:repeat(3,1fr)}}</style>
+    <div id="list" class="grid3"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No sites.</p>
   </main>
 
