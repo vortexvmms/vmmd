@@ -87,11 +87,6 @@
     <div class="bt">VCMS</div>
     <div class="brand-center">Vortex Construction Management System</div>
     <div class="grow"></div>
-    <div class="hsearch">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
-      <input id="hsearch" placeholder="Search pages…" autocomplete="off" oninput="onSearch()" onkeydown="if(event.key==='Enter')goFirst()">
-      <div class="hres" id="hres"></div>
-    </div>
     <div class="gcard">
       <div><div class="g1" id="greet">—</div><div class="g2" id="fullname"></div></div>
       <span class="chip" id="rolechip">—</span>
@@ -182,7 +177,6 @@
       box.style.display="block";
     }
     function goFirst(){ if(NAVITEMS.length){ const q=document.getElementById("hsearch").value.trim().toLowerCase(); const m=NAVITEMS.find(it=>it[0].toLowerCase().includes(q)); if(m) location.href=m[1]; } }
-    document.addEventListener("click",e=>{ if(!e.target.closest(".hsearch")) document.getElementById("hres").style.display="none"; });
 
     function kcard(label,val,color,icon){ return `<a class="kpi" href="dashboard.html"><span class="ico" style="background:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span><div class="n">${val}</div><div class="l">${label}</div><div class="d">tap for details ›</div></a>`; }
     const KI={u:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',lv:'<path d="M20 8s-4 0-8 4M4 20c6-2 8-6 8-8"/>',st:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>',cl:'<rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 10h6M9 13h6"/>',med:'<rect x="5" y="8" width="14" height="12" rx="2"/><path d="M12 11v6M9 14h6M9 4h6v4H9z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>',mn:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',ck:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',bo:'<path d="M13 3L4 14h6l-1 7 9-11h-6z"/>',sg:'<path d="M4 6h16M4 6l6 6-6 6h16"/>'};
@@ -207,10 +201,10 @@
       renderNav(viewRole);
       const first=(ME.name||"").trim().split(/\s+/)[0]||"";
       const hr=new Date().getHours(); const g=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
-      document.getElementById("greet").textContent=`${g}, ${first}`;
+      document.getElementById("greet").textContent=g;
       document.getElementById("fullname").textContent=ME.name||"";
       document.getElementById("rolechip").textContent=ROLE_LABELS[ME.role]||ME.role;
-      document.getElementById("mgreet").textContent=`${g}, ${first}`;
+      document.getElementById("mgreet").textContent=g;
       document.getElementById("mfull").textContent=ME.name||"";
       document.getElementById("mchip").textContent=ROLE_LABELS[ME.role]||ME.role;
       document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"}).toUpperCase()+" · YOUR SITE OVERVIEW";
