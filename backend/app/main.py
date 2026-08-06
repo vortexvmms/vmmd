@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.56.0")  # PR dashboard + site-progress dashboard
+app = FastAPI(title="VCMS API", version="0.56.1")  # PR dashboard route order fix
 
 app.add_middleware(
     CORSMiddleware,
@@ -3039,6 +3039,63 @@ async def pr_list(user: dict = Depends(get_current_user)):
         return r.json() if r.status_code == 200 else []
 
 
+def _pr_num(v):
+    try:
+        return float(str(v).replace(",", "").strip() or 0)
+    except Exception:
+        return 0.0
+
+
+@app.get("/api/v1/pr/dashboard")   # NOTE: must be defined before /api/v1/pr/{pr_id}
+async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    params = {"select": "id,pr_no,pr_date,category,urgency,site_name,project,requested_by_name,items,remarks,created_at",
+              "order": "created_at.desc", "limit": "500"}
+    if month and len(month) == 7:
+        y, m = int(month[:4]), int(month[5:7])
+        start = f"{y:04d}-{m:02d}-01"
+        ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+        params["and"] = f"(pr_date.gte.{start},pr_date.lt.{ny:04d}-{nm:02d}-01)"
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/purchase_requisitions", params=params,
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+    total_value = 0.0
+    by_cat = {"asset": 0, "consumable": 0, "rentals": 0}
+    by_site, by_month, log, urgent = {}, {}, [], 0
+    for p in rows:
+        items = p.get("items") or []
+        v = sum(_pr_num(it.get("amount")) for it in items)
+        total_value += v
+        c = (p.get("category") or "").lower()
+        if c in by_cat:
+            by_cat[c] += 1
+        if (p.get("urgency") or "") == "urgent":
+            urgent += 1
+        s = p.get("site_name") or "—"
+        bs = by_site.setdefault(s, {"site": s, "count": 0, "value": 0.0})
+        bs["count"] += 1; bs["value"] += v
+        mo = (p.get("pr_date") or p.get("created_at") or "")[:7]
+        if mo:
+            bm = by_month.setdefault(mo, {"month": mo, "count": 0, "value": 0.0})
+            bm["count"] += 1; bm["value"] += v
+        if len(log) < 200:
+            descs = [str(it.get("description") or "").strip() for it in items if str(it.get("description") or "").strip()]
+            summ = " · ".join(descs[:3]) or (p.get("remarks") or "")
+            log.append({"id": p["id"], "pr_no": p.get("pr_no"), "pr_date": p.get("pr_date"),
+                        "site_name": s, "project": p.get("project"), "category": p.get("category"),
+                        "urgency": p.get("urgency"), "requested_by_name": p.get("requested_by_name"),
+                        "value": round(v, 2), "summary": summ})
+    return {
+        "total_count": len(rows), "total_value": round(total_value, 2), "urgent": urgent,
+        "by_category": by_cat,
+        "by_site": sorted(by_site.values(), key=lambda x: -x["value"]),
+        "by_month": sorted(by_month.values(), key=lambda x: x["month"])[-6:],
+        "log": log,
+    }
+
+
 @app.get("/api/v1/pr/{pr_id}")
 async def pr_get(pr_id: str, user: dict = Depends(get_current_user)):
     if user["role"] not in PR_ROLES:
@@ -3123,63 +3180,6 @@ async def pr_delete(pr_id: str, user: dict = Depends(get_current_user)):
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete PR")
         return {"ok": True}
-
-
-def _pr_num(v):
-    try:
-        return float(str(v).replace(",", "").strip() or 0)
-    except Exception:
-        return 0.0
-
-
-@app.get("/api/v1/pr/dashboard")
-async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
-    if user["role"] not in PR_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,pr_no,pr_date,category,urgency,site_name,project,requested_by_name,items,remarks,created_at",
-              "order": "created_at.desc", "limit": "500"}
-    if month and len(month) == 7:
-        y, m = int(month[:4]), int(month[5:7])
-        start = f"{y:04d}-{m:02d}-01"
-        ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
-        params["and"] = f"(pr_date.gte.{start},pr_date.lt.{ny:04d}-{nm:02d}-01)"
-    async with shared_client() as client:
-        r = await client.get(f"{REST}/purchase_requisitions", params=params,
-                             headers=supabase_headers(user["token"]))
-        rows = r.json() if r.status_code == 200 else []
-    total_value = 0.0
-    by_cat = {"asset": 0, "consumable": 0, "rentals": 0}
-    by_site, by_month, log, urgent = {}, {}, [], 0
-    for p in rows:
-        items = p.get("items") or []
-        v = sum(_pr_num(it.get("amount")) for it in items)
-        total_value += v
-        c = (p.get("category") or "").lower()
-        if c in by_cat:
-            by_cat[c] += 1
-        if (p.get("urgency") or "") == "urgent":
-            urgent += 1
-        s = p.get("site_name") or "—"
-        bs = by_site.setdefault(s, {"site": s, "count": 0, "value": 0.0})
-        bs["count"] += 1; bs["value"] += v
-        mo = (p.get("pr_date") or p.get("created_at") or "")[:7]
-        if mo:
-            bm = by_month.setdefault(mo, {"month": mo, "count": 0, "value": 0.0})
-            bm["count"] += 1; bm["value"] += v
-        if len(log) < 200:
-            descs = [str(it.get("description") or "").strip() for it in items if str(it.get("description") or "").strip()]
-            summ = " · ".join(descs[:3]) or (p.get("remarks") or "")
-            log.append({"id": p["id"], "pr_no": p.get("pr_no"), "pr_date": p.get("pr_date"),
-                        "site_name": s, "project": p.get("project"), "category": p.get("category"),
-                        "urgency": p.get("urgency"), "requested_by_name": p.get("requested_by_name"),
-                        "value": round(v, 2), "summary": summ})
-    return {
-        "total_count": len(rows), "total_value": round(total_value, 2), "urgent": urgent,
-        "by_category": by_cat,
-        "by_site": sorted(by_site.values(), key=lambda x: -x["value"]),
-        "by_month": sorted(by_month.values(), key=lambda x: x["month"])[-6:],
-        "log": log,
-    }
 
 
 @app.get("/api/v1/site-progress")
