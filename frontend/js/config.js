@@ -59,7 +59,7 @@ window.vmmsSetTheme = function (t) {
     "@media(min-width:1024px){::-webkit-scrollbar{width:10px;height:10px}" +
     "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}" +
     "::-webkit-scrollbar-thumb:hover{background:#94A3B8}" +
-    "body:not(.shell){background:#EDEFF3 !important}" +
+    "body:not(.shell){background:#E4E7EC !important}" +
     // Use the empty desktop gutters: widen phone-width content containers to ~1024px.
     // Excludes bottom-sheet modals (rounded-t-2xl) and pages that already opted into a
     // wider desktop width (md:max-w-*). Login stays narrow (uses max-w-sm).
