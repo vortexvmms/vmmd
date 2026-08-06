@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.56.2")  # PR log: bullet descriptions
+app = FastAPI(title="VCMS API", version="0.57.0")  # app-shell home overview
 
 app.add_middleware(
     CORSMiddleware,
@@ -3219,6 +3219,69 @@ async def site_progress(days: int = 14, user: dict = Depends(get_current_user)):
         "sites": site_list,
         "trend": [{"date": k, "manpower": trend[k]} for k in sorted(trend.keys())],
         "feed": feed,
+    }
+
+
+@app.get("/api/v1/home-overview")
+async def home_overview(user: dict = Depends(get_current_user)):
+    """Cross-module snapshot for the home dashboard: manpower on site, active
+    sites, DPRs, open PRs, pending attendance, an activity feed and alerts."""
+    today = _sgt_today()
+    start = (date_cls.fromisoformat(today) - timedelta(days=13)).isoformat()
+    async with shared_client() as client:
+        rd = await client.get(
+            f"{REST}/daily_reports",
+            params={"select": "report_date,site_id,manpower,sites(site_name)",
+                    "and": f"(report_date.gte.{start},report_date.lte.{today})",
+                    "order": "report_date.desc", "limit": "800"},
+            headers=supabase_headers(user["token"]))
+        reps = rd.json() if rd.status_code == 200 else []
+        prs = []
+        if user["role"] in PR_ROLES:
+            rp = await client.get(
+                f"{REST}/purchase_requisitions",
+                params={"select": "pr_no,pr_date,site_name,category,created_at",
+                        "order": "created_at.desc", "limit": "200"},
+                headers=supabase_headers(user["token"]))
+            prs = rp.json() if rp.status_code == 200 else []
+        try:
+            pending_att = len(await _pending_sites(client, "attendance"))
+        except Exception:
+            pending_att = 0
+
+    sites, feed = {}, []
+    for r in reps:
+        sid = r.get("site_id"); d = r.get("report_date"); mp = len(r.get("manpower") or [])
+        name = (r.get("sites") or {}).get("site_name", "?")
+        if sid not in sites:
+            sites[sid] = {"name": name, "latest": d, "manpower": mp}
+            feed.append({"kind": "dpr", "title": "DPR · " + name,
+                         "meta": f"{mp} men · {d}", "date": d})
+    manpower_on_site = sum(s["manpower"] for s in sites.values())
+    alerts = []
+    for s in sites.values():
+        try:
+            ago = (date_cls.fromisoformat(today) - date_cls.fromisoformat(s["latest"])).days
+        except Exception:
+            ago = 0
+        if ago >= 2:
+            alerts.append({"level": "warn", "text": f"{s['name']} — no DPR for {ago} days"})
+    if pending_att:
+        alerts.append({"level": "info", "text": f"{pending_att} site(s) pending attendance today"})
+    for p in prs[:4]:
+        feed.append({"kind": "pr", "title": "PR " + (p.get("pr_no") or "") + " raised",
+                     "meta": f"{p.get('category') or ''} · {p.get('pr_date') or ''}",
+                     "date": p.get("pr_date") or ""})
+    feed.sort(key=lambda x: x.get("date") or "", reverse=True)
+    return {
+        "today": today,
+        "manpower_on_site": manpower_on_site,
+        "active_sites": len(sites),
+        "dprs": len(reps),
+        "open_prs": len(prs),
+        "pending_attendance": pending_att,
+        "feed": feed[:10],
+        "alerts": alerts[:6],
     }
 
 
