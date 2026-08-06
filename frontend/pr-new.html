@@ -39,34 +39,36 @@
 
   <main class="flex-1 p-4 max-w-4xl mx-auto w-full pb-24">
     <div class="card p-4">
-      <!-- Category + PR No -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="fl">Category</label>
-          <div class="seg" id="seg-cat">
-            <button data-v="asset" onclick="pick('cat',this)">Asset</button>
-            <button data-v="consumable" onclick="pick('cat',this)">Consumable</button>
-            <button data-v="rentals" onclick="pick('cat',this)">Rentals</button>
-          </div>
-        </div>
-        <div>
-          <label class="fl">P.R No <span id="seedhint" class="hidden text-red-600 normal-case">— first time: type your last used number</span></label>
-          <input id="f-prno" class="inp" placeholder="e.g. PKJV T5-237">
+      <!-- Category -->
+      <div>
+        <label class="fl">Category</label>
+        <div class="seg" id="seg-cat">
+          <button data-v="asset" onclick="pick('cat',this)">Asset</button>
+          <button data-v="consumable" onclick="pick('cat',this)">Consumable</button>
+          <button data-v="rentals" onclick="pick('cat',this)">Rentals</button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
-        <div>
-          <label class="fl">Date</label>
-          <input id="f-date" type="date" class="inp">
-        </div>
+      <!-- Site first → generates the PR No -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
         <div>
           <label class="fl">Site Name</label>
-          <select id="f-site" class="inp" onchange="onSite()"><option value="">Select site…</option></select>
+          <select id="f-site" class="inp" onchange="onSiteUser()"><option value="">Select site…</option></select>
         </div>
         <div>
           <label class="fl">Project Code</label>
           <select id="f-code" class="inp" onchange="onCode()"><option value="">—</option></select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+        <div>
+          <label class="fl">P.R No <span id="prevref" class="text-gray-400 normal-case font-normal"></span></label>
+          <input id="f-prno" class="inp" placeholder="Select a site to generate…">
+        </div>
+        <div>
+          <label class="fl">Date</label>
+          <input id="f-date" type="date" class="inp">
         </div>
       </div>
 
@@ -150,7 +152,7 @@
 
   <script>
     requireLogin();
-    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[], PENDING_LINES=[];
+    let ME=null, DIR=[], SEL={cat:"consumable",urg:"normal",del:"delivery"}, PR_PHOTOS=[], PENDING_LINES=[], EDITING=false;
     const SIG_KEY="vcms_my_signature";   // same saved signature as the DPR page
     const LOGO_URL="https://www.vortex.sg/images/Vortex-Logo_Type.png";
 
@@ -344,7 +346,6 @@
       const sites=[...new Set(DIR.map(d=>d.site_name))].sort();
       document.getElementById("f-site").innerHTML='<option value="">Select site…</option>'+sites.map(s=>`<option>${esc(s)}</option>`).join("");
       addItem();
-      await nextNumber();
       await loadRecent();
       // photo inputs
       document.getElementById("ph-file").addEventListener("change", e=>{ [...e.target.files].forEach(addPhotoFile); e.target.value=""; });
@@ -354,10 +355,24 @@
       drop.addEventListener("drop", e=>{ [...(e.dataTransfer.files||[])].forEach(addPhotoFile); });
       window.addEventListener("paste", e=>{ [...(e.clipboardData.items||[])].forEach(x=>{ if(x.type&&x.type.startsWith("image/")) addPhotoFile(x.getAsFile()); }); });
     }
-    async function nextNumber(){
-      const r=await vmmsApi("/api/v1/pr/next-number"); const d=r.ok?await r.json():{};
+    // Per-site running number. Called only on a user-driven site change (not when loading an existing PR).
+    async function onSiteUser(){ EDITING=false; onSite(); await genNumber(); }
+    async function genNumber(){
+      const site=document.getElementById("f-site").value;
+      const pref=document.getElementById("prevref");
+      if(!site){ document.getElementById("f-prno").value=""; pref.textContent=""; return; }
+      const r=await vmmsApi("/api/v1/pr/next-number?site_name="+encodeURIComponent(site));
+      const d=r.ok?await r.json():{};
       document.getElementById("f-prno").value=d.next||"";
-      document.getElementById("seedhint").classList.toggle("hidden", !d.seed);
+      if(d.seed) pref.textContent="— first PR for this site: type your last used number";
+      else if(d.last) pref.textContent="· previous: "+d.last;
+      else pref.textContent="";
+    }
+    function reviseNo(s){
+      s=String(s||"").trim();
+      const m=s.match(/\sR(\d+)\s*$/i);
+      if(m) return s.replace(/\sR\d+\s*$/i,"")+" R"+(parseInt(m[1])+1);
+      return s+" R1";
     }
     function onSite(){
       const site=document.getElementById("f-site").value;
@@ -434,14 +449,14 @@
       if(!d.items.length){ toast("Add at least one item"); return; }
       const r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Save failed"); return; }
-      toast("PR saved"); await loadRecent(); await nextNumber();
+      toast("PR saved"); EDITING=false; await loadRecent(); await genNumber();
     }
     function newBlank(){
       document.getElementById("f-prno").value=""; document.getElementById("f-site").value="";
       document.getElementById("f-code").innerHTML='<option value="">—</option>';
       document.getElementById("f-project").value=""; document.getElementById("f-deliverto").value="";
       document.getElementById("f-remarks").value=""; document.getElementById("items").innerHTML="";
-      SEL._pm=""; SEL._md=""; PR_PHOTOS=[]; renderPhotos(); PENDING_LINES=[]; document.getElementById("importbtn").classList.add("hidden"); addItem(); nextNumber();
+      SEL._pm=""; SEL._md=""; EDITING=false; PR_PHOTOS=[]; renderPhotos(); PENDING_LINES=[]; document.getElementById("importbtn").classList.add("hidden"); document.getElementById("prevref").textContent=""; addItem();
       document.getElementById("f-date").value=new Date().toISOString().slice(0,10);
       setSeg("cat","consumable"); setSeg("urg","normal"); setSeg("del","delivery");
       window.scrollTo(0,0);
@@ -460,11 +475,14 @@
     async function openPR(id){
       const r=await vmmsApi("/api/v1/pr/"+id); if(!r.ok){toast("Could not open");return;}
       const d=await r.json();
-      document.getElementById("f-prno").value=d.pr_no||"";
+      EDITING=true;
       document.getElementById("f-date").value=(d.pr_date||"").slice(0,10);
-      setSeg("cat",d.category||"consumable"); setSeg("urg",d.urgency||"normal"); setSeg("del",d.delivery_mode||"delivery");
-      document.getElementById("f-site").value=d.site_name||""; onSite();
+      setSeg("cat",d.category||""); setSeg("urg",d.urgency||""); setSeg("del",d.delivery_mode||"");
+      document.getElementById("f-site").value=d.site_name||""; onSite();   // populate code list, no renumber
       document.getElementById("f-code").value=d.project_code||""; onCode();
+      // editing an existing PR → bump to a revision (R1, R2, …)
+      document.getElementById("f-prno").value=reviseNo(d.pr_no||"");
+      document.getElementById("prevref").textContent="· revision of "+(d.pr_no||"");
       document.getElementById("f-project").value=d.project||"";
       document.getElementById("f-deliverto").value=d.deliver_to||"";
       document.getElementById("f-remarks").value=d.remarks||"";
