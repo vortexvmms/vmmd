@@ -11,62 +11,59 @@
   <link rel="stylesheet" href="css/app.css">
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||["main_sup","wshc_lead"].indexOf(r)!==-1};</script>
   <style>
-    :root{ --brand:#C00000; --ink:#1F2328; --muted:#6B7280; --line:#E7E5E1; --bg:#F6F5F2; --panel:#fff; }
+    :root{ --brand:#C00000; --ink:#1F2328; --muted:#6B7280; --line:#E7E5E1; --bg:#F6F5F2; }
     body.shell{ margin:0; background:var(--bg); color:var(--ink); font-family:Arial,system-ui,sans-serif; }
     .layout{ display:flex; min-height:100vh; }
-    /* Sidebar */
-    .side{ width:210px; flex:none; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
-    .side-brand{ display:flex; align-items:center; gap:9px; padding:14px 14px 12px; }
-    .side-brand .logo{ width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; overflow:hidden; }
+    .side{ width:236px; flex:none; background:#F1EFEA; border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
+    .side-brand{ display:flex; align-items:center; gap:10px; padding:15px 15px 12px; }
+    .side-brand .logo{ width:36px; height:36px; border-radius:9px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; overflow:hidden; flex:none; }
     .side-brand .logo img{ width:100%; height:100%; object-fit:contain; background:#fff; }
-    .side-brand .t{ font-weight:800; font-size:16px; line-height:1; } .side-brand .s{ font-size:10px; color:var(--muted); line-height:1.25; margin-top:2px; }
-    .nav{ flex:1; overflow:auto; padding:4px 8px 16px; }
-    .nav .grp{ font-size:10.5px; font-weight:700; color:#9A968E; letter-spacing:.06em; text-transform:uppercase; padding:12px 8px 5px; }
-    .nav a{ display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:9px; color:#3A3D42; font-size:13.5px; text-decoration:none; margin:1px 0; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
+    .side-brand .t{ font-weight:800; font-size:17px; line-height:1; } .side-brand .s{ font-size:10px; color:var(--muted); line-height:1.25; margin-top:2px; }
+    .nav{ flex:1; overflow:auto; padding:4px 10px 16px; }
+    .nav .grp{ font-size:10.5px; font-weight:700; color:#9A968E; letter-spacing:.06em; text-transform:uppercase; padding:13px 8px 5px; }
+    .nav a{ display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; color:#3A3D42; font-size:14px; text-decoration:none; margin:1px 0; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
     .nav a:hover{ background:#fff; transform:translateX(3px); box-shadow:0 4px 12px rgba(0,0,0,.08); }
     .nav a.on{ background:#FDE8E8; color:var(--brand); font-weight:700; }
-    .nav a.on:hover{ background:#FBDCDC; }
-    .nav a svg{ width:18px; height:18px; flex:none; }
-    /* Main */
+    .nav a.on:hover{ background:#FBDCDC; } .nav a svg{ width:19px; height:19px; flex:none; }
     .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
-    .top{ height:56px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; padding:0 18px 0 14px; position:sticky; top:0; z-index:20; }
-    .top .ttl{ font-size:17px; font-weight:800; }
-    .top .grow{ flex:1; }
+    .top{ height:58px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; padding:0 18px 0 14px; position:sticky; top:0; z-index:20; }
+    .top .ttl{ font-size:17px; font-weight:800; } .top .grow{ flex:1; }
     .top .search{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:9px; padding:7px 11px; color:#94A3B8; font-size:13px; min-width:180px; }
-    .top .who{ display:flex; align-items:center; gap:9px; }
     .top .av{ width:32px; height:32px; border-radius:50%; background:#DBEAFE; color:#1D4ED8; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; }
     .burger{ display:none; background:none; border:none; font-size:22px; cursor:pointer; color:#334155; }
-    .content{ padding:20px; max-width:1180px; width:100%; margin:0 auto; }
-    /* cards */
-    .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-    .kpi{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; border-left:4px solid var(--ac,#C00000); }
-    .kpi .n{ font-size:28px; font-weight:800; letter-spacing:-.01em; } .kpi .l{ font-size:12px; color:var(--muted); }
-    .qa{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-    .qa a{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; text-decoration:none; color:var(--ink); font-size:14px; font-weight:600; transition:transform .14s ease, box-shadow .14s ease; }
-    .qa a:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.10); } .qa a svg{ width:20px; height:20px; color:var(--brand); flex:none; }
-    .two{ display:grid; grid-template-columns:1.3fr 1fr; gap:14px; }
-    .panel{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
-    .panel h3{ margin:0 0 12px; font-size:14px; font-weight:800; }
-    .feed .row{ display:flex; gap:11px; padding:10px 0; border-top:1px solid #F1F5F9; }
-    .feed .row:first-child{ border-top:none; }
-    .feed .ic{ width:30px; height:30px; border-radius:8px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; flex:none; }
-    .feed .ic svg{ width:16px; height:16px; color:#64748B; }
-    .alert{ display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:8px; }
-    .a-warn{ background:#FBE4E4; color:#B42318; } .a-info{ background:#EFEDE9; color:#4B5563; } .a-ok{ background:#EFEDE9; color:#4B5563; }
-    .kpi{ transition:transform .14s ease, box-shadow .14s ease; } .kpi:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.08); }
-    .greet{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .content{ padding:18px; width:100%; }
+    .home-wrap{ display:grid; grid-template-columns:1fr 320px; gap:16px; max-width:1280px; margin:0 auto; }
+    .greet{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
     .chip{ background:#FDE8E8; color:var(--brand); font-size:12px; font-weight:700; padding:4px 13px; border-radius:20px; }
+    .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .kpi{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 15px; text-decoration:none; color:inherit; display:block; transition:transform .14s ease, box-shadow .14s ease; }
+    .kpi:hover{ transform:translateY(-2px); box-shadow:0 8px 18px rgba(0,0,0,.09); }
+    .kpi .ico{ width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; color:#fff; margin-bottom:8px; }
+    .kpi .ico svg{ width:18px; height:18px; }
+    .kpi .n{ font-size:26px; font-weight:800; letter-spacing:-.01em; } .kpi .l{ font-size:12.5px; color:#475569; }
+    .kpi .d{ font-size:11px; color:#9CA3AF; margin-top:4px; }
+    .updates{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+    .upd{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .upd h4{ margin:0 0 10px; font-size:13px; font-weight:800; }
+    .pill{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:20px; margin-right:6px; }
+    .p-pend{ background:#FEF3C7; color:#92400E; } .p-done{ background:#DCFCE7; color:#166534; }
+    .tasks{ background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; position:sticky; top:74px; align-self:start; }
+    .tasks .th{ background:var(--brand); color:#fff; font-weight:800; font-size:15px; padding:13px 15px; display:flex; align-items:center; justify-content:space-between; }
+    .tasks .tb{ padding:12px 14px; }
+    .tsec{ font-size:11px; font-weight:700; color:#9A968E; text-transform:uppercase; letter-spacing:.04em; margin:10px 0 5px; }
+    .titem{ display:flex; gap:8px; align-items:flex-start; font-size:13px; padding:4px 0; }
+    .titem .dot{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
+    .tbtn{ display:block; text-align:center; background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:13px; padding:10px; border-radius:10px; margin-top:12px; }
+    .SECT{ font-size:12px; color:#94A3B8; font-weight:700; letter-spacing:.04em; margin:2px 0 8px; }
     .backdrop{ display:none; }
+    @media (max-width:1000px){ .home-wrap{ grid-template-columns:1fr; } .tasks{ position:static; } }
     @media (max-width:900px){
       .side{ position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 30px rgba(0,0,0,.25); }
-      body.navopen .side{ transform:translateX(0); }
-      body.navopen .backdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; }
-      .burger{ display:block; }
-      .kpis{ grid-template-columns:repeat(2,1fr); } .qa{ grid-template-columns:repeat(2,1fr); } .two{ grid-template-columns:1fr; }
-      .top .search{ display:none; }
-      .content{ padding:14px; }
+      body.navopen .side{ transform:translateX(0); } body.navopen .backdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; }
+      .burger{ display:block; } .top .search{ display:none; }
+      .kpis{ grid-template-columns:repeat(2,1fr); } .updates{ grid-template-columns:1fr; } .content{ padding:14px; }
     }
   </style>
 </head>
@@ -84,36 +81,37 @@
     <div class="main">
       <div class="top">
         <button class="burger" onclick="toggleNav(true)" aria-label="Menu">☰</button>
-        <div class="ttl">Home</div>
-        <div class="grow"></div>
+        <div class="ttl">Home</div><div class="grow"></div>
         <div class="search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search</div>
-        <div class="who"><div class="av" id="av">–</div><button onclick="vmmsLogout()" style="background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer;color:#334155">Log out</button></div>
+        <div class="av" id="av">–</div>
+        <button onclick="vmmsLogout()" style="background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer;color:#334155">Log out</button>
       </div>
 
       <div class="content">
-        <div class="greet">
-          <div><div style="font-size:20px;font-weight:800" id="greet">—</div><div style="font-size:13px;color:var(--muted)" id="subgreet"></div></div>
-          <span class="chip" id="rolechip">—</span>
-        </div>
+        <div class="home-wrap">
+          <div>
+            <div class="greet">
+              <div><div style="font-size:20px;font-weight:800" id="greet">—</div><div style="font-size:13px;color:var(--muted)" id="subgreet"></div></div>
+              <span class="chip" id="rolechip">—</span>
+            </div>
+            <div class="kpis" id="kpis"></div>
+            <div class="SECT" style="margin-top:18px">UPDATES FOR THIS DAY</div>
+            <div class="updates">
+              <div class="upd"><h4>🌅 Morning · attendance</h4>
+                <div><span class="pill p-pend">PENDING</span><span id="m-pend" style="font-size:12.5px;color:#374151"></span></div>
+                <div style="margin-top:8px"><span class="pill p-done">DONE</span><span id="m-done" style="font-size:12.5px;color:#374151"></span></div>
+              </div>
+              <div class="upd"><h4>🌙 Evening · end times</h4>
+                <div><span class="pill p-pend">PENDING</span><span id="e-pend" style="font-size:12.5px;color:#374151"></span></div>
+                <div style="margin-top:8px"><span class="pill p-done">DONE</span><span id="e-done" style="font-size:12.5px;color:#374151"></span></div>
+              </div>
+            </div>
+          </div>
 
-        <div class="kpis" style="margin-top:14px">
-          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-men">–</div><div class="l">Manpower on site</div></div>
-          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-sites">–</div><div class="l">Active sites</div></div>
-          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-pend">–</div><div class="l">Pending attendance</div></div>
-          <div class="kpi" style="--ac:#8A8A8A"><div class="n" id="k-pr">–</div><div class="l">Open PRs</div></div>
-        </div>
-
-        <div style="font-size:12px;color:#94A3B8;font-weight:700;letter-spacing:.04em;margin:20px 2px 8px">QUICK ACTIONS</div>
-        <div class="qa">
-          <a href="dpr.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M12 9.5v5M9.5 12h5"/></svg>New daily report</a>
-          <a href="pr-new.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/><path d="M18.5 4.5v4M16.5 6.5h4"/></svg>Raise PR</a>
-          <a href="allocation.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 10h6M9 13h6"/></svg>Allocate manpower</a>
-          <a href="attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Attendance</a>
-        </div>
-
-        <div class="two" style="margin-top:18px">
-          <div class="panel feed"><h3>Recent activity</h3><div id="feed"></div></div>
-          <div class="panel"><h3>Needs attention</h3><div id="alerts"></div></div>
+          <div class="tasks">
+            <div class="th">Today tasks for you<a href="todo.html" style="color:#fff;font-size:12px;font-weight:700;text-decoration:none;opacity:.9">Edit ›</a></div>
+            <div class="tb" id="tasks-body"><p style="color:#9CA3AF;font-size:13px">Loading…</p></div>
+          </div>
         </div>
       </div>
     </div>
@@ -122,34 +120,26 @@
   <script>
     requireLogin();
     function toggleNav(on){ document.body.classList.toggle("navopen", on); }
+    const ROLE_LABELS={admin:"Administrator",general_manager:"General Manager",operation_manager:"Operation Manager",hr_assistant:"HR Assistant",main_sup:"Site Manager",wshc_lead:"WSHC Lead",site_sup:"Site Supervisor",safety_sup:"Safety Supervisor",wshc:"WSHC",logistics_sup:"Logistics Supervisor",payroll:"Payroll"};
 
-    const NAV = [
-      { items:[["Home","home.html","home"]] },
-      { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"]] },
+    const NAV=[
+      { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
+      { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]] },
       { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"],["Reports","reports.html","doc"]] },
       { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
       { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]] },
     ];
-    const IC = {
-      home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', user:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',
-      bld:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>', cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
-      chk:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>', clk:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
-      grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>', doc:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',
-      list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>', chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',
-      cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>', chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
-      shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',
-      help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
-    };
+    const IC={home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',check:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',user:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',bld:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>',cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',chk:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',clk:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',doc:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>',chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>',chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>',gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>'};
     function renderNav(){
-      const cur=location.pathname.split("/").pop()||"home2.html";
-      document.getElementById("nav").innerHTML = NAV.map(sec=>
-        (sec.grp?`<div class="grp">${sec.grp}</div>`:"")+
-        sec.items.map(([label,href,ic])=>`<a href="${href}" class="${href===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(label)}</a>`).join("")
-      ).join("");
+      const cur=location.pathname.split("/").pop()||"home.html";
+      document.getElementById("nav").innerHTML=NAV.map(s=>(s.grp?`<div class="grp">${s.grp}</div>`:"")+s.items.map(([l,h,ic])=>`<a href="${h}" class="${h===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("")).join("");
     }
 
-    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
-    const ROLE_LABELS={admin:"Administrator",general_manager:"General Manager",operation_manager:"Operation Manager",hr_assistant:"HR Assistant",main_sup:"Site Manager",wshc_lead:"WSHC Lead",site_sup:"Site Supervisor",safety_sup:"Safety Supervisor",wshc:"WSHC",logistics_sup:"Logistics Supervisor",payroll:"Payroll"};
+    function kcard(label,val,color,icon,note){
+      return `<a class="kpi" href="dashboard.html"><span class="ico" style="background:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>
+        <div class="n">${val}</div><div class="l">${label}</div>${note?`<div class="d">${note}</div>`:""}</a>`;
+    }
+    const KI={u:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',lv:'<path d="M20 8s-4 0-8 4M4 20c6-2 8-6 8-8"/>',st:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>',cl:'<rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 10h6M9 13h6"/>',med:'<rect x="5" y="8" width="14" height="12" rx="2"/><path d="M12 11v6M9 14h6M9 4h6v4H9z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/>',mn:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',ck:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',bo:'<path d="M13 3L4 14h6l-1 7 9-11h-6z"/>',sg:'<path d="M4 6h16M4 6l6 6-6 6h16"/>'};
 
     async function boot(){
       renderNav();
@@ -158,23 +148,55 @@
       const first=(me.name||"").trim().split(/\s+/)[0]||"";
       const hr=new Date().getHours(); const g=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
       document.getElementById("greet").textContent=`${g}, ${first}`;
-      document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"})+" · here's your site overview";
+      document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"})+" · your site overview";
       document.getElementById("rolechip").textContent=ROLE_LABELS[me.role]||me.role;
       document.getElementById("av").textContent=(me.name||"?").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
 
-      const ov=await (await vmmsApi("/api/v1/home-overview")).json();
-      document.getElementById("k-men").textContent=ov.manpower_on_site;
-      document.getElementById("k-sites").textContent=ov.active_sites;
-      document.getElementById("k-pend").textContent=ov.pending_attendance;
-      document.getElementById("k-pr").textContent=ov.open_prs;
-      const IF={dpr:IC.doc, pr:IC.cart};
-      document.getElementById("feed").innerHTML=(ov.feed||[]).map(f=>`
-        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${IF[f.kind]||IC.doc}</svg></div>
-          <div><div style="font-size:13.5px">${esc(f.title)}</div><div style="font-size:11.5px;color:#94A3B8">${esc(f.meta)}</div></div></div>`).join("")
-        || '<p style="color:#94A3B8;font-size:13px">No recent activity.</p>';
-      document.getElementById("alerts").innerHTML=(ov.alerts||[]).map(a=>`
-        <div class="alert ${a.level==="warn"?"a-warn":"a-info"}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">${a.level==="warn"?'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'}</svg>${esc(a.text)}</div>`).join("")
-        || '<div class="alert a-ok"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>All sites reporting — nothing outstanding.</div>';
+      loadTasks();
+
+      const dr=await vmmsApi("/api/v1/dashboard?date="+new Date().toISOString().slice(0,10));
+      if(dr.ok){
+        const d=await dr.json();
+        const mt=(Number(d.month_normal_hours||0)+Number(d.month_ot_hours||0)).toFixed(1);
+        let cards="";
+        if(!d.scoped){
+          cards+=kcard("Active workers",d.total_workers,"#2563EB",KI.u,"tap for details ›");
+          cards+=kcard("On leave",d.on_leave,"#D97706",KI.lv,"tap for details ›");
+        }
+        cards+=kcard(d.scoped?"My sites":"Active sites",d.total_sites,"#4F46E5",KI.st,"tap for details ›");
+        cards+=kcard("Allocated this day",d.today_allocated,"#C00000",KI.cl,"tap for details ›");
+        cards+=kcard("MC this day",d.today_mc??0,"#CA8A04",KI.med,"tap for details ›");
+        cards+=kcard("AL this day",d.today_al??0,"#0284C7",KI.sun,"tap for details ›");
+        cards+=kcard("UL this day",d.today_ul??0,"#EA580C",KI.mn,"tap for details ›");
+        cards+=kcard("Month normal hours",d.month_normal_hours,"#059669",KI.ck,"tap for details ›");
+        cards+=kcard("Month OT hours",d.month_ot_hours,"#E11D48",KI.bo,"tap for details ›");
+        cards+=kcard("Total man-hours (month)",mt,"#0D9488",KI.sg,"");
+        document.getElementById("kpis").innerHTML=cards;
+        const nl=x=>x.toUpperCase()!=="HOME LEAVE";
+        const mp=(d.morning_pending||[]).filter(nl), md=(d.morning_completed||[]).filter(nl);
+        const ep=(d.evening_pending||d.pending_updates||[]).filter(nl), ed=(d.evening_completed||d.completed_updates||[]).filter(nl);
+        document.getElementById("m-pend").textContent=mp.length?mp.join(", "):"None — all marked ✓";
+        document.getElementById("m-done").textContent=md.length?md.join(", "):"None yet";
+        document.getElementById("e-pend").textContent=ep.length?ep.join(", "):"None — all submitted ✓";
+        document.getElementById("e-done").textContent=ed.length?ed.join(", "):"None yet";
+      } else {
+        document.getElementById("kpis").innerHTML='<p style="color:#9CA3AF">Manpower dashboard unavailable.</p>';
+      }
+    }
+    async function loadTasks(){
+      const r=await vmmsApi("/api/v1/todos"); const todos=r.ok?await r.json():[];
+      const open=todos.filter(t=>!t.done);
+      const groups=[["q1","Do first","#C00000"],["q2","Schedule","#2563EB"],["q3","Delegate","#D97706"]];
+      let html="";
+      groups.forEach(([q,name,c])=>{
+        const items=open.filter(t=>(t.quadrant||"inbox")===q);
+        if(!items.length) return;
+        html+=`<div class="tsec">${name}</div>`+items.map(t=>`<div class="titem"><span class="dot" style="background:${c}"></span><span>${esc(t.text)}</span></div>`).join("");
+      });
+      const inbox=open.filter(t=>(t.quadrant||"inbox")==="inbox");
+      if(inbox.length){ html+=`<div class="tsec">To sort</div>`+inbox.map(t=>`<div class="titem"><span class="dot" style="background:#9CA3AF"></span><span>${esc(t.text)}</span></div>`).join(""); }
+      if(!open.length) html=`<p style="color:#9CA3AF;font-size:13px">No tasks yet. Plan your day in the to-do board.</p>`;
+      document.getElementById("tasks-body").innerHTML=html+`<a class="tbtn" href="todo.html">Open to-do board</a>`;
     }
     boot();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
