@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Home</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    :root{ --brand:#C00000; --ink:#0F172A; --muted:#64748B; --line:#E5E7EB; --bg:#F1F3F6; --panel:#fff; }
+    body.shell{ margin:0; background:var(--bg); color:var(--ink); font-family:Arial,system-ui,sans-serif; }
+    .layout{ display:flex; min-height:100vh; }
+    /* Sidebar */
+    .side{ width:210px; flex:none; background:#fff; border-right:1px solid var(--line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; }
+    .side-brand{ display:flex; align-items:center; gap:9px; padding:14px 14px 12px; }
+    .side-brand .logo{ width:34px; height:34px; border-radius:9px; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:17px; overflow:hidden; }
+    .side-brand .logo img{ width:100%; height:100%; object-fit:contain; background:#fff; }
+    .side-brand .t{ font-weight:800; font-size:16px; } .side-brand .s{ font-size:11px; color:var(--muted); }
+    .nav{ flex:1; overflow:auto; padding:4px 8px 16px; }
+    .nav .grp{ font-size:10.5px; font-weight:700; color:#94A3B8; letter-spacing:.06em; text-transform:uppercase; padding:12px 8px 5px; }
+    .nav a{ display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:9px; color:#334155; font-size:13.5px; text-decoration:none; margin:1px 0; }
+    .nav a:hover{ background:#F3F4F6; }
+    .nav a.on{ background:#FDE8E8; color:var(--brand); font-weight:700; }
+    .nav a svg{ width:18px; height:18px; flex:none; }
+    /* Main */
+    .main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+    .top{ height:56px; background:#fff; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; padding:0 18px 0 14px; position:sticky; top:0; z-index:20; }
+    .top .ttl{ font-size:17px; font-weight:800; }
+    .top .grow{ flex:1; }
+    .top .search{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:9px; padding:7px 11px; color:#94A3B8; font-size:13px; min-width:180px; }
+    .top .who{ display:flex; align-items:center; gap:9px; }
+    .top .av{ width:32px; height:32px; border-radius:50%; background:#DBEAFE; color:#1D4ED8; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; }
+    .burger{ display:none; background:none; border:none; font-size:22px; cursor:pointer; color:#334155; }
+    .content{ padding:20px; max-width:1180px; width:100%; margin:0 auto; }
+    /* cards */
+    .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .kpi{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; border-left:4px solid var(--ac,#C00000); }
+    .kpi .n{ font-size:28px; font-weight:800; letter-spacing:-.01em; } .kpi .l{ font-size:12px; color:var(--muted); }
+    .qa{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .qa a{ display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:13px 15px; text-decoration:none; color:var(--ink); font-size:14px; font-weight:600; }
+    .qa a:hover{ border-color:#CBD5E1; } .qa a svg{ width:20px; height:20px; color:var(--brand); flex:none; }
+    .two{ display:grid; grid-template-columns:1.3fr 1fr; gap:14px; }
+    .panel{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .panel h3{ margin:0 0 12px; font-size:14px; font-weight:800; }
+    .feed .row{ display:flex; gap:11px; padding:10px 0; border-top:1px solid #F1F5F9; }
+    .feed .row:first-child{ border-top:none; }
+    .feed .ic{ width:30px; height:30px; border-radius:8px; background:#F1F5F9; display:flex; align-items:center; justify-content:center; flex:none; }
+    .feed .ic svg{ width:16px; height:16px; color:#64748B; }
+    .alert{ display:flex; align-items:center; gap:10px; border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:8px; }
+    .a-warn{ background:#FEF3C7; color:#92400E; } .a-info{ background:#DBEAFE; color:#1D4ED8; } .a-ok{ background:#DCFCE7; color:#166534; }
+    .greet{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .chip{ background:#FDE8E8; color:var(--brand); font-size:12px; font-weight:700; padding:4px 13px; border-radius:20px; }
+    .backdrop{ display:none; }
+    @media (max-width:900px){
+      .side{ position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 30px rgba(0,0,0,.25); }
+      body.navopen .side{ transform:translateX(0); }
+      body.navopen .backdrop{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; }
+      .burger{ display:block; }
+      .kpis{ grid-template-columns:repeat(2,1fr); } .qa{ grid-template-columns:repeat(2,1fr); } .two{ grid-template-columns:1fr; }
+      .top .search{ display:none; }
+      .content{ padding:14px; }
+    }
+  </style>
+</head>
+<body class="shell">
+  <div class="backdrop" onclick="toggleNav(false)"></div>
+  <div class="layout">
+    <aside class="side" id="side">
+      <div class="side-brand">
+        <div class="logo"><img src="icons/icon-192.png" onerror="this.parentNode.textContent='V'"></div>
+        <div><div class="t">VCMS</div><div class="s">Vortex</div></div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+
+    <div class="main">
+      <div class="top">
+        <button class="burger" onclick="toggleNav(true)" aria-label="Menu">☰</button>
+        <div class="ttl">Home</div>
+        <div class="grow"></div>
+        <div class="search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search</div>
+        <div class="who"><div class="av" id="av">–</div><button onclick="vmmsLogout()" style="background:none;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer;color:#334155">Log out</button></div>
+      </div>
+
+      <div class="content">
+        <div class="greet">
+          <div><div style="font-size:20px;font-weight:800" id="greet">—</div><div style="font-size:13px;color:var(--muted)" id="subgreet"></div></div>
+          <span class="chip" id="rolechip">—</span>
+        </div>
+
+        <div class="kpis" style="margin-top:14px">
+          <div class="kpi" style="--ac:#C00000"><div class="n" id="k-men">–</div><div class="l">Manpower on site</div></div>
+          <div class="kpi" style="--ac:#2563EB"><div class="n" id="k-sites">–</div><div class="l">Active sites</div></div>
+          <div class="kpi" style="--ac:#D97706"><div class="n" id="k-pend">–</div><div class="l">Pending attendance</div></div>
+          <div class="kpi" style="--ac:#16A34A"><div class="n" id="k-pr">–</div><div class="l">Open PRs</div></div>
+        </div>
+
+        <div style="font-size:12px;color:#94A3B8;font-weight:700;letter-spacing:.04em;margin:20px 2px 8px">QUICK ACTIONS</div>
+        <div class="qa">
+          <a href="dpr.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M12 9.5v5M9.5 12h5"/></svg>New daily report</a>
+          <a href="pr-new.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/><path d="M18.5 4.5v4M16.5 6.5h4"/></svg>Raise PR</a>
+          <a href="allocation.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4.5" width="12" height="15" rx="2"/><path d="M9 10h6M9 13h6"/></svg>Allocate manpower</a>
+          <a href="attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>Attendance</a>
+        </div>
+
+        <div class="two" style="margin-top:18px">
+          <div class="panel feed"><h3>Recent activity</h3><div id="feed"></div></div>
+          <div class="panel"><h3>Needs attention</h3><div id="alerts"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    requireLogin();
+    function toggleNav(on){ document.body.classList.toggle("navopen", on); }
+
+    const NAV = [
+      { items:[["Home","home2.html","home"]] },
+      { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"]] },
+      { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"],["Reports","reports.html","doc"]] },
+      { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
+      { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]] },
+    ];
+    const IC = {
+      home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', user:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',
+      bld:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>', cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',
+      chk:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>', clk:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+      grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>', doc:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',
+      list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>', chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',
+      cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>', chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
+      shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',
+      help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>',
+    };
+    function renderNav(){
+      const cur=location.pathname.split("/").pop()||"home2.html";
+      document.getElementById("nav").innerHTML = NAV.map(sec=>
+        (sec.grp?`<div class="grp">${sec.grp}</div>`:"")+
+        sec.items.map(([label,href,ic])=>`<a href="${href}" class="${href===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(label)}</a>`).join("")
+      ).join("");
+    }
+
+    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
+    const ROLE_LABELS={admin:"Administrator",general_manager:"General Manager",operation_manager:"Operation Manager",hr_assistant:"HR Assistant",main_sup:"Site Manager",wshc_lead:"WSHC Lead",site_sup:"Site Supervisor",safety_sup:"Safety Supervisor",wshc:"WSHC",logistics_sup:"Logistics Supervisor",payroll:"Payroll"};
+
+    async function boot(){
+      renderNav();
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){ vmmsLogout(); return; }
+      const me=await r.json();
+      const first=(me.name||"").trim().split(/\s+/)[0]||"";
+      const hr=new Date().getHours(); const g=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
+      document.getElementById("greet").textContent=`${g}, ${first}`;
+      document.getElementById("subgreet").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"})+" · here's your site overview";
+      document.getElementById("rolechip").textContent=ROLE_LABELS[me.role]||me.role;
+      document.getElementById("av").textContent=(me.name||"?").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
+
+      const ov=await (await vmmsApi("/api/v1/home-overview")).json();
+      document.getElementById("k-men").textContent=ov.manpower_on_site;
+      document.getElementById("k-sites").textContent=ov.active_sites;
+      document.getElementById("k-pend").textContent=ov.pending_attendance;
+      document.getElementById("k-pr").textContent=ov.open_prs;
+      const IF={dpr:IC.doc, pr:IC.cart};
+      document.getElementById("feed").innerHTML=(ov.feed||[]).map(f=>`
+        <div class="row"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${IF[f.kind]||IC.doc}</svg></div>
+          <div><div style="font-size:13.5px">${esc(f.title)}</div><div style="font-size:11.5px;color:#94A3B8">${esc(f.meta)}</div></div></div>`).join("")
+        || '<p style="color:#94A3B8;font-size:13px">No recent activity.</p>';
+      document.getElementById("alerts").innerHTML=(ov.alerts||[]).map(a=>`
+        <div class="alert ${a.level==="warn"?"a-warn":"a-info"}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">${a.level==="warn"?'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>':'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'}</svg>${esc(a.text)}</div>`).join("")
+        || '<div class="alert a-ok"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>All sites reporting — nothing outstanding.</div>';
+    }
+    boot();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
