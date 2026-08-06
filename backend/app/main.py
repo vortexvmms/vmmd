@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.57.0")  # app-shell home overview
+app = FastAPI(title="VCMS API", version="0.58.0")  # personal to-do (Eisenhower)
 
 app.add_middleware(
     CORSMiddleware,
@@ -3283,6 +3283,72 @@ async def home_overview(user: dict = Depends(get_current_user)):
         "feed": feed[:10],
         "alerts": alerts[:6],
     }
+
+
+# ================= Personal to-do (Eisenhower matrix) =================
+class TodoIn(BaseModel):
+    text: str
+
+
+class TodoPatch(BaseModel):
+    text: str | None = None
+    quadrant: str | None = None
+    done: bool | None = None
+
+
+@app.get("/api/v1/todos")
+async def todos_list(user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/todos",
+            params={"user_id": f"eq.{user['user_id']}", "order": "created_at.asc",
+                    "select": "id,text,quadrant,done,created_at"},
+            headers=supabase_headers(user["token"]))
+        return r.json() if r.status_code == 200 else []
+
+
+@app.post("/api/v1/todos", status_code=201)
+async def todos_add(body: TodoIn, user: dict = Depends(get_current_user)):
+    txt = (body.text or "").strip()
+    if not txt:
+        raise HTTPException(status_code=400, detail="Task text required")
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/todos",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"user_id": user["user_id"], "text": txt[:400], "quadrant": "inbox"})
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Could not add task ({r.status_code})")
+        rows = r.json()
+        return rows[0] if rows else {"ok": True}
+
+
+@app.patch("/api/v1/todos/{todo_id}")
+async def todos_update(todo_id: str, body: TodoPatch, user: dict = Depends(get_current_user)):
+    patch = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.text is not None:
+        patch["text"] = body.text.strip()[:400]
+    if body.quadrant is not None:
+        patch["quadrant"] = body.quadrant
+    if body.done is not None:
+        patch["done"] = body.done
+    async with shared_client() as client:
+        r = await client.patch(f"{REST}/todos",
+            params={"id": f"eq.{todo_id}", "user_id": f"eq.{user['user_id']}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json=patch)
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not update task")
+        return {"ok": True}
+
+
+@app.delete("/api/v1/todos/{todo_id}")
+async def todos_delete(todo_id: str, user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/todos",
+            params={"id": f"eq.{todo_id}", "user_id": f"eq.{user['user_id']}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete task")
+        return {"ok": True}
 
 
 class UploadUrlIn(BaseModel):
