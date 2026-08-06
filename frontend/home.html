@@ -65,14 +65,17 @@
     .tbtn{ display:block; text-align:center; background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:13px; padding:10px; border-radius:10px; margin-top:12px; }
     .backdrop{ display:none; } .mgreet{ display:none; }
     .mnav{ display:none; }
+    .mnav .msec{ font-size:11px; font-weight:800; color:#9AA1AB; text-transform:uppercase; letter-spacing:.05em; margin:16px 2px 8px; }
+    .mnav .mgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
     .mnav a{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 6px; text-align:center; text-decoration:none; color:#3A3D42; font-size:12px; font-weight:600; display:flex; flex-direction:column; align-items:center; gap:7px; }
     .mnav a:active{ background:#FDE8E8; } .mnav a svg{ width:23px; height:23px; color:var(--brand); }
+    .mrswitch{ display:none; }
     @media (max-width:1000px){ .home-wrap{ grid-template-columns:1fr; } .tasks{ position:static; } }
     @media (max-width:900px){
       .side{ display:none !important; } .burger{ display:none !important; }
       .brand{ padding:0 52px 0 12px; gap:9px; height:54px; } .brand .logo{ height:32px; } .brand .bt{ font-size:19px; }
       .hsearch{ display:none; } .gcard{ display:none; } #rswitch{ display:none !important; } .logout{ padding:7px 12px; }
-      .mgreet{ display:block; } .mnav{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+      .mgreet{ display:block; } .mnav{ display:block; margin-bottom:6px; } .mrswitch{ display:block; }
       .kpis{ grid-template-columns:repeat(2,1fr); } .updates{ grid-template-columns:1fr; } .content{ padding:13px; }
       .home-wrap{ gap:12px; }
     }
@@ -105,6 +108,7 @@
               <div style="font-size:19px;font-weight:800" id="mgreet">—</div>
               <div style="font-size:12.5px;color:#6B7280" id="mfull"></div>
               <div style="margin-top:7px"><span class="chip" id="mchip"></span></div>
+              <select id="mrswitch" class="mrswitch" onchange="onRoleSwitch(this.value)" style="margin-top:10px;width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-weight:700;background:#fff;color:#111"></select>
             </div>
             <div class="mnav" id="mnav"></div>
             <div class="SECT" id="subgreet"></div>
@@ -164,8 +168,25 @@
       const nav=navFor(role); NAVITEMS=[];
       nav.forEach(s=>s.items.forEach(it=>NAVITEMS.push(it)));
       document.getElementById("nav").innerHTML=nav.map(s=>(s.grp?`<div class="grp">${s.grp}</div>`:"")+s.items.map(([l,h,ic])=>`<a href="${h}" class="${h===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("")).join("");
-      const mn=document.getElementById("mnav");
-      if(mn) mn.innerHTML=NAVITEMS.filter(it=>it[1]!=="home.html").map(([l,h,ic])=>`<a href="${h}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("");
+      renderMobileMenu(role);
+    }
+    /* mobile home menu — grouped into 3 sections (like old layout) */
+    function mobileSections(role){
+      const nav=navFor(role);
+      const labeled=nav.slice(1);                          // skip Home/To-do row
+      const todo=nav[0].items.filter(it=>it[1]!=="home.html");
+      const s1={ name:labeled[0].grp, items:[...labeled[0].items, ...todo] };
+      const s2=labeled[1]?{ name:labeled[1].grp, items:[...labeled[1].items] }:{ name:"", items:[] };
+      const rest=labeled.slice(2);
+      const s3={ name:rest.map(g=>g.grp).join(" & ")||"More", items:[].concat(...rest.map(g=>g.items)) };
+      return [s1,s2,s3].filter(s=>s.items.length);
+    }
+    function renderMobileMenu(role){
+      const mn=document.getElementById("mnav"); if(!mn) return;
+      mn.innerHTML=mobileSections(role).map(s=>
+        `<div class="msec">${esc(s.name)}</div><div class="mgrid">`+
+        s.items.map(([l,h,ic])=>`<a href="${h}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("")+
+        `</div>`).join("");
     }
     /* header search — quick jump across nav pages */
     function onSearch(){
@@ -186,18 +207,21 @@
     function copyReminder(stage){ const t=reminderText(stage); (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>alert("Reminder copied — paste it in the group")).catch(()=>window.prompt("Copy this reminder:",t)); }
     function shareReminder(stage){ window.open("https://wa.me/?text="+encodeURIComponent(reminderText(stage)),"_blank"); }
 
-    function onRoleSwitch(){ const v=document.getElementById("rswitch").value; try{ localStorage.setItem("vmms_view_role",v);}catch(e){} renderNav(v); }
+    function onRoleSwitch(v){ v=v||(document.getElementById("rswitch")||{}).value; try{ localStorage.setItem("vmms_view_role",v);}catch(e){} const d=document.getElementById("rswitch"); if(d) d.value=v; const m=document.getElementById("mrswitch"); if(m) m.value=v; renderNav(v); }
 
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){ vmmsLogout(); return; }
       ME=await r.json();
       let viewRole=ME.role;
+      const msel=document.getElementById("mrswitch");
       if(ME.role==="admin"){
+        const opts=Object.keys(ROLE_LABELS).map(k=>`<option value="${k}">Acting as: ${ROLE_LABELS[k]}</option>`).join("");
         const sel=document.getElementById("rswitch");
-        sel.innerHTML=Object.keys(ROLE_LABELS).map(k=>`<option value="${k}">Acting as: ${ROLE_LABELS[k]}</option>`).join("");
+        sel.innerHTML=opts; msel.innerHTML=opts;
         try{ viewRole=localStorage.getItem("vmms_view_role")||"admin"; }catch(e){}
         sel.value=viewRole; sel.style.display="inline-block";
-      }
+        msel.value=viewRole;
+      } else { msel.style.display="none"; }
       renderNav(viewRole);
       const first=(ME.name||"").trim().split(/\s+/)[0]||"";
       const hr=new Date().getHours(); const g=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
