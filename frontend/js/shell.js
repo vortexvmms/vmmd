@@ -57,13 +57,14 @@
         "@media(max-width:899px){#vcms-brand,#vcms-rail{display:none!important;}}" +
         "#vcms-brand{position:fixed;top:0;left:0;right:0;height:60px;background:#C00000;color:#fff;display:flex;align-items:center;gap:14px;padding:0 64px 0 14px;z-index:50;font-family:Arial,system-ui,sans-serif;}" +
         "#vcms-brand .logo{height:40px;background:#fff;border-radius:8px;padding:3px;flex:none;}" +
-        "#vcms-brand .bt{font-size:22px;font-weight:800;}#vcms-brand .bs{font-size:10.5px;color:#FECACA;font-weight:600;}" +
+        "#vcms-brand .bt{font-size:22px;font-weight:800;}" +
+        "#vcms-brand .bc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:17px;font-weight:800;color:#fff;white-space:nowrap;pointer-events:none;}@media(max-width:1300px){#vcms-brand .bc{display:none;}}" +
         "#vcms-brand .grow{flex:1;}" +
-        "#vcms-brand .sw{position:relative;}#vcms-brand .sw input{border:none;border-radius:9px;padding:8px 12px 8px 32px;font-size:13px;width:180px;background:#fff;color:#111;}#vcms-brand .sw svg{position:absolute;left:10px;top:9px;width:15px;height:15px;color:#9CA3AF;}" +
-        "#vcms-brand .res{position:absolute;top:40px;left:0;right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden;display:none;z-index:60;}#vcms-brand .res a{display:block;padding:9px 12px;font-size:13px;color:#334155;text-decoration:none;}#vcms-brand .res a:hover{background:#F3F4F6;}" +
-        "#vcms-brand .gc{background:#fff;color:#111;border-radius:12px;padding:6px 10px 6px 14px;display:flex;align-items:center;gap:10px;max-width:330px;}#vcms-brand .gc .g1{font-weight:800;font-size:14px;line-height:1.1;white-space:nowrap;}#vcms-brand .gc .g2{font-size:11px;color:#6B7280;white-space:nowrap;}#vcms-brand .gc .chip{background:#C00000;color:#fff;font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;white-space:nowrap;}" +
-        "#vcms-brand select{border:none;border-radius:8px;padding:7px 9px;font-size:12px;font-weight:700;background:#fff;color:#111;}" +
-        "#vcms-brand .lo{background:#A50E0E;color:#fff;border:none;border-radius:9px;padding:8px 15px;font-weight:700;font-size:13px;cursor:pointer;flex:none;}" +
+        "#vcms-brand .sw{position:relative;}#vcms-brand .sw input{border:none;border-radius:10px;height:40px;box-sizing:border-box;padding:0 12px 0 32px;font-size:13px;width:180px;background:#fff;color:#111;}#vcms-brand .sw svg{position:absolute;left:10px;top:12px;width:15px;height:15px;color:#9CA3AF;}" +
+        "#vcms-brand .res{position:absolute;top:44px;left:0;right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden;display:none;z-index:60;}#vcms-brand .res a{display:block;padding:9px 12px;font-size:13px;color:#334155;text-decoration:none;}#vcms-brand .res a:hover{background:#F3F4F6;}" +
+        "#vcms-brand .gc{background:#fff;color:#111;border-radius:10px;height:40px;box-sizing:border-box;padding:0 8px 0 14px;display:flex;align-items:center;gap:10px;max-width:330px;}#vcms-brand .gc .g1{font-weight:800;font-size:14px;line-height:1.1;white-space:nowrap;}#vcms-brand .gc .g2{font-size:11px;color:#6B7280;white-space:nowrap;}#vcms-brand .gc .chip{background:#C00000;color:#fff;font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;white-space:nowrap;}" +
+        "#vcms-brand select{border:none;border-radius:10px;height:40px;box-sizing:border-box;padding:0 9px;font-size:12px;font-weight:700;background:#fff;color:#111;}" +
+        "#vcms-brand .lo{background:#A50E0E;color:#fff;border:none;border-radius:10px;height:40px;box-sizing:border-box;padding:0 16px;font-weight:700;font-size:13px;cursor:pointer;flex:none;}" +
         "#vcms-rail{position:fixed;left:0;top:60px;bottom:0;width:236px;background:#fff;border-right:1px solid #E5E7EB;display:flex;flex-direction:column;z-index:40;font-family:Arial,system-ui,sans-serif;}" +
         "#vcms-rail .rn{flex:1;overflow:auto;padding:8px 10px 16px;}" +
         "#vcms-rail .grp{font-size:10.5px;font-weight:700;color:#9AA1AB;letter-spacing:.06em;text-transform:uppercase;padding:13px 8px 5px;}" +
@@ -79,7 +80,8 @@
       brand.id = "vcms-brand";
       brand.innerHTML =
         '<img class="logo" src="'+LOGO+'" onerror="this.style.display=\'none\'">' +
-        '<div style="line-height:1.05"><div class="bt">VCMS</div><div class="bs">Vortex Construction Management System</div></div>' +
+        '<div class="bt">VCMS</div>' +
+        '<div class="bc">Vortex Construction Management System</div>' +
         '<div class="grow"></div>' +
         '<div class="sw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input id="vcms-search" placeholder="Search pages…" autocomplete="off"><div class="res" id="vcms-res"></div></div>' +
         '<div class="gc"><div><div class="g1">'+esc((me&&me.name?("Hi, "+(me.name.split(/\\s+/)[0])):"Signed in"))+'</div><div class="g2">'+esc(me&&me.name?me.name:"")+'</div></div><span class="chip">'+esc(ROLE_LABELS[role]||role)+'</span></div>' +
