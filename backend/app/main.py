@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.56.1")  # PR dashboard route order fix
+app = FastAPI(title="VCMS API", version="0.56.2")  # PR log: bullet descriptions
 
 app.add_middleware(
     CORSMiddleware,
@@ -3086,7 +3086,7 @@ async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
             log.append({"id": p["id"], "pr_no": p.get("pr_no"), "pr_date": p.get("pr_date"),
                         "site_name": s, "project": p.get("project"), "category": p.get("category"),
                         "urgency": p.get("urgency"), "requested_by_name": p.get("requested_by_name"),
-                        "value": round(v, 2), "summary": summ})
+                        "value": round(v, 2), "summary": summ, "lines": descs[:8]})
     return {
         "total_count": len(rows), "total_value": round(total_value, 2), "urgent": urgent,
         "by_category": by_cat,
