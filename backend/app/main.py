@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.54.1")  # PR: attachments (invoice/ref photos)
+app = FastAPI(title="VCMS API", version="0.54.2")  # PR: per-site running number + revisions
 
 app.add_middleware(
     CORSMiddleware,
@@ -2975,25 +2975,36 @@ async def pr_directory_delete(entry_id: str, user: dict = Depends(get_current_us
 
 
 @app.get("/api/v1/pr/next-number")
-async def pr_next_number(user: dict = Depends(get_current_user)):
-    """Suggest the next PR No by incrementing the trailing digits of the most
-    recent PR. First-ever PR returns blank so the user types the starting number."""
+async def pr_next_number(site_name: str = "", user: dict = Depends(get_current_user)):
+    """Next PR No for a given site: each site has its own running sequence.
+    Revisions (e.g. ' R1') don't advance the base number. First PR for a site
+    returns blank so the user types the starting number once."""
     import re as _re
     if user["role"] not in PR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
+    params = {"select": "pr_no,created_at", "order": "created_at.desc", "limit": "300"}
+    if site_name:
+        params["site_name"] = f"eq.{site_name}"
     async with shared_client() as client:
-        r = await client.get(f"{REST}/purchase_requisitions",
-                             params={"select": "pr_no", "order": "created_at.desc", "limit": "1"},
+        r = await client.get(f"{REST}/purchase_requisitions", params=params,
                              headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
-    if not rows or not (rows[0].get("pr_no") or "").strip():
-        return {"next": "", "seed": True}
-    last = rows[0]["pr_no"].strip()
-    m = _re.search(r"^(.*?)(\d+)(\D*)$", last)
-    if not m:
+    last = rows[0]["pr_no"] if rows and rows[0].get("pr_no") else ""
+    best = None  # (prefix, num, suffix, width)
+    for row in rows:
+        pr = (row.get("pr_no") or "").strip()
+        if not pr:
+            continue
+        base = _re.sub(r"\s*R\d+\s*$", "", pr, flags=_re.I).strip()   # strip revision
+        m = _re.search(r"^(.*?)(\d+)(\D*)$", base)
+        if not m:
+            continue
+        num = int(m.group(2))
+        if best is None or num > best[1]:
+            best = (m.group(1), num, m.group(3), len(m.group(2)))
+    if best is None:
         return {"next": "", "seed": True, "last": last}
-    prefix, num, suffix = m.groups()
-    nxt = prefix + str(int(num) + 1).zfill(len(num)) + suffix
+    nxt = best[0] + str(best[1] + 1).zfill(best[3]) + best[2]
     return {"next": nxt, "seed": False, "last": last}
 
 
