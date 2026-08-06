@@ -64,6 +64,14 @@
     .pcell { border:1px solid #000; break-inside:avoid; page-break-inside:avoid; }
     .dpr-sheet tr, .dpr-sheet .dpr-top { break-inside:avoid; page-break-inside:avoid; }
     .dpr-sheet .pgrid-wrap { break-inside:auto; }
+    /* Native Print/PDF only: push the sign-off to the bottom of page 1 and start
+       the Activity Photos on a fresh page. (Ignored by the one-page Download PDF,
+       which renders in screen media, so that path is unchanged.) */
+    @media print {
+      .page1 { display:flex; flex-direction:column; min-height:262mm; }
+      .page1-spacer { flex:1 1 auto; }
+      .photos-block { page-break-before:always; break-before:page; }
+    }
     .pcell .cap { text-align:center; font-weight:bold; border-bottom:1px solid #000; padding:2px; }
     /* fixed-height photo box; orientation decides the fit (class set at capture time) */
     .pcell .imgwrap { height:172px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#fff; }
@@ -569,7 +577,7 @@
       const mpRows=mp.map(r=>`<tr><td>${e(r.name)}</td><td>${e(r.role)}</td><td class="c">${e(r.no)}</td><td class="c">${e(r.from)}</td><td class="c">${e(r.to)}</td><td class="c">${e(r.total)}</td><td>${e(r.remarks)}</td></tr>`).join("");
       const eqRows=eq.map(r=>`<tr><td>${e(r.name)}</td><td class="c">${e(r.no)}</td><td class="c">${e(r.from)}</td><td class="c">${e(r.to)}</td><td class="c">${e(r.total)}</td><td>${e(r.remarks)}</td></tr>`).join("") || '<tr><td colspan="6">&nbsp;</td></tr>';
       const mtRows=mt.map(r=>`<tr><td>${e(r.name)}</td><td class="c">${e(r.qty)}</td><td class="c">${e(r.unit)}</td><td>${e(r.remarks)}</td></tr>`).join("") || '<tr><td colspan="4">&nbsp;</td></tr>';
-      let html=`<div class="dpr-sheet">
+      let html=`<div class="dpr-sheet"><div class="page1"><div class="page1-top">
         <div class="dpr-top">
           <img class="dpr-logo" src="${DPR_LOGO}" crossorigin="anonymous" alt="Vortex">
           <div class="proj">${e(d.project_title)}</div>
@@ -595,16 +603,19 @@
           <tr class="hd"><th>Material / Tools</th><th class="c">Qty</th><th class="c">Unit</th><th>Remarks</th></tr>
           ${mtRows}
         </table>
+        </div><div class="page1-spacer"></div>
+        <div class="signoff">
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
           <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
           <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}" crossorigin="anonymous" style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
-        </table>`;
+        </table>
+        </div></div>`;
       if(PHOTOS.length){
-        html+=`<div style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
+        html+=`<div class="photos-block"><div style="font-weight:bold;margin:0 0 6px">Activity Photos</div><div class="pgrid">`;
         html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}" crossorigin="anonymous"></div></div>`).join("");
-        html+=`</div>`;
+        html+=`</div></div>`;
       }
       return html+`</div>`;
     }
