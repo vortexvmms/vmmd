@@ -28,7 +28,15 @@
       var allow = ALLOW[TIER[role] || "full"];
       var ok = function (href) { return !allow || allow.has(href); };
 
-      var NAV = [
+      var tier = TIER[role] || "full";
+      var curated = (tier === "supervisor");
+      var NAV = curated ? [
+        { items:[["Home","home.html","home"],["To-do","todo.html","chk"]] },
+        { grp:"Daily", items:[["Request manpower","request.html","cal"],["Attendance","attendance.html","chk"],["WhatsApp","whatsapp.html","chat"]] },
+        { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"],["Reports","reports.html","doc"]] },
+        { grp:"Procurement", items:[["New PR","pr-new.html","cart"]] },
+        { grp:"More", items:[["Settings","settings.html","gear"],["How to use","help.html","help"]] },
+      ] : [
         { items: [["Home","home.html","home"],["To-do","todo.html","chk"]] },
         { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]] },
         { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"],["Reports","reports.html","doc"]] },
@@ -48,7 +56,7 @@
       var esc = window.esc || function (v) { return String(v == null ? "" : v); };
 
       var css =
-        "#vcms-rail{position:fixed;left:0;top:0;height:100vh;width:236px;background:#F1EFEA;border-right:1px solid #E7E5E1;display:flex;flex-direction:column;z-index:40;font-family:Arial,system-ui,sans-serif;}" +
+        "#vcms-rail{position:fixed;left:0;top:0;height:100vh;width:236px;background:#fff;border-right:1px solid #E5E7EB;display:flex;flex-direction:column;z-index:40;font-family:Arial,system-ui,sans-serif;}" +
         "#vcms-rail .rb{display:flex;align-items:center;gap:10px;padding:15px 15px 12px;}" +
         "#vcms-rail .rb .lg{width:36px;height:36px;border-radius:9px;background:#C00000;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;overflow:hidden;flex:none;}" +
         "#vcms-rail .rb .lg img{width:100%;height:100%;object-fit:contain;background:#fff;}" +
@@ -56,7 +64,7 @@
         "#vcms-rail .rn{flex:1;overflow:auto;padding:4px 10px 16px;}" +
         "#vcms-rail .grp{font-size:10.5px;font-weight:700;color:#9A968E;letter-spacing:.06em;text-transform:uppercase;padding:13px 8px 5px;}" +
         "#vcms-rail a{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px;color:#3A3D42;font-size:14px;text-decoration:none;margin:1px 0;transition:transform .14s,box-shadow .14s,background .14s;}" +
-        "#vcms-rail a:hover{background:#fff;transform:translateX(3px);box-shadow:0 4px 12px rgba(0,0,0,.08);}" +
+        "#vcms-rail a:hover{background:#F6F7F9;transform:translateX(3px);box-shadow:0 4px 12px rgba(0,0,0,.07);}" +
         "#vcms-rail a.on{background:#FDE8E8;color:#C00000;font-weight:700;}#vcms-rail a.on:hover{background:#FBDCDC;}" +
         "#vcms-rail a svg{width:19px;height:19px;flex:none;}" +
         "@media(min-width:900px){body.vcms-shelled{margin-left:236px;}}" +
@@ -65,7 +73,7 @@
       document.head.appendChild(st);
 
       var navHTML = NAV.map(function (sec) {
-        var items = sec.items.filter(function (it) { return ok(it[1]); });
+        var items = sec.items.filter(function (it) { return curated || ok(it[1]); });
         if (!items.length) return "";
         return (sec.grp ? '<div class="grp">' + sec.grp + "</div>" : "") +
           items.map(function (it) {
