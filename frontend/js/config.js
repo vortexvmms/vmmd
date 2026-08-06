@@ -67,6 +67,12 @@ window.vmmsSetTheme = function (t) {
   (document.head || document.documentElement).appendChild(s);
 })();
 
+// ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
+(function () {
+  var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
+  (document.head || document.documentElement).appendChild(sh);
+})();
+
 // ---- Role tiers (Rev 6) — shared by all pages ----
 window.VMMS_TIER = {
   full: ["admin", "general_manager", "operation_manager", "hr_assistant"],
