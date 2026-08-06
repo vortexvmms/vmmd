@@ -359,6 +359,9 @@
       ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background="";}));
       drop.addEventListener("drop", e=>{ [...(e.dataTransfer.files||[])].forEach(addPhotoFile); });
       window.addEventListener("paste", e=>{ [...(e.clipboardData.items||[])].forEach(x=>{ if(x.type&&x.type.startsWith("image/")) addPhotoFile(x.getAsFile()); }); });
+      // open a specific PR when linked from the dashboard log
+      const op=new URLSearchParams(location.search).get("open");
+      if(op) openPR(op);
     }
     // Per-site running number. Called only on a user-driven site change (not when loading an existing PR).
     async function onSiteUser(){ onSite(); if(!CURRENT_ID) await genNumber(); }

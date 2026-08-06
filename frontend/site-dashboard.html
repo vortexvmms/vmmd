@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Site Progress</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    body.db { background:#F3F4F6; }
+    .card { background:#fff; border:1px solid #E5E7EB; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    .kpi { padding:14px 16px; } .kpi .n { font-size:26px; font-weight:800; color:#111827; line-height:1.1; }
+    .kpi .l { font-size:11px; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.03em; margin-top:2px; }
+    .stile .hd { font-weight:800; color:#111827; font-size:14px; }
+    .stile .sub { color:#6B7280; font-size:12px; }
+    .badge { font-size:11px; font-weight:700; border-radius:999px; padding:3px 10px; }
+    .b-men{ background:#DCFCE7; color:#15803D;} .b-photo{ background:#DBEAFE; color:#1D4ED8;}
+    .feed-item { padding:9px 12px; border-top:1px solid #F1F1F1; }
+    .stale { color:#B91C1C; font-weight:700; }
+  </style>
+</head>
+<body class="db min-h-screen flex flex-col">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold">Site Progress</h1><p class="text-red-100 text-xs">Manpower &amp; activity across sites</p></div>
+      <select id="f-days" class="rounded-lg p-2 text-gray-800 text-sm" onchange="load()">
+        <option value="7">Last 7 days</option><option value="14" selected>Last 14 days</option><option value="30">Last 30 days</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
+    <div id="msg" class="text-center text-gray-500 mt-8">Loading…</div>
+    <div id="body" class="hidden">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card kpi"><div class="n" id="k-men">—</div><div class="l">Manpower on site</div></div>
+        <div class="card kpi"><div class="n" id="k-sites">—</div><div class="l">Active sites</div></div>
+        <div class="card kpi"><div class="n" id="k-dprs">—</div><div class="l">DPRs (period)</div></div>
+        <div class="card kpi"><div class="n" id="k-photos">—</div><div class="l">Latest-day photos</div></div>
+      </div>
+
+      <div class="card p-4 mt-3">
+        <p class="text-sm font-bold text-gray-800 mb-2">Daily manpower trend</p>
+        <canvas id="ch-men" height="90"></canvas>
+      </div>
+
+      <p class="text-sm font-bold text-gray-600 mt-4 mb-2">SITES</p>
+      <div id="sites" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+
+      <div class="card mt-4" style="overflow:hidden">
+        <p class="font-bold text-gray-800 text-sm p-3 border-b border-gray-100">Recent activity</p>
+        <div id="feed"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+    let DATA=null, CH=null;
+    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
+    function daysAgo(iso, today){ try{ return Math.round((new Date(today)-new Date(iso))/86400000); }catch(e){ return 0; } }
+
+    async function load(){
+      const days=document.getElementById("f-days").value;
+      document.getElementById("msg").classList.remove("hidden"); document.getElementById("msg").textContent="Loading…";
+      document.getElementById("body").classList.add("hidden");
+      const r=await vmmsApi("/api/v1/site-progress?days="+days);
+      if(!r.ok){ document.getElementById("msg").textContent="Could not load ("+r.status+")."; return; }
+      DATA=await r.json();
+      document.getElementById("msg").classList.add("hidden");
+      document.getElementById("body").classList.remove("hidden");
+      render();
+    }
+    function render(){
+      document.getElementById("k-men").textContent=DATA.manpower_latest;
+      document.getElementById("k-sites").textContent=DATA.active_sites;
+      document.getElementById("k-dprs").textContent=DATA.dprs;
+      document.getElementById("k-photos").textContent=(DATA.sites||[]).reduce((a,s)=>a+(s.photos||0),0);
+      // trend
+      if(CH) CH.destroy();
+      const t=DATA.trend||[];
+      CH=new Chart(document.getElementById("ch-men"),{type:"line",
+        data:{labels:t.map(x=>fmtDMY(x.date).slice(0,5)),datasets:[{data:t.map(x=>x.manpower),borderColor:"#16A34A",backgroundColor:"rgba(22,163,74,.12)",fill:true,tension:.3,pointRadius:2}]},
+        options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+      // site cards
+      document.getElementById("sites").innerHTML=(DATA.sites||[]).map(s=>{
+        const ago=daysAgo(s.latest_date, DATA.today);
+        const stale=ago>=2?`<span class="stale">· ${ago}d ago</span>`:(ago===1?"· yesterday":"· today");
+        return `<div class="card stile p-4">
+          <div class="flex items-start gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="hd">${esc(s.site_name)}</div>
+              <div class="sub">${esc(s.item_of_work||"—")}</div>
+            </div>
+            <div class="text-right"><span class="badge b-men">${s.manpower} men</span></div>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Latest: ${fmtDMY(s.latest_date)} ${stale} &nbsp;·&nbsp; ${s.photos} photos</p>
+          <p class="text-sm text-gray-700 mt-2" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(s.activity||"—")}</p>
+        </div>`;}).join("") || '<p class="text-gray-400 text-sm">No site reports in this period.</p>';
+      // feed
+      document.getElementById("feed").innerHTML=(DATA.feed||[]).map(f=>`
+        <div class="feed-item">
+          <div class="flex justify-between"><span class="font-bold text-sm text-gray-800">${esc(f.site_name)}</span><span class="text-xs text-gray-400">${fmtDMY(f.date)} · ${f.manpower} men</span></div>
+          <div class="text-xs text-gray-500">${esc(f.item_of_work||"")}</div>
+          <div class="text-sm text-gray-700 mt-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(f.activity||"—")}</div>
+        </div>`).join("") || '<p class="text-gray-400 text-sm p-4">No recent activity.</p>';
+    }
+    load();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — PR Dashboard</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    body.db { background:#F3F4F6; }
+    .card { background:#fff; border:1px solid #E5E7EB; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+    .kpi { padding:14px 16px; } .kpi .n { font-size:26px; font-weight:800; color:#111827; line-height:1.1; }
+    .kpi .l { font-size:11px; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.03em; margin-top:2px; }
+    .kpi .s { font-size:11px; color:#9CA3AF; margin-top:2px; }
+    table.log { width:100%; font-size:13px; border-collapse:collapse; }
+    table.log thead th { font-size:11px; text-transform:uppercase; color:#6B7280; background:#F9FAFB; padding:8px 10px; text-align:left; white-space:nowrap; }
+    table.log tbody td { padding:8px 10px; border-top:1px solid #F1F1F1; vertical-align:top; }
+    table.log tbody tr:hover { background:#FAFAFA; cursor:pointer; }
+    .chip { font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px; }
+    .c-asset{ background:#EDE9FE; color:#6D28D9;} .c-consumable{ background:#DBEAFE; color:#1D4ED8;} .c-rentals{ background:#FEF3C7; color:#B45309;}
+    .c-urgent{ background:#FEE2E2; color:#B91C1C;}
+  </style>
+</head>
+<body class="db min-h-screen flex flex-col">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
+    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
+      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold">PR Dashboard</h1><p class="text-red-100 text-xs">Procurement overview &amp; log</p></div>
+      <input id="f-month" type="month" class="rounded-lg p-2 text-gray-800 text-sm" onchange="load()">
+      <button onclick="document.getElementById('f-month').value='';load()" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">All</button>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 max-w-6xl mx-auto w-full pb-10">
+    <div id="msg" class="text-center text-gray-500 mt-8">Loading…</div>
+    <div id="body" class="hidden">
+      <!-- KPIs -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card kpi"><div class="n" id="k-value">—</div><div class="l">Total Value (SGD)</div><div class="s" id="k-value-s"></div></div>
+        <div class="card kpi"><div class="n" id="k-count">—</div><div class="l">Total PRs</div></div>
+        <div class="card kpi"><div class="n" id="k-urgent">—</div><div class="l">Urgent</div></div>
+        <div class="card kpi"><div class="n" id="k-sites">—</div><div class="l">Sites</div></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        <div class="card p-4"><p class="text-sm font-bold text-gray-800 mb-2">By category</p><canvas id="ch-cat" height="180"></canvas></div>
+        <div class="card p-4"><p class="text-sm font-bold text-gray-800 mb-2">Value by month (SGD)</p><canvas id="ch-month" height="180"></canvas></div>
+        <div class="card p-4"><p class="text-sm font-bold text-gray-800 mb-2">Top sites by value</p><canvas id="ch-site" height="180"></canvas></div>
+      </div>
+
+      <!-- PR Log -->
+      <div class="card mt-4" style="overflow:hidden">
+        <div class="flex items-center gap-2 p-3 border-b border-gray-100">
+          <p class="font-bold text-gray-800 text-sm flex-1">PR Log</p>
+          <input id="q" oninput="renderLog()" placeholder="Search PR no, site, description…" class="border border-gray-300 rounded-lg p-2 text-sm w-64 max-w-full">
+        </div>
+        <div style="overflow:auto">
+          <table class="log">
+            <thead><tr><th>Date</th><th>PR No</th><th>Site</th><th>Category</th><th>Requested By</th><th style="text-align:right">Value</th><th>Description</th></tr></thead>
+            <tbody id="log"></tbody>
+          </table>
+        </div>
+        <p id="logempty" class="hidden text-center text-gray-400 p-6 text-sm">No PRs for this filter.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    requireLogin();
+    let DATA=null, CH={};
+    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
+    function money(n){ return (Number(n)||0).toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function monLabel(m){ const [y,mm]=m.split("-"); return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(+mm)-1]+" "+y.slice(2); }
+
+    async function load(){
+      const month=document.getElementById("f-month").value;
+      document.getElementById("msg").classList.remove("hidden"); document.getElementById("msg").textContent="Loading…";
+      document.getElementById("body").classList.add("hidden");
+      const r=await vmmsApi("/api/v1/pr/dashboard"+(month?("?month="+month):""));
+      if(!r.ok){ document.getElementById("msg").textContent="Could not load ("+r.status+")."; return; }
+      DATA=await r.json();
+      document.getElementById("msg").classList.add("hidden");
+      document.getElementById("body").classList.remove("hidden");
+      render();
+    }
+    function render(){
+      document.getElementById("k-value").textContent="$"+money(DATA.total_value);
+      document.getElementById("k-value-s").textContent = DATA.total_value?("across "+DATA.total_count+" PRs"):"";
+      document.getElementById("k-count").textContent=DATA.total_count;
+      document.getElementById("k-urgent").textContent=DATA.urgent;
+      document.getElementById("k-sites").textContent=DATA.by_site.length;
+      drawCharts(); renderLog();
+    }
+    function drawCharts(){
+      Object.values(CH).forEach(c=>c&&c.destroy()); CH={};
+      const cat=DATA.by_category||{};
+      CH.cat=new Chart(document.getElementById("ch-cat"),{type:"doughnut",
+        data:{labels:["Asset","Consumable","Rentals"],datasets:[{data:[cat.asset||0,cat.consumable||0,cat.rentals||0],backgroundColor:["#6D28D9","#1D4ED8","#B45309"]}]},
+        options:{plugins:{legend:{position:"bottom",labels:{font:{size:11}}}}}});
+      const bm=DATA.by_month||[];
+      CH.month=new Chart(document.getElementById("ch-month"),{type:"bar",
+        data:{labels:bm.map(x=>monLabel(x.month)),datasets:[{data:bm.map(x=>Math.round(x.value)),backgroundColor:"#C00000"}]},
+        options:{plugins:{legend:{display:false}},scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+      const bs=(DATA.by_site||[]).slice(0,8);
+      CH.site=new Chart(document.getElementById("ch-site"),{type:"bar",
+        data:{labels:bs.map(x=>x.site),datasets:[{data:bs.map(x=>Math.round(x.value)),backgroundColor:"#0E7490"}]},
+        options:{indexAxis:"y",plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+    }
+    function renderLog(){
+      const q=(document.getElementById("q").value||"").toLowerCase();
+      let rows=DATA.log||[];
+      if(q) rows=rows.filter(x=>((x.pr_no||"")+" "+(x.site_name||"")+" "+(x.summary||"")+" "+(x.project||"")+" "+(x.requested_by_name||"")).toLowerCase().includes(q));
+      document.getElementById("logempty").classList.toggle("hidden", rows.length>0);
+      document.getElementById("log").innerHTML=rows.map(x=>{
+        const cc=(x.category||"").toLowerCase();
+        const cat=x.category?`<span class="chip c-${cc}">${esc(x.category)}</span>`:"";
+        const urg=(x.urgency==="urgent")?` <span class="chip c-urgent">URGENT</span>`:"";
+        return `<tr onclick="location.href='pr-new.html?open=${x.id}'">
+          <td style="white-space:nowrap">${fmtDMY(x.pr_date)}</td>
+          <td style="font-weight:700;color:#C00000;white-space:nowrap">${esc(x.pr_no||"—")}</td>
+          <td>${esc(x.site_name||"—")}</td>
+          <td style="white-space:nowrap">${cat}${urg}</td>
+          <td style="color:#6B7280">${esc(x.requested_by_name||"—")}</td>
+          <td style="text-align:right;white-space:nowrap">${x.value?("$"+money(x.value)):"—"}</td>
+          <td style="color:#374151;max-width:340px">${esc(x.summary||"—")}</td>
+        </tr>`;}).join("");
+    }
+    load();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

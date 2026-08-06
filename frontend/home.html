@@ -150,8 +150,8 @@
     };
 
     const TIER_MENU = {
-      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
-      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      full: [["Workers", 4, "workers.html"], ["Sites", 5, "sites.html"], ["Daily Allocation", 6, "allocation.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["Site Dashboard", 12, "site-dashboard.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["PR Dashboard", 12, "pr-dashboard.html"], ["WhatsApp Messages", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Users & Access", 3, "users.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
+      manager: [["Request Manpower (next day)", 6, "request.html"], ["Attendance", 7, "attendance.html"], ["End-Time Verification", 7, "verify.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["Resource Summary", 12, "resource-summary.html"], ["Site Dashboard", 12, "site-dashboard.html"], ["PR Directory", 12, "pr-directory.html"], ["New PR Request", 12, "pr-new.html"], ["PR Dashboard", 12, "pr-dashboard.html"], ["WhatsApp (Site Update)", 9, "whatsapp.html"], ["Dashboard", 10, "dashboard.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       supervisor: [["Request Manpower (next day)", 6, "request.html"], ["My Site — Attendance", 7, "attendance.html"], ["Daily Progress Report", 12, "dpr.html"], ["DPR History", 12, "dprlist.html"], ["New PR Request", 12, "pr-new.html"], ["WhatsApp Update", 9, "whatsapp.html"], ["Dashboard (my sites)", 10, "dashboard.html"], ["Reports (my sites)", 11, "reports.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
       payroll: [["End-Time Verification", 7, "verify.html"], ["Reports", 11, "reports.html"], ["Monthly Timesheet", 11, "timesheet.html"], ["Monthly Man-Hours", 12, "manhours.html"], ["Settings", 12, "settings.html"], ["How to Use", 1, "help.html"]],
     };
@@ -169,6 +169,7 @@
       "My Site — Attendance":"Attendance", "Dashboard (my sites)":"Dashboard", "Reports (my sites)":"Reports",
       "Daily Progress Report":"Progress", "DPR History":"DPR History", "Resource Summary":"Resources",
       "PR Directory":"PR Directory", "New PR Request":"New PR",
+      "PR Dashboard":"PR Board", "Site Dashboard":"Site Board",
     };
 
     // Icon colour per page (rounded app-tile background)
@@ -179,6 +180,7 @@
       "timesheet.html":"#EA580C", "manhours.html":"#E11D48", "users.html":"#475569",
       "settings.html":"#6B7280", "help.html":"#0EA5E9", "dpr.html":"#0891B2", "dprlist.html":"#0E7490",
       "resource-summary.html":"#B45309", "pr-directory.html":"#6D28D9", "pr-new.html":"#BE185D",
+      "pr-dashboard.html":"#9D174D", "site-dashboard.html":"#047857",
     };
     // Inline SVG glyph per page (stroke = white, set on the <svg>)
     const ICONS = {
@@ -201,6 +203,8 @@
       "resource-summary.html":'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',
       "pr-directory.html":'<path d="M4 5.5h6l2 2h8v11H4z"/><path d="M8 12h8M8 15h5"/>',
       "pr-new.html":'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.4"/><circle cx="16" cy="19" r="1.4"/><path d="M6 6L5 3.5H3"/><path d="M18.5 4.5v4M16.5 6.5h4"/>',
+      "pr-dashboard.html":'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-4"/><path d="M3.5 20.5h17"/>',
+      "site-dashboard.html":'<path d="M12 3.5a8.5 8.5 0 108.5 8.5"/><path d="M12 12l4.5-3"/><path d="M12 12V4"/>',
       _default:'<circle cx="12" cy="12" r="8"/>',
     };
 
@@ -216,9 +220,9 @@
           ["WhatsApp Messages","whatsapp.html"], ["Users & Access","users.html"] ] },
       { title:"Site Progress", pages:[
           ["Daily Progress Report","dpr.html"], ["DPR History","dprlist.html"],
-          ["Resource Summary","resource-summary.html"] ] },
+          ["Resource Summary","resource-summary.html"], ["Site Dashboard","site-dashboard.html"] ] },
       { title:"Procurement Request", pages:[
-          ["PR Directory","pr-directory.html"], ["New PR Request","pr-new.html"] ] },
+          ["PR Directory","pr-directory.html"], ["New PR Request","pr-new.html"], ["PR Dashboard","pr-dashboard.html"] ] },
       { title:"Safety", soon:true, pages:[] },
       { title:"Equipments & Machineries", soon:true, pages:[] },
     ];
