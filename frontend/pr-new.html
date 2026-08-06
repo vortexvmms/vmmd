@@ -456,9 +456,14 @@
       if(CURRENT_ID) r=await vmmsApi("/api/v1/pr/"+CURRENT_ID,{method:"PATCH",body:JSON.stringify(d)});
       else r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Save failed"); return; }
-      toast(CURRENT_ID?"PR updated":"PR saved");
-      CURRENT_ID=null; document.getElementById("editbar").classList.add("hidden");
-      await loadRecent(); await genNumber();
+      const saved=await r.json().catch(()=>({}));
+      // keep THIS PR loaded (same number) so Print uses the saved number.
+      // The next number only comes up when you start a new PR (+ New).
+      if(saved && saved.id) CURRENT_ID=saved.id;
+      document.getElementById("editbar").classList.remove("hidden");
+      document.getElementById("prevref").textContent="· saved "+d.pr_no+" — Print now, or Save to update";
+      toast("PR saved — you can Print now");
+      await loadRecent();
     }
     async function saveRevision(){
       document.getElementById("f-prno").value=reviseNo(document.getElementById("f-prno").value);
@@ -467,9 +472,11 @@
       if(!d.items.length){ toast("Add at least one item"); return; }
       const r=await vmmsApi("/api/v1/pr",{method:"POST",body:JSON.stringify(d)});
       if(!r.ok){ const e=await r.json().catch(()=>({})); toast(e.detail||"Failed"); return; }
-      toast("Saved as revision "+d.pr_no);
-      document.getElementById("editbar").classList.add("hidden");
-      await loadRecent(); await genNumber();
+      const saved=await r.json().catch(()=>({}));
+      if(saved && saved.id) CURRENT_ID=saved.id;   // keep revision loaded so Print uses it
+      document.getElementById("prevref").textContent="· saved "+d.pr_no+" — Print now";
+      toast("Saved as revision "+d.pr_no+" — you can Print now");
+      await loadRecent();
     }
     async function deletePR(id, label){
       if(!confirm("Delete PR "+(label||"")+"?\nThis cannot be undone.")) return;
