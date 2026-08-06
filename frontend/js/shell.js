@@ -43,7 +43,13 @@
           {grp:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
           {grp:"More",items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]]} ];
         var allow = ALLOW[t];
-        return full.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return !allow || allow.has(it[1]); })}; }).filter(function(s){ return s.items.length; });
+        var out = full.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return !allow || allow.has(it[1]); })}; }).filter(function(s){ return s.items.length; });
+        // Managers (Site Manager / WSHC Lead) sometimes request manpower too.
+        if (t === "manager") {
+          var mp = out.filter(function(s){ return s.grp === "Manpower"; })[0];
+          if (mp && !mp.items.some(function(it){ return it[1] === "request.html"; })) mp.items.unshift(["Request manpower","request.html","cal"]);
+        }
+        return out;
       }
       var NAVITEMS = [];
       function railHTML(rl){
