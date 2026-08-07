@@ -37,6 +37,14 @@
     .toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;}
     .btn{border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;}
     .tbtn{padding:9px 13px !important;font-size:13px !important;}
+    #m-sides{display:flex;}
+    .sideslot{flex:1;text-align:center;}
+    .sideslot .sl{font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;}
+    .sideslot .sb{border:1px dashed #CBD5E1;border-radius:10px;height:104px;display:flex;align-items:center;justify-content:center;color:#6B7280;font-size:12.5px;cursor:pointer;overflow:hidden;background:#F8FAFC;padding:6px;}
+    .sideslot .sb img{width:100%;height:100%;object-fit:contain;}
+    .sideslot .rm{font-size:11px;color:#B91C1C;cursor:pointer;margin-top:4px;display:inline-block;}
+    .card .imgrow{position:relative;}
+    .backbtn{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;cursor:zoom-in;}
     .b-red{background:#C00000;color:#fff;} .b-dark{background:#111827;color:#fff;} .b-out{background:#fff;color:#C00000;border:1px solid #C00000;} .b-gray{background:#F3F4F6;color:#374151;}
     .grid{display:grid;grid-template-columns:1fr;gap:14px;}
     @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr);}}
@@ -120,55 +128,68 @@
     </div>
   </div>
 
-  <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
-  <input type="file" id="fileReplace" accept="image/*" capture="environment" style="display:none">
+  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none">
+  <input type="file" id="sideInput" accept="image/*" capture="environment" style="display:none">
 
   <div class="modal" id="modal">
     <div class="sheet">
       <h3 id="m-title">Add card</h3>
-      <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
-      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Drag / resize the box to crop freely to the card edges.</div>
-      <div id="m-warn" style="display:none;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:8px;padding:7px 10px;margin:0 0 8px">⚠ Photo looks blurry — consider retaking for clearer text.</div>
-      <div id="m-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
-        <button type="button" class="btn b-dark tbtn" id="btn-scan" onclick="autoScan()">⤢ Auto-scan</button>
-        <button type="button" class="btn b-gray tbtn" id="btn-ratio" onclick="setCardRatio()">Auto card ratio</button>
-        <button type="button" class="btn b-gray tbtn" id="btn-free" style="display:none" onclick="setFreeCrop()">Free crop</button>
-        <button type="button" class="btn b-gray tbtn" id="btn-redact" onclick="startRedact()">✎ Black out numbers</button>
-        <button type="button" class="btn b-red tbtn" id="btn-blackout" style="display:none" onclick="blackoutSelection()">Black out box</button>
-        <button type="button" class="btn b-gray tbtn" id="btn-undo" style="display:none" onclick="undoRedact()">Undo</button>
+
+      <div id="m-sides" style="display:none;gap:10px;margin-bottom:12px">
+        <div class="sideslot"><div class="sl">Front</div><div class="sb" id="sb-front" onclick="captureSide('front')">＋ Add front</div><span class="rm" id="rm-front" style="display:none" onclick="removeSide('front')">Remove</span></div>
+        <div class="sideslot"><div class="sl">Back <span style="color:#9CA3AF;font-weight:400">(optional)</span></div><div class="sb" id="sb-back" onclick="captureSide('back')">＋ Add back</div><span class="rm" id="rm-back" style="display:none" onclick="removeSide('back')">Remove</span></div>
       </div>
-      <div id="m-edittools" style="display:none;gap:8px;flex-wrap:wrap;margin:0 0 10px">
-        <button type="button" class="btn b-gray tbtn" onclick="editPhoto()">Re-crop / black out photo</button>
-        <button type="button" class="btn b-gray tbtn" onclick="pickReplace()">Upload new photo</button>
+
+      <div id="m-capture" style="display:none">
+        <div id="m-caphd" style="font-size:13px;font-weight:800;color:#111827;margin-bottom:6px">Front side</div>
+        <div id="m-imgwrap" style="max-height:300px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
+        <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Crop to the card edges, or tap Auto-scan / Auto card ratio.</div>
+        <div id="m-warn" style="display:none;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:8px;padding:7px 10px;margin:0 0 8px">⚠ Photo looks blurry — consider retaking for clearer text.</div>
+        <div id="m-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+          <button type="button" class="btn b-dark tbtn" id="btn-scan" onclick="autoScan()">⤢ Auto-scan</button>
+          <button type="button" class="btn b-gray tbtn" id="btn-ratio" onclick="setCardRatio()">Auto card ratio</button>
+          <button type="button" class="btn b-gray tbtn" id="btn-free" style="display:none" onclick="setFreeCrop()">Free crop</button>
+          <button type="button" class="btn b-gray tbtn" id="btn-redact" onclick="startRedact()">✎ Black out numbers</button>
+          <button type="button" class="btn b-red tbtn" id="btn-blackout" style="display:none" onclick="blackoutSelection()">Black out box</button>
+          <button type="button" class="btn b-gray tbtn" id="btn-undo" style="display:none" onclick="undoRedact()">Undo</button>
+        </div>
+        <div style="display:flex;gap:9px;margin:0 0 4px">
+          <button class="btn b-gray tbtn" style="flex:1" onclick="cancelSide()">Cancel</button>
+          <button class="btn b-red tbtn" style="flex:1" id="m-use" onclick="useThisSide()">Use this side</button>
+        </div>
       </div>
+
       <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
-      <div class="fld"><label>Type</label>
-        <select id="m-cat">
-          <option value="work_permit">Work Permit</option>
-          <option value="visit_pass">Visit Pass</option>
-          <option value="course" selected>Training / course card</option>
-          <option value="other">Other document</option>
-        </select>
+
+      <div id="m-form">
+        <div class="fld"><label>Type</label>
+          <select id="m-cat">
+            <option value="work_permit">Work Permit</option>
+            <option value="visit_pass">Visit Pass</option>
+            <option value="course" selected>Training / course card</option>
+            <option value="other">Other document</option>
+          </select>
+        </div>
+        <div class="fld"><label>Label / course name</label>
+          <input id="m-label" list="courselist" placeholder="e.g. Manage Work at Height">
+          <datalist id="courselist">
+            <option value="Manage Work at Height"><option value="Work at Height for Workers"><option value="Perform Work in Confined Space Operation">
+            <option value="WSH Management in Construction Industry"><option value="SWSHPP (WSH in Chemical/Process)"><option value="Supervise Work in Confined Space">
+            <option value="Apply Workplace Safety and Health in Construction Sites"><option value="Metal Scaffold Erector"><option value="First Aid / CPR+AED">
+          </datalist>
+        </div>
+        <div class="fld"><label>Training institute</label>
+          <input id="m-inst" list="instlist" placeholder="e.g. Wong Fong Academy">
+          <datalist id="instlist">
+            <option value="Eversafe Academy"><option value="Wong Fong Academy"><option value="WF Academy"><option value="NTUC LearningHub">
+            <option value="BCA Academy"><option value="Singapore Safety Academy"><option value="SISO"><option value="Kaplan"><option value="Avanta Global">
+          </datalist>
+        </div>
+        <div class="fld"><label>Certificate / student no.</label><input id="m-cert" placeholder="e.g. WPH-WSH-3080-1.1-00687"></div>
+        <div class="fld"><label>Issued date</label><input id="m-issued" type="date"></div>
+        <div class="fld"><label>Expiry date (optional)</label><input id="m-expiry" type="date"></div>
       </div>
-      <div class="fld"><label>Label / course name</label>
-        <input id="m-label" list="courselist" placeholder="e.g. Manage Work at Height">
-        <datalist id="courselist">
-          <option value="Manage Work at Height"><option value="Work at Height for Workers"><option value="Perform Work in Confined Space Operation">
-          <option value="WSH Management in Construction Industry"><option value="SWSHPP (WSH in Chemical/Process)"><option value="Supervise Work in Confined Space">
-          <option value="Apply Workplace Safety and Health in Construction Sites"><option value="Metal Scaffold Erector"><option value="First Aid / CPR+AED">
-        </datalist>
-      </div>
-      <div class="fld"><label>Training institute</label>
-        <input id="m-inst" list="instlist" placeholder="e.g. Wong Fong Academy">
-        <datalist id="instlist">
-          <option value="Eversafe Academy"><option value="Wong Fong Academy"><option value="WF Academy"><option value="NTUC LearningHub">
-          <option value="BCA Academy"><option value="Singapore Safety Academy"><option value="SISO"><option value="Kaplan"><option value="Avanta Global">
-        </datalist>
-      </div>
-      <div class="fld"><label>Certificate / student no.</label><input id="m-cert" placeholder="e.g. WPH-WSH-3080-1.1-00687"></div>
-      <div class="fld"><label>Issued date</label><input id="m-issued" type="date"></div>
-      <div class="fld"><label>Expiry date (optional)</label><input id="m-expiry" type="date"></div>
-      <div style="display:flex;gap:9px;margin-top:14px">
+      <div id="m-savebar" style="display:flex;gap:9px;margin-top:14px">
         <button class="btn b-gray" style="flex:1" onclick="closeModal()">Cancel</button>
         <button class="btn b-red" style="flex:1" id="m-save" onclick="saveCard()">Save card</button>
       </div>
@@ -221,20 +242,34 @@
     function undoRedact(){ const R=REDACT; if(R&&R.rects.length){ R.rects.pop(); loadRedactImage(); } }
     function redactedBlob(){ return new Promise(res=>{ rebuildWork().toBlob(b=>res(b),"image/jpeg",0.85); }); }
 
-    // ---- edit / replace an already-saved photo ----
-    function pickReplace(){ document.getElementById("fileReplace").click(); }
-    document.getElementById("fileReplace").addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f)return; startImageEdit(await compressImage(f)); });
-    async function editPhoto(){
-      const c=CARDS.find(x=>x.id===EDIT_ID); if(!c) return;
-      try{ const resp=await fetch(c.image_path,{mode:"cors"}); if(!resp.ok) throw 0; startImageEdit(await resp.blob()); }
-      catch(err){ toast("Can't load that image here — use ‘Upload new photo’."); }
+    // ---- front / back capture into slots ----
+    let SIDES={front:null,back:null}, CURSIDE=null;
+    const sideInput=document.getElementById("sideInput");
+    function showSidesView(){ document.getElementById("m-sides").style.display="flex"; document.getElementById("m-form").style.display="block"; document.getElementById("m-savebar").style.display="flex"; document.getElementById("m-capture").style.display="none"; }
+    function showCaptureView(lbl){ document.getElementById("m-sides").style.display="none"; document.getElementById("m-form").style.display="none"; document.getElementById("m-savebar").style.display="none"; document.getElementById("m-capture").style.display="block"; document.getElementById("m-caphd").textContent=lbl; }
+    function renderSides(){
+      ["front","back"].forEach(w=>{ const sb=document.getElementById("sb-"+w), rm=document.getElementById("rm-"+w); const s=SIDES[w];
+        if(s&&s.url){ sb.innerHTML='<img src="'+s.url+'">'; rm.style.display="inline-block"; }
+        else { sb.textContent=(w==="front"?"＋ Add front":"＋ Add back"); rm.style.display="none"; } });
     }
-    function startImageEdit(blob){
-      PENDING={blob,url:URL.createObjectURL(blob)}; NEWIMG=true; REDACT=null;
-      document.getElementById("m-edittools").style.display="none";
-      document.getElementById("m-crophint").textContent="Crop, then optionally black out numbers.";
+    function removeSide(w){ const s=SIDES[w]; if(s&&s.blob&&s.url)URL.revokeObjectURL(s.url); SIDES[w]=null; renderSides(); }
+    function captureSide(which){ CURSIDE=which; sideInput.value=""; sideInput.click(); }
+    sideInput.addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(f) onSideFile(await compressImage(f)); });
+    function startAddCard(preBlob){
+      EDIT_ID=null; SIDES={front:null,back:null};
+      document.getElementById("m-title").textContent="Add card";
+      document.getElementById("m-cat").value="course";
+      ["m-label","m-inst","m-cert","m-issued","m-expiry"].forEach(id=>document.getElementById(id).value="");
+      document.getElementById("m-ocr").style.display="none";
+      document.getElementById("modal").classList.add("show");
+      renderSides(); showSidesView();
+      if(preBlob){ CURSIDE="front"; onSideFile(preBlob); } else { captureSide("front"); }
+    }
+    function onSideFile(blob){
+      PENDING={blob,url:URL.createObjectURL(blob)}; REDACT=null;
+      showCaptureView(CURSIDE==="front"?"Front side":"Back side");
+      document.getElementById("m-crophint").textContent="Crop to the card edges, or tap Auto-scan / Auto card ratio.";
       document.getElementById("m-crophint").style.display="block";
-      document.getElementById("m-tools").style.display="flex";
       document.getElementById("btn-scan").style.display="inline-block";
       document.getElementById("btn-ratio").style.display="inline-block";
       document.getElementById("btn-free").style.display="none";
@@ -246,8 +281,17 @@
       const img=resetImgWrap();
       img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
-      checkBlur(blob);
+      checkBlur(blob); runOCR(blob);
     }
+    async function useThisSide(){
+      const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
+      if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null;
+      const old=SIDES[CURSIDE]; if(old&&old.blob&&old.url)URL.revokeObjectURL(old.url);
+      SIDES[CURSIDE]={blob,url:URL.createObjectURL(blob),changed:true};
+      if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;
+      CURSIDE=null; showSidesView(); renderSides();
+    }
+    function cancelSide(){ if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null; CURSIDE=null; showSidesView(); }
     function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
     const BLOCK=["operation_manager","general_manager"];
     let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
@@ -333,7 +377,10 @@
       const g=document.getElementById("cards");
       document.getElementById("cards-empty").style.display=CARDS.length?"none":"block";
       g.innerHTML=CARDS.map((c,i)=>`<div class="card">
-        <img src="${esc(c.image_path)}" onclick="openLightbox(this.src)" alt="">
+        <div class="imgrow">
+          <img src="${esc(c.image_path)}" onclick="openLightbox(this.src)" alt="">
+          ${c.back_image_path?`<span class="backbtn" onclick="openLightbox('${esc(c.back_image_path)}')">Back ↗</span>`:""}
+        </div>
         <div class="meta">
           <div class="cat">${CATLBL[c.category]||"Document"}</div>
           <div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div>
@@ -381,53 +428,18 @@
       return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
     }
 
-    // ---- add flow (with OCR autofill) ----
-    let QUEUE=[];
-    fileInput.addEventListener("change",e=>{ QUEUE=[...e.target.files]; fileInput.value=""; nextInQueue(); });
-    document.getElementById("drop").addEventListener("click",()=>fileInput.click());
+    // ---- add-card entry points ----
+    fileInput.addEventListener("change",async e=>{ const f=e.target.files[0]; fileInput.value=""; if(f) startAddCard(await compressImage(f)); });
+    document.getElementById("drop").addEventListener("click",()=>startAddCard());
     document.getElementById("drop").addEventListener("dragover",e=>{e.preventDefault();});
-    document.getElementById("drop").addEventListener("drop",e=>{e.preventDefault(); QUEUE=[...e.dataTransfer.files].filter(f=>f.type.startsWith("image/")); nextInQueue();});
-    document.addEventListener("paste",e=>{
+    document.getElementById("drop").addEventListener("drop",async e=>{e.preventDefault(); const f=[...e.dataTransfer.files].filter(x=>x.type.startsWith("image/"))[0]; if(f) startAddCard(await compressImage(f));});
+    document.addEventListener("paste",async e=>{
       if(!WORKER || document.getElementById("panel").style.display==="none") return;
       if(document.getElementById("modal").classList.contains("show")) return;
       const items=(e.clipboardData&&e.clipboardData.items)||[];
-      const imgs=[];
-      for(const it of items){ if(it.type&&it.type.indexOf("image")===0){const f=it.getAsFile(); if(f)imgs.push(f);} }
-      if(imgs.length){ e.preventDefault(); QUEUE=imgs.slice(); nextInQueue(); toast("Screenshot pasted"); }
+      let f=null; for(const it of items){ if(it.type&&it.type.indexOf("image")===0){ f=it.getAsFile(); break; } }
+      if(f){ e.preventDefault(); startAddCard(await compressImage(f)); toast("Screenshot pasted"); }
     });
-
-    async function nextInQueue(){
-      if(!QUEUE.length) return;
-      const file=QUEUE.shift();
-      const blob=await compressImage(file);
-      PENDING={blob,url:URL.createObjectURL(blob)};
-      EDIT_ID=null; REDACT=null; NEWIMG=false;
-      document.getElementById("m-title").textContent="Add card";
-      document.getElementById("m-crophint").textContent="Drag / resize the box to crop, or tap ‘Auto card ratio’.";
-      document.getElementById("m-crophint").style.display="block";
-      document.getElementById("m-edittools").style.display="none";
-      document.getElementById("m-tools").style.display="flex";
-      document.getElementById("btn-ratio").style.display="inline-block";
-      document.getElementById("btn-free").style.display="none";
-      document.getElementById("btn-scan").style.display="inline-block";
-      document.getElementById("btn-redact").style.display="inline-block";
-      document.getElementById("btn-blackout").style.display="none";
-      document.getElementById("btn-undo").style.display="none";
-      document.getElementById("m-cat").value="course";
-      document.getElementById("m-label").value="";
-      document.getElementById("m-inst").value="";
-      document.getElementById("m-cert").value="";
-      document.getElementById("m-issued").value="";
-      document.getElementById("m-expiry").value="";
-      document.getElementById("m-warn").style.display="none";
-      document.getElementById("modal").classList.add("show");
-      if(CROPPER){CROPPER.destroy();CROPPER=null;}
-      const img=resetImgWrap();
-      img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
-      img.src=PENDING.url;
-      checkBlur(blob);
-      runOCR(blob);
-    }
     async function enhanceForOCR(blob){
       try{ const bmp=await createImageBitmap(blob); const c=document.createElement("canvas"); c.width=bmp.width; c.height=bmp.height; const x=c.getContext("2d"); x.filter="grayscale(1) contrast(1.6) brightness(1.05)"; x.drawImage(bmp,0,0); return await new Promise(r=>c.toBlob(r,"image/jpeg",0.92)); }
       catch(e){ return blob; }
@@ -524,13 +536,10 @@
 
     function editCard(id){
       const c=CARDS.find(x=>x.id===id); if(!c)return;
-      EDIT_ID=id; PENDING=null; REDACT=null; NEWIMG=false;
+      EDIT_ID=id; PENDING=null; REDACT=null;
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
-      document.getElementById("m-crophint").style.display="none";
-      document.getElementById("m-tools").style.display="none";
-      document.getElementById("m-edittools").style.display="flex";
+      SIDES={ front:{url:c.image_path,changed:false}, back:(c.back_image_path?{url:c.back_image_path,changed:false}:null) };
       document.getElementById("m-title").textContent="Edit card";
-      const img=resetImgWrap(); img.onload=null; img.src=c.image_path;
       document.getElementById("m-ocr").style.display="none";
       document.getElementById("m-cat").value=c.category||"course";
       document.getElementById("m-label").value=c.label||"";
@@ -538,33 +547,29 @@
       document.getElementById("m-cert").value=c.cert_no||"";
       document.getElementById("m-issued").value=c.issued_date||"";
       document.getElementById("m-expiry").value=c.expiry_date||"";
-      document.getElementById("m-warn").style.display="none";
       document.getElementById("modal").classList.add("show");
+      renderSides(); showSidesView();
     }
-    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; NEWIMG=false; document.getElementById("m-edittools").style.display="none"; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
+    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; CURSIDE=null; ["front","back"].forEach(w=>{const s=SIDES[w]; if(s&&s.blob&&s.url)URL.revokeObjectURL(s.url);}); SIDES={front:null,back:null}; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
 
     async function saveCard(){
+      if(!SIDES.front){ toast("Add the front image first"); return; }
       const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
       const payload={category:document.getElementById("m-cat").value,label:document.getElementById("m-label").value.trim(),institute:document.getElementById("m-inst").value.trim(),cert_no:document.getElementById("m-cert").value.trim(),issued_date:document.getElementById("m-issued").value||null,expiry_date:document.getElementById("m-expiry").value||null};
+      const newPath=(s)=>`worker-cards/${WORKER.id}/${Date.now()}_${s}_${Math.random().toString(36).slice(2,7)}.jpg`;
       try{
+        if(SIDES.front.changed){ payload.image_path=await storeImage(SIDES.front.blob,newPath("f")); }
+        if(SIDES.back){ if(SIDES.back.changed){ payload.back_image_path=await storeImage(SIDES.back.blob,newPath("b")); } }
+        else { payload.back_image_path=""; }
         if(EDIT_ID){
-          if(NEWIMG){
-            const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
-            const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
-            payload.image_path=await storeImage(blob,path);
-          }
           const r=await vmmsApi("/api/v1/worker-cards/"+EDIT_ID,{method:"PATCH",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
         }else{
-          const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
-          const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
-          const url=await storeImage(blob,path);
-          payload.worker_id=WORKER.id; payload.image_path=url; payload.position=CARDS.length;
+          payload.worker_id=WORKER.id; payload.position=CARDS.length;
           const r=await vmmsApi("/api/v1/worker-cards",{method:"POST",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
         }
         closeModal(); await loadCards(); toast("Saved");
-        if(!EDIT_ID && QUEUE.length) setTimeout(nextInQueue,300);
       }catch(e){ toast("Could not save card"); }
       finally{ btn.disabled=false; btn.textContent="Save card"; }
     }
@@ -583,11 +588,13 @@
     function generateSheet(){
       if(!CARDS.length){toast("No cards to print");return;}
       const name=esc(WORKER.name), fin=esc(maskFin(WORKER.fin||""));
+      let imgs=[];
+      CARDS.forEach(c=>{ imgs.push(c.image_path); if(c.back_image_path) imgs.push(c.back_image_path); });
       let pages="";
-      for(let i=0;i<CARDS.length;i+=10){
-        const chunk=CARDS.slice(i,i+10);
+      for(let i=0;i<imgs.length;i+=10){
+        const chunk=imgs.slice(i,i+10);
         pages+=`<div class="page"><div class="hd"><span>${name}</span><span>${fin}</span></div><div class="grid">`+
-          chunk.map(c=>`<div class="cell"><img src="${esc(c.image_path)}"></div>`).join("")+`</div></div>`;
+          chunk.map(u=>`<div class="cell"><img src="${esc(u)}"></div>`).join("")+`</div></div>`;
       }
       const w=window.open("","_sic");
       if(!w){toast("Allow pop-ups, then try again");return;}
