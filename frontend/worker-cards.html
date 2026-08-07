@@ -125,7 +125,11 @@
     <div class="sheet">
       <h3 id="m-title">Add card</h3>
       <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
-      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 10px">Drag / resize the box to crop freely to the card edges.</div>
+      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Drag / resize the box to crop freely to the card edges.</div>
+      <div id="m-tools" style="display:flex;gap:8px;margin:0 0 10px">
+        <button type="button" class="btn b-gray" id="btn-redact" style="padding:7px 12px;font-size:12.5px" onclick="startRedact()">✎ Black out numbers</button>
+        <button type="button" class="btn b-gray" id="btn-undo" style="padding:7px 12px;font-size:12.5px;display:none" onclick="undoRedact()">Undo box</button>
+      </div>
       <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
       <div class="fld"><label>Type</label>
         <select id="m-cat">
@@ -160,7 +164,30 @@
 
   <script>
     requireLogin();
-    const ATM=85.6/54; let CROPPER=null;
+    const ATM=85.6/54; let CROPPER=null, REDACT=null;
+    function resetImgWrap(){ const wrap=document.getElementById("m-imgwrap"); wrap.innerHTML='<img id="m-img" alt="" style="display:block;max-width:100%">'; return document.getElementById("m-img"); }
+    function startRedact(){
+      if(!CROPPER) return;
+      const cc=CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"});
+      CROPPER.destroy(); CROPPER=null;
+      document.getElementById("m-crophint").textContent="Drag across the middle numbers to black them out. Add as many boxes as needed, then Save.";
+      document.getElementById("btn-redact").style.display="none";
+      document.getElementById("btn-undo").style.display="inline-block";
+      const wrap=document.getElementById("m-imgwrap"); wrap.innerHTML="";
+      const dispW=Math.min(420,cc.width), dispH=Math.round(cc.height*(dispW/cc.width));
+      const cv=document.createElement("canvas"); cv.width=dispW; cv.height=dispH;
+      cv.style.maxWidth="100%"; cv.style.touchAction="none"; cv.style.cursor="crosshair"; cv.style.borderRadius="8px";
+      wrap.appendChild(cv);
+      REDACT={full:cc, disp:cv, ctx:cv.getContext("2d"), rects:[], drawing:false, start:null};
+      redrawRedact();
+      cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);const p=pt(e,cv);REDACT.drawing=true;REDACT.start=p;});
+      cv.addEventListener("pointermove",e=>{if(!REDACT.drawing)return;const p=pt(e,cv);redrawRedact();REDACT.ctx.fillStyle="rgba(0,0,0,.9)";REDACT.ctx.fillRect(REDACT.start[0],REDACT.start[1],p[0]-REDACT.start[0],p[1]-REDACT.start[1]);});
+      cv.addEventListener("pointerup",e=>{if(!REDACT.drawing)return;REDACT.drawing=false;const p=pt(e,cv);const x=Math.min(REDACT.start[0],p[0]),y=Math.min(REDACT.start[1],p[1]),w=Math.abs(p[0]-REDACT.start[0]),h=Math.abs(p[1]-REDACT.start[1]);if(w>4&&h>4)REDACT.rects.push([x,y,w,h]);redrawRedact();});
+    }
+    function pt(e,cv){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)];}
+    function redrawRedact(){const R=REDACT;R.ctx.clearRect(0,0,R.disp.width,R.disp.height);R.ctx.drawImage(R.full,0,0,R.disp.width,R.disp.height);R.ctx.fillStyle="#000";R.rects.forEach(r=>R.ctx.fillRect(r[0],r[1],r[2],r[3]));}
+    function undoRedact(){if(REDACT&&REDACT.rects.length){REDACT.rects.pop();redrawRedact();}}
+    function redactedBlob(){return new Promise(res=>{const R=REDACT;const out=document.createElement("canvas");out.width=R.full.width;out.height=R.full.height;const o=out.getContext("2d");o.drawImage(R.full,0,0);const fx=R.full.width/R.disp.width,fy=R.full.height/R.disp.height;o.fillStyle="#000";R.rects.forEach(r=>o.fillRect(r[0]*fx,r[1]*fy,r[2]*fx,r[3]*fy));out.toBlob(b=>res(b),"image/jpeg",0.85);});}
     function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
     const BLOCK=["operation_manager","general_manager"];
     let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
@@ -168,6 +195,8 @@
 
     function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",2600);}
     function fmt(iso){if(!iso)return "";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;}
+    // PDPA: show only first char + last 4 of the FIN, mask the middle.
+    function maskFin(f){f=(f||"").trim();if(f.length<=5)return f;return f[0]+"•".repeat(f.length-5)+f.slice(-4);}
 
     let ALLW=[], COUNTS={};
     async function boot(){
@@ -194,7 +223,7 @@
       const rows=ALLW.filter(w=>!q||w.name.toLowerCase().includes(q)||(w.worker_code||"").toLowerCase().includes(q));
       const el=document.getElementById("wlist");
       el.innerHTML=rows.length?rows.map(w=>{const n=COUNTS[w.id]||0;const up=n>0;
-        return `<div class="wrow" onclick='openWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'><div><div class="nm">${esc(w.name)}</div><div class="cd">${esc(w.worker_code||"")}${w.fin?" · "+esc(w.fin):""}</div></div><span class="st ${up?'st-up':'st-pend'}">${up?("Updated · "+n+" card"+(n>1?"s":"")):"Pending"}</span></div>`;
+        return `<div class="wrow" onclick='openWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'><div><div class="nm">${esc(w.name)}</div><div class="cd">${esc(w.worker_code||"")}${w.fin?" · "+esc(maskFin(w.fin)):""}</div></div><span class="st ${up?'st-up':'st-pend'}">${up?("Updated · "+n+" card"+(n>1?"s":"")):"Pending"}</span></div>`;
       }).join(""):'<p class="empty">No workers match.</p>';
     }
     function openWorker(w){
@@ -203,8 +232,9 @@
       document.getElementById("panel").style.display="block";
       document.getElementById("wname").textContent=w.name;
       document.getElementById("wcode").textContent="Worker ID: "+w.worker_code;
-      const fin=document.getElementById("wfin"); fin.value=w.fin||"";
-      if(isFull(ME.role)){ fin.disabled=false; document.getElementById("finsave").style.display="inline-block"; }
+      const fin=document.getElementById("wfin");
+      if(isFull(ME.role)){ fin.value=w.fin||""; fin.disabled=false; document.getElementById("finsave").style.display="inline-block"; }
+      else { fin.value=maskFin(w.fin||""); fin.disabled=true; document.getElementById("finsave").style.display="none"; }
       showTab("cards"); loadCards(); window.scrollTo(0,0);
     }
     function backToList(){
@@ -310,16 +340,20 @@
       const file=QUEUE.shift();
       const blob=await compressImage(file);
       PENDING={blob,url:URL.createObjectURL(blob)};
-      EDIT_ID=null;
+      EDIT_ID=null; REDACT=null;
       document.getElementById("m-title").textContent="Add card";
+      document.getElementById("m-crophint").textContent="Drag / resize the box to crop freely to the card edges.";
       document.getElementById("m-crophint").style.display="block";
+      document.getElementById("m-tools").style.display="flex";
+      document.getElementById("btn-redact").style.display="inline-block";
+      document.getElementById("btn-undo").style.display="none";
       document.getElementById("m-cat").value="course";
       document.getElementById("m-label").value="";
       document.getElementById("m-issued").value="";
       document.getElementById("m-expiry").value="";
       document.getElementById("modal").classList.add("show");
-      const img=document.getElementById("m-img");
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
+      const img=resetImgWrap();
       img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
       runOCR(blob);
@@ -353,11 +387,12 @@
 
     function editCard(id){
       const c=CARDS.find(x=>x.id===id); if(!c)return;
-      EDIT_ID=id; PENDING=null;
+      EDIT_ID=id; PENDING=null; REDACT=null;
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
       document.getElementById("m-crophint").style.display="none";
+      document.getElementById("m-tools").style.display="none";
       document.getElementById("m-title").textContent="Edit card";
-      const img=document.getElementById("m-img"); img.onload=null; img.src=c.image_path;
+      const img=resetImgWrap(); img.onload=null; img.src=c.image_path;
       document.getElementById("m-ocr").style.display="none";
       document.getElementById("m-cat").value=c.category||"course";
       document.getElementById("m-label").value=c.label||"";
@@ -365,7 +400,7 @@
       document.getElementById("m-expiry").value=c.expiry_date||"";
       document.getElementById("modal").classList.add("show");
     }
-    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} document.getElementById("m-img").onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
+    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} REDACT=null; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
 
     async function saveCard(){
       const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
@@ -375,8 +410,10 @@
           const r=await vmmsApi("/api/v1/worker-cards/"+EDIT_ID,{method:"PATCH",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
         }else{
-          let blob=PENDING.blob;
-          if(CROPPER){ blob=await new Promise(res=>CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"}).toBlob(res,"image/jpeg",0.85)); }
+          let blob;
+          if(REDACT){ blob=await redactedBlob(); }
+          else if(CROPPER){ blob=await new Promise(res=>CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"}).toBlob(res,"image/jpeg",0.85)); }
+          else { blob=PENDING.blob; }
           const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
           const url=await storeImage(blob,path);
           payload.worker_id=WORKER.id; payload.image_path=url; payload.position=CARDS.length;
@@ -402,7 +439,7 @@
     // ---- SIC sheet (browser Print / PDF) ----
     function generateSheet(){
       if(!CARDS.length){toast("No cards to print");return;}
-      const name=esc(WORKER.name), fin=esc(WORKER.fin||"");
+      const name=esc(WORKER.name), fin=esc(maskFin(WORKER.fin||""));
       let pages="";
       for(let i=0;i<CARDS.length;i+=10){
         const chunk=CARDS.slice(i,i+10);

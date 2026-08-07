@@ -93,6 +93,7 @@
     function daysTo(d){return Math.round((new Date(d)-new Date())/86400000);}
     function fmt(iso){if(!iso)return "";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;}
     function norm(s){return (s||"").trim();}
+    function maskFin(f){f=(f||"").trim();if(f.length<=5)return f;return f[0]+"•".repeat(f.length-5)+f.slice(-4);}
 
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
@@ -170,7 +171,7 @@
           const clk=card?`onclick="openLightbox('${esc(card.image_path)}')"`:"";
           return `<td><span class="cell c-${s}" title="${esc(title)}" ${clk}>${SYM[s]}</span></td>`;
         }).join("");
-        return `<tr><td class="wname">${esc(w.name)}<small>${esc(w.worker_code||"")}${w.fin?" · "+esc(w.fin):""}</small></td>${cells}</tr>`;
+        return `<tr><td class="wname">${esc(w.name)}<small>${esc(w.worker_code||"")}${w.fin?" · "+esc(maskFin(w.fin)):""}</small></td>${cells}</tr>`;
       }).join("")+`</tbody>`;
       document.getElementById("tbl").innerHTML=head+body;
     }
@@ -180,7 +181,7 @@
       const head=["Worker","ID","FIN"].concat(cols.map(c=>c.name));
       const lines=[head];
       WORKERS.forEach(w=>{
-        const row=[w.name,w.worker_code||"",w.fin||""];
+        const row=[w.name,w.worker_code||"",maskFin(w.fin||"")];
         cols.forEach(c=>{const card=cardFor(w.id,c);const s=statusOf(card);
           row.push(s==="miss"?"":(card&&card.expiry_date?("valid to "+fmt(card.expiry_date)):"valid"));});
         lines.push(row);
