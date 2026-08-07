@@ -36,6 +36,7 @@
     .tab.on{background:#C00000;color:#fff;border-color:#C00000;}
     .toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;}
     .btn{border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;}
+    .tbtn{padding:9px 13px !important;font-size:13px !important;}
     .b-red{background:#C00000;color:#fff;} .b-dark{background:#111827;color:#fff;} .b-out{background:#fff;color:#C00000;border:1px solid #C00000;} .b-gray{background:#F3F4F6;color:#374151;}
     .grid{display:grid;grid-template-columns:1fr;gap:14px;}
     @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr);}}
@@ -120,15 +121,23 @@
   </div>
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
+  <input type="file" id="fileReplace" accept="image/*" capture="environment" style="display:none">
 
   <div class="modal" id="modal">
     <div class="sheet">
       <h3 id="m-title">Add card</h3>
       <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
       <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Drag / resize the box to crop freely to the card edges.</div>
-      <div id="m-tools" style="display:flex;gap:8px;margin:0 0 10px">
-        <button type="button" class="btn b-gray" id="btn-redact" style="padding:7px 12px;font-size:12.5px" onclick="startRedact()">✎ Black out numbers</button>
-        <button type="button" class="btn b-gray" id="btn-undo" style="padding:7px 12px;font-size:12.5px;display:none" onclick="undoRedact()">Undo box</button>
+      <div id="m-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+        <button type="button" class="btn b-gray tbtn" id="btn-ratio" onclick="setCardRatio()">Auto card ratio</button>
+        <button type="button" class="btn b-gray tbtn" id="btn-free" style="display:none" onclick="setFreeCrop()">Free crop</button>
+        <button type="button" class="btn b-gray tbtn" id="btn-redact" onclick="startRedact()">✎ Black out numbers</button>
+        <button type="button" class="btn b-red tbtn" id="btn-blackout" style="display:none" onclick="blackoutSelection()">Black out box</button>
+        <button type="button" class="btn b-gray tbtn" id="btn-undo" style="display:none" onclick="undoRedact()">Undo</button>
+      </div>
+      <div id="m-edittools" style="display:none;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+        <button type="button" class="btn b-gray tbtn" onclick="editPhoto()">Re-crop / black out photo</button>
+        <button type="button" class="btn b-gray tbtn" onclick="pickReplace()">Upload new photo</button>
       </div>
       <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
       <div class="fld"><label>Type</label>
@@ -164,30 +173,67 @@
 
   <script>
     requireLogin();
-    const ATM=85.6/54; let CROPPER=null, REDACT=null;
+    const ATM=85.6/54; let CROPPER=null, REDACT=null, NEWIMG=false;
     function resetImgWrap(){ const wrap=document.getElementById("m-imgwrap"); wrap.innerHTML='<img id="m-img" alt="" style="display:block;max-width:100%">'; return document.getElementById("m-img"); }
+    function croppedBlob(){ return new Promise(res=>CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"}).toBlob(res,"image/jpeg",0.85)); }
+    function setCardRatio(){ if(!CROPPER)return; CROPPER.setAspectRatio(ATM); document.getElementById("btn-ratio").style.display="none"; document.getElementById("btn-free").style.display="inline-block"; }
+    function setFreeCrop(){ if(!CROPPER)return; CROPPER.setAspectRatio(NaN); document.getElementById("btn-free").style.display="none"; document.getElementById("btn-ratio").style.display="inline-block"; }
+
+    // ---- black-out: use a draggable/resizable box (easy on mobile) ----
     function startRedact(){
       if(!CROPPER) return;
       const cc=CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"});
       CROPPER.destroy(); CROPPER=null;
-      document.getElementById("m-crophint").textContent="Drag across the middle numbers to black them out. Add as many boxes as needed, then Save.";
+      REDACT={orig:cc, rects:[], cropper:null};
+      document.getElementById("m-crophint").textContent="Move / resize the box over the numbers, tap ‘Black out box’. Repeat as needed, then Save.";
+      document.getElementById("btn-ratio").style.display="none";
+      document.getElementById("btn-free").style.display="none";
       document.getElementById("btn-redact").style.display="none";
+      document.getElementById("btn-blackout").style.display="inline-block";
       document.getElementById("btn-undo").style.display="inline-block";
-      const wrap=document.getElementById("m-imgwrap"); wrap.innerHTML="";
-      const dispW=Math.min(420,cc.width), dispH=Math.round(cc.height*(dispW/cc.width));
-      const cv=document.createElement("canvas"); cv.width=dispW; cv.height=dispH;
-      cv.style.maxWidth="100%"; cv.style.touchAction="none"; cv.style.cursor="crosshair"; cv.style.borderRadius="8px";
-      wrap.appendChild(cv);
-      REDACT={full:cc, disp:cv, ctx:cv.getContext("2d"), rects:[], drawing:false, start:null};
-      redrawRedact();
-      cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);const p=pt(e,cv);REDACT.drawing=true;REDACT.start=p;});
-      cv.addEventListener("pointermove",e=>{if(!REDACT.drawing)return;const p=pt(e,cv);redrawRedact();REDACT.ctx.fillStyle="rgba(0,0,0,.9)";REDACT.ctx.fillRect(REDACT.start[0],REDACT.start[1],p[0]-REDACT.start[0],p[1]-REDACT.start[1]);});
-      cv.addEventListener("pointerup",e=>{if(!REDACT.drawing)return;REDACT.drawing=false;const p=pt(e,cv);const x=Math.min(REDACT.start[0],p[0]),y=Math.min(REDACT.start[1],p[1]),w=Math.abs(p[0]-REDACT.start[0]),h=Math.abs(p[1]-REDACT.start[1]);if(w>4&&h>4)REDACT.rects.push([x,y,w,h]);redrawRedact();});
+      loadRedactImage();
     }
-    function pt(e,cv){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*(cv.width/r.width),(e.clientY-r.top)*(cv.height/r.height)];}
-    function redrawRedact(){const R=REDACT;R.ctx.clearRect(0,0,R.disp.width,R.disp.height);R.ctx.drawImage(R.full,0,0,R.disp.width,R.disp.height);R.ctx.fillStyle="#000";R.rects.forEach(r=>R.ctx.fillRect(r[0],r[1],r[2],r[3]));}
-    function undoRedact(){if(REDACT&&REDACT.rects.length){REDACT.rects.pop();redrawRedact();}}
-    function redactedBlob(){return new Promise(res=>{const R=REDACT;const out=document.createElement("canvas");out.width=R.full.width;out.height=R.full.height;const o=out.getContext("2d");o.drawImage(R.full,0,0);const fx=R.full.width/R.disp.width,fy=R.full.height/R.disp.height;o.fillStyle="#000";R.rects.forEach(r=>o.fillRect(r[0]*fx,r[1]*fy,r[2]*fx,r[3]*fy));out.toBlob(b=>res(b),"image/jpeg",0.85);});}
+    function rebuildWork(){ const R=REDACT; const c=document.createElement("canvas"); c.width=R.orig.width; c.height=R.orig.height; const x=c.getContext("2d"); x.drawImage(R.orig,0,0); x.fillStyle="#000"; R.rects.forEach(r=>x.fillRect(r[0],r[1],r[2],r[3])); return c; }
+    function loadRedactImage(){
+      const R=REDACT; const url=rebuildWork().toDataURL("image/jpeg",0.9);
+      const img=resetImgWrap();
+      img.onload=()=>{ if(R.cropper){R.cropper.destroy();} R.cropper=new Cropper(img,{viewMode:1,autoCropArea:0.25,aspectRatio:NaN,background:false,movable:false,zoomable:false,rotatable:false}); };
+      img.src=url;
+    }
+    function blackoutSelection(){
+      const R=REDACT; if(!R||!R.cropper) return;
+      const d=R.cropper.getData(true);
+      const x=Math.max(0,Math.round(d.x)), y=Math.max(0,Math.round(d.y)), w=Math.round(d.width), h=Math.round(d.height);
+      if(w>2&&h>2){ R.rects.push([x,y,w,h]); }
+      loadRedactImage();
+    }
+    function undoRedact(){ const R=REDACT; if(R&&R.rects.length){ R.rects.pop(); loadRedactImage(); } }
+    function redactedBlob(){ return new Promise(res=>{ rebuildWork().toBlob(b=>res(b),"image/jpeg",0.85); }); }
+
+    // ---- edit / replace an already-saved photo ----
+    function pickReplace(){ document.getElementById("fileReplace").click(); }
+    document.getElementById("fileReplace").addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f)return; startImageEdit(await compressImage(f)); });
+    async function editPhoto(){
+      const c=CARDS.find(x=>x.id===EDIT_ID); if(!c) return;
+      try{ const resp=await fetch(c.image_path,{mode:"cors"}); if(!resp.ok) throw 0; startImageEdit(await resp.blob()); }
+      catch(err){ toast("Can't load that image here — use ‘Upload new photo’."); }
+    }
+    function startImageEdit(blob){
+      PENDING={blob,url:URL.createObjectURL(blob)}; NEWIMG=true; REDACT=null;
+      document.getElementById("m-edittools").style.display="none";
+      document.getElementById("m-crophint").textContent="Crop, then optionally black out numbers.";
+      document.getElementById("m-crophint").style.display="block";
+      document.getElementById("m-tools").style.display="flex";
+      document.getElementById("btn-ratio").style.display="inline-block";
+      document.getElementById("btn-free").style.display="none";
+      document.getElementById("btn-redact").style.display="inline-block";
+      document.getElementById("btn-blackout").style.display="none";
+      document.getElementById("btn-undo").style.display="none";
+      if(CROPPER){CROPPER.destroy();CROPPER=null;}
+      const img=resetImgWrap();
+      img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
+      img.src=PENDING.url;
+    }
     function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
     const BLOCK=["operation_manager","general_manager"];
     let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
@@ -340,12 +386,16 @@
       const file=QUEUE.shift();
       const blob=await compressImage(file);
       PENDING={blob,url:URL.createObjectURL(blob)};
-      EDIT_ID=null; REDACT=null;
+      EDIT_ID=null; REDACT=null; NEWIMG=false;
       document.getElementById("m-title").textContent="Add card";
-      document.getElementById("m-crophint").textContent="Drag / resize the box to crop freely to the card edges.";
+      document.getElementById("m-crophint").textContent="Drag / resize the box to crop, or tap ‘Auto card ratio’.";
       document.getElementById("m-crophint").style.display="block";
+      document.getElementById("m-edittools").style.display="none";
       document.getElementById("m-tools").style.display="flex";
+      document.getElementById("btn-ratio").style.display="inline-block";
+      document.getElementById("btn-free").style.display="none";
       document.getElementById("btn-redact").style.display="inline-block";
+      document.getElementById("btn-blackout").style.display="none";
       document.getElementById("btn-undo").style.display="none";
       document.getElementById("m-cat").value="course";
       document.getElementById("m-label").value="";
@@ -387,10 +437,11 @@
 
     function editCard(id){
       const c=CARDS.find(x=>x.id===id); if(!c)return;
-      EDIT_ID=id; PENDING=null; REDACT=null;
+      EDIT_ID=id; PENDING=null; REDACT=null; NEWIMG=false;
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
       document.getElementById("m-crophint").style.display="none";
       document.getElementById("m-tools").style.display="none";
+      document.getElementById("m-edittools").style.display="flex";
       document.getElementById("m-title").textContent="Edit card";
       const img=resetImgWrap(); img.onload=null; img.src=c.image_path;
       document.getElementById("m-ocr").style.display="none";
@@ -400,20 +451,22 @@
       document.getElementById("m-expiry").value=c.expiry_date||"";
       document.getElementById("modal").classList.add("show");
     }
-    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} REDACT=null; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
+    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; NEWIMG=false; document.getElementById("m-edittools").style.display="none"; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
 
     async function saveCard(){
       const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
       const payload={category:document.getElementById("m-cat").value,label:document.getElementById("m-label").value.trim(),issued_date:document.getElementById("m-issued").value||null,expiry_date:document.getElementById("m-expiry").value||null};
       try{
         if(EDIT_ID){
+          if(NEWIMG){
+            const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
+            const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
+            payload.image_path=await storeImage(blob,path);
+          }
           const r=await vmmsApi("/api/v1/worker-cards/"+EDIT_ID,{method:"PATCH",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
         }else{
-          let blob;
-          if(REDACT){ blob=await redactedBlob(); }
-          else if(CROPPER){ blob=await new Promise(res=>CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"}).toBlob(res,"image/jpeg",0.85)); }
-          else { blob=PENDING.blob; }
+          const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
           const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
           const url=await storeImage(blob,path);
           payload.worker_id=WORKER.id; payload.image_path=url; payload.position=CARDS.length;
