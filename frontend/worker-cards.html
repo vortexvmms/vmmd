@@ -8,6 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};</script>
@@ -31,7 +33,7 @@
     .grid{display:grid;grid-template-columns:1fr;gap:14px;}
     @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr);}}
     .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;}
-    .card img{width:100%;height:220px;object-fit:contain;background:#F8FAFC;display:block;}
+    .card img{width:100%;aspect-ratio:1.586/1;object-fit:contain;background:#F8FAFC;display:block;cursor:zoom-in;}
     .card .meta{padding:11px 13px;}
     .card .cat{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#9CA3AF;}
     .card .lbl{font-size:15px;font-weight:700;color:#111827;margin-top:2px;}
@@ -111,7 +113,8 @@
   <div class="modal" id="modal">
     <div class="sheet">
       <h3 id="m-title">Add card</h3>
-      <img id="m-img" alt="">
+      <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
+      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 10px">Drag / resize the box to crop to the card edges (ATM-card size).</div>
       <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
       <div class="fld"><label>Type</label>
         <select id="m-cat">
@@ -138,10 +141,16 @@
     </div>
   </div>
 
+  <div id="lightbox" onclick="this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:90;align-items:center;justify-content:center;padding:20px;cursor:zoom-out">
+    <img id="lb-img" style="max-width:96%;max-height:96%;object-fit:contain;border-radius:8px">
+  </div>
+
   <div id="toast"></div>
 
   <script>
     requireLogin();
+    const ATM=85.6/54; let CROPPER=null;
+    function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
     const BLOCK=["operation_manager","general_manager"];
     let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
     const fileInput=document.getElementById("fileInput");
@@ -215,7 +224,7 @@
       const g=document.getElementById("cards");
       document.getElementById("cards-empty").style.display=CARDS.length?"none":"block";
       g.innerHTML=CARDS.map((c,i)=>`<div class="card">
-        <img src="${esc(c.image_path)}" alt="">
+        <img src="${esc(c.image_path)}" onclick="openLightbox(this.src)" alt="">
         <div class="meta">
           <div class="cat">${CATLBL[c.category]||"Document"}</div>
           <div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div>
@@ -276,12 +285,16 @@
       PENDING={blob,url:URL.createObjectURL(blob)};
       EDIT_ID=null;
       document.getElementById("m-title").textContent="Add card";
-      document.getElementById("m-img").src=PENDING.url;
+      document.getElementById("m-crophint").style.display="block";
       document.getElementById("m-cat").value="course";
       document.getElementById("m-label").value="";
       document.getElementById("m-issued").value="";
       document.getElementById("m-expiry").value="";
       document.getElementById("modal").classList.add("show");
+      const img=document.getElementById("m-img");
+      if(CROPPER){CROPPER.destroy();CROPPER=null;}
+      img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:ATM,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
+      img.src=PENDING.url;
       runOCR(blob);
     }
     function guessLabel(t){
@@ -314,8 +327,10 @@
     function editCard(id){
       const c=CARDS.find(x=>x.id===id); if(!c)return;
       EDIT_ID=id; PENDING=null;
+      if(CROPPER){CROPPER.destroy();CROPPER=null;}
+      document.getElementById("m-crophint").style.display="none";
       document.getElementById("m-title").textContent="Edit card";
-      document.getElementById("m-img").src=c.image_path;
+      const img=document.getElementById("m-img"); img.onload=null; img.src=c.image_path;
       document.getElementById("m-ocr").style.display="none";
       document.getElementById("m-cat").value=c.category||"course";
       document.getElementById("m-label").value=c.label||"";
@@ -323,7 +338,7 @@
       document.getElementById("m-expiry").value=c.expiry_date||"";
       document.getElementById("modal").classList.add("show");
     }
-    function closeModal(){document.getElementById("modal").classList.remove("show"); if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
+    function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} document.getElementById("m-img").onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
 
     async function saveCard(){
       const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
@@ -333,8 +348,10 @@
           const r=await vmmsApi("/api/v1/worker-cards/"+EDIT_ID,{method:"PATCH",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
         }else{
+          let blob=PENDING.blob;
+          if(CROPPER){ blob=await new Promise(res=>CROPPER.getCroppedCanvas({maxWidth:1600,maxHeight:1400,imageSmoothingQuality:"high"}).toBlob(res,"image/jpeg",0.85)); }
           const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
-          const url=await storeImage(PENDING.blob,path);
+          const url=await storeImage(blob,path);
           payload.worker_id=WORKER.id; payload.image_path=url; payload.position=CARDS.length;
           const r=await vmmsApi("/api/v1/worker-cards",{method:"POST",body:JSON.stringify(payload)});
           if(!r.ok)throw new Error();
@@ -359,20 +376,26 @@
     function generateSheet(){
       if(!CARDS.length){toast("No cards to print");return;}
       const name=esc(WORKER.name), fin=esc(WORKER.fin||"");
-      const cells=CARDS.map(c=>`<div class="cell"><img src="${esc(c.image_path)}"></div>`).join("");
+      let pages="";
+      for(let i=0;i<CARDS.length;i+=10){
+        const chunk=CARDS.slice(i,i+10);
+        pages+=`<div class="page"><div class="hd"><span>${name}</span><span>${fin}</span></div><div class="grid">`+
+          chunk.map(c=>`<div class="cell"><img src="${esc(c.image_path)}"></div>`).join("")+`</div></div>`;
+      }
       const w=window.open("","_sic");
       if(!w){toast("Allow pop-ups, then try again");return;}
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${name}${fin?" ["+fin+"]":""}</title>
         <style>
-          @page{size:A4;margin:12mm;}
+          @page{size:A4 portrait;margin:10mm;}
           body{font-family:Arial,sans-serif;margin:0;color:#111;}
-          .hd{display:flex;justify-content:space-between;align-items:baseline;font-weight:bold;font-size:15px;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:12px;}
-          .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-          .cell{border:1px solid #ddd;border-radius:6px;padding:6px;display:flex;align-items:center;justify-content:center;min-height:190px;}
-          .cell img{max-width:100%;max-height:230px;object-fit:contain;}
+          .page{page-break-after:always;}
+          .page:last-child{page-break-after:auto;}
+          .hd{display:flex;justify-content:space-between;align-items:baseline;font-weight:bold;font-size:14px;border-bottom:2px solid #111;padding-bottom:5px;margin-bottom:8px;}
+          .grid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:8px;}
+          .cell{border:1px solid #ccc;border-radius:6px;aspect-ratio:1.586/1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;}
+          .cell img{width:100%;height:100%;object-fit:contain;}
         </style></head><body>
-        <div class="hd"><span>${name}</span><span>${fin}</span></div>
-        <div class="grid">${cells}</div>
+        ${pages}
         <script>
           var imgs=document.images,n=imgs.length,done=0;
           if(!n){window.print();}

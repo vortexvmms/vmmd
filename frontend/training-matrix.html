@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Workers Training Matrix</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <style>
+    .tm-wrap{max-width:1500px;margin:0 auto;padding:16px;}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+    .kpi{background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:13px 15px;}
+    .kpi .n{font-size:26px;font-weight:800;line-height:1;} .kpi .l{font-size:12px;color:#6B7280;margin-top:5px;}
+    .kpi.k-soon .n{color:#B45309;} .kpi.k-exp .n{color:#B91C1B;} .kpi.k-ok .n{color:#166534;}
+    .bar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+    .bar input,.bar select{border:1px solid #D1D5DB;border-radius:9px;padding:9px 11px;font-size:13.5px;background:#fff;}
+    .bar input{min-width:220px;}
+    .btn{border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;}
+    .b-red{background:#C00000;color:#fff;} .b-dark{background:#111827;color:#fff;} .b-gray{background:#F3F4F6;color:#374151;}
+    .legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:#6B7280;margin-left:auto;}
+    .legend span{display:flex;align-items:center;gap:5px;} .legend i{width:13px;height:13px;border-radius:4px;display:inline-block;}
+    .wrap{overflow:auto;border:1px solid #E5E7EB;border-radius:12px;background:#fff;max-height:calc(100vh - 250px);}
+    table{border-collapse:separate;border-spacing:0;font-size:12.5px;width:100%;}
+    th,td{padding:8px 9px;border-bottom:1px solid #F1F2F5;white-space:nowrap;text-align:center;}
+    thead th{position:sticky;top:0;background:#F7F8FA;z-index:3;font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;color:#64748B;font-weight:700;border-bottom:2px solid #E5E7EB;}
+    thead th.rot{height:120px;vertical-align:bottom;padding:0;}
+    thead th.rot > div{width:34px;transform:translateX(6px) rotate(-60deg);transform-origin:bottom left;text-align:left;}
+    thead th.rot span{display:inline-block;padding:5px 0;width:150px;}
+    .wname{position:sticky;left:0;background:#fff;z-index:2;text-align:left;font-weight:700;color:#111827;min-width:180px;box-shadow:1px 0 0 #E5E7EB;}
+    thead th.wname{z-index:4;background:#F7F8FA;}
+    .wname small{display:block;color:#9CA3AF;font-weight:400;font-size:11px;}
+    tbody tr:hover td{background:#FCFCFD;} tbody tr:hover .wname{background:#FCFCFD;}
+    .cell{font-weight:800;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:26px;cursor:default;}
+    .c-ok{background:#DCFCE7;color:#166534;} .c-soon{background:#FEF3C7;color:#92400E;cursor:zoom-in;} .c-exp{background:#FEE2E2;color:#991B1B;cursor:zoom-in;} .c-miss{color:#D1D5DB;}
+    .c-ok{cursor:zoom-in;}
+    #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:90;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;}
+    #lightbox img{max-width:96%;max-height:96%;object-fit:contain;border-radius:8px;}
+    .empty{text-align:center;color:#9CA3AF;padding:40px 0;font-size:14px;}
+    @media print{.bar,header,.kpis{display:none;} .wrap{max-height:none;border:none;overflow:visible;} thead th{position:static;}}
+  </style>
+</head>
+<body class="tm" style="background:#EEF0F3;min-height:100vh">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Workers Training Matrix</h1>
+      <p class="text-red-100 text-xs" id="sub">Loading…</p>
+    </div>
+  </header>
+
+  <div class="tm-wrap">
+    <div class="kpis">
+      <div class="kpi"><div class="n" id="k-workers">—</div><div class="l">Workers</div></div>
+      <div class="kpi k-ok"><div class="n" id="k-valid">—</div><div class="l">Valid certificates</div></div>
+      <div class="kpi k-soon"><div class="n" id="k-soon">—</div><div class="l">Expiring ≤ 60 days</div></div>
+      <div class="kpi k-exp"><div class="n" id="k-exp">—</div><div class="l">Expired</div></div>
+    </div>
+
+    <div class="bar">
+      <input id="q" placeholder="Search worker…" oninput="render()">
+      <select id="fcol" onchange="render()"><option value="">All courses</option></select>
+      <select id="fstat" onchange="render()">
+        <option value="">All statuses</option>
+        <option value="gap">Has a gap (missing)</option>
+        <option value="soon">Has expiring soon</option>
+        <option value="exp">Has expired</option>
+      </select>
+      <button class="btn b-dark" onclick="window.print()">Print</button>
+      <button class="btn b-gray" onclick="exportCSV()">Export CSV</button>
+      <div class="legend">
+        <span><i class="c-ok"></i>Valid</span><span><i class="c-soon"></i>Expiring</span><span><i class="c-exp"></i>Expired</span><span><i style="background:#F3F4F6"></i>Missing</span>
+      </div>
+    </div>
+
+    <div class="wrap"><table id="tbl"></table></div>
+    <p class="empty" id="empty" style="display:none">No worker cards captured yet. Add cards in the Worker Cards page.</p>
+  </div>
+
+  <div id="lightbox" onclick="this.style.display='none'"><img id="lb-img"></div>
+
+  <script>
+    requireLogin();
+    const BLOCK=["operation_manager","general_manager"];
+    let ME=null, WORKERS=[], CARDS=[], COLS=[];
+
+    function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
+    function daysTo(d){return Math.round((new Date(d)-new Date())/86400000);}
+    function fmt(iso){if(!iso)return "";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;}
+    function norm(s){return (s||"").trim();}
+
+    async function boot(){
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
+      ME=await r.json();
+      if(BLOCK.indexOf(ME.role)!==-1){document.querySelector(".tm-wrap").innerHTML='<p class="empty">This page is not available for your role.</p>';return;}
+      const [rw,rc]=await Promise.all([vmmsApi("/api/v1/workers?status=active"),vmmsApi("/api/v1/worker-cards/matrix")]);
+      WORKERS=rw.ok?await rw.json():[];
+      CARDS=rc.ok?await rc.json():[];
+      buildColumns();
+      computeKpis();
+      render();
+    }
+
+    function buildColumns(){
+      const labels=new Set();
+      CARDS.forEach(c=>{ if(c.category==="course" && norm(c.label)) labels.add(norm(c.label)); });
+      COLS=[{key:"__wp",name:"Work Permit",cat:"work_permit"},{key:"__vp",name:"Visit Pass",cat:"visit_pass"}]
+        .concat([...labels].sort().map(l=>({key:l,name:l,cat:"course"})));
+      const sel=document.getElementById("fcol");
+      sel.innerHTML='<option value="">All courses</option>'+COLS.map(c=>`<option value="${esc(c.key)}">${esc(c.name)}</option>`).join("");
+    }
+
+    function cardFor(workerId,col){
+      const list=CARDS.filter(c=>c.worker_id===workerId && (col.cat==="course"?(c.category==="course"&&norm(c.label)===col.key):c.category===col.cat));
+      if(!list.length) return null;
+      // prefer the one with the latest expiry, else latest issued
+      list.sort((a,b)=>String(b.expiry_date||b.issued_date||"").localeCompare(String(a.expiry_date||a.issued_date||"")));
+      return list[0];
+    }
+    function statusOf(card){
+      if(!card) return "miss";
+      if(!card.expiry_date) return "ok";
+      const d=daysTo(card.expiry_date);
+      if(d<0) return "exp"; if(d<=60) return "soon"; return "ok";
+    }
+
+    function computeKpis(){
+      let valid=0,soon=0,exp=0;
+      CARDS.forEach(c=>{const s=statusOf(c); if(s==="ok")valid++; else if(s==="soon")soon++; else if(s==="exp")exp++;});
+      document.getElementById("k-workers").textContent=WORKERS.length;
+      document.getElementById("k-valid").textContent=valid;
+      document.getElementById("k-soon").textContent=soon;
+      document.getElementById("k-exp").textContent=exp;
+      document.getElementById("sub").textContent=`${WORKERS.length} active workers · ${COLS.length} document types · ${CARDS.length} cards`;
+    }
+
+    function rowsFiltered(){
+      const q=document.getElementById("q").value.trim().toLowerCase();
+      const fcol=document.getElementById("fcol").value;
+      const fstat=document.getElementById("fstat").value;
+      const cols=fcol?COLS.filter(c=>c.key===fcol):COLS;
+      return WORKERS.filter(w=>{
+        if(q && !(w.name.toLowerCase().includes(q)||(w.worker_code||"").toLowerCase().includes(q))) return false;
+        if(fstat){
+          const stats=cols.map(c=>statusOf(cardFor(w.id,c)));
+          if(fstat==="gap" && !stats.includes("miss")) return false;
+          if(fstat==="soon" && !stats.includes("soon")) return false;
+          if(fstat==="exp" && !stats.includes("exp")) return false;
+        }
+        return true;
+      });
+    }
+
+    const SYM={ok:"✓",soon:"!",exp:"✕",miss:"—"};
+    function render(){
+      const fcol=document.getElementById("fcol").value;
+      const cols=fcol?COLS.filter(c=>c.key===fcol):COLS;
+      const rows=rowsFiltered();
+      document.getElementById("empty").style.display=CARDS.length?"none":"block";
+      const head=`<thead><tr><th class="wname">Worker</th>`+cols.map(c=>`<th class="rot"><div><span>${esc(c.name)}</span></div></th>`).join("")+`</tr></thead>`;
+      const body=`<tbody>`+rows.map(w=>{
+        const cells=cols.map(c=>{
+          const card=cardFor(w.id,c); const s=statusOf(card);
+          const title=card?`${c.name}${card.issued_date?" · issued "+fmt(card.issued_date):""}${card.expiry_date?" · expiry "+fmt(card.expiry_date):""}`:`${c.name} · missing`;
+          const clk=card?`onclick="openLightbox('${esc(card.image_path)}')"`:"";
+          return `<td><span class="cell c-${s}" title="${esc(title)}" ${clk}>${SYM[s]}</span></td>`;
+        }).join("");
+        return `<tr><td class="wname">${esc(w.name)}<small>${esc(w.worker_code||"")}${w.fin?" · "+esc(w.fin):""}</small></td>${cells}</tr>`;
+      }).join("")+`</tbody>`;
+      document.getElementById("tbl").innerHTML=head+body;
+    }
+
+    function exportCSV(){
+      const cols=COLS;
+      const head=["Worker","ID","FIN"].concat(cols.map(c=>c.name));
+      const lines=[head];
+      WORKERS.forEach(w=>{
+        const row=[w.name,w.worker_code||"",w.fin||""];
+        cols.forEach(c=>{const card=cardFor(w.id,c);const s=statusOf(card);
+          row.push(s==="miss"?"":(card&&card.expiry_date?("valid to "+fmt(card.expiry_date)):"valid"));});
+        lines.push(row);
+      });
+      const csv=lines.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+      const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+      a.download="training_matrix.csv"; a.click();
+    }
+
+    boot();
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
