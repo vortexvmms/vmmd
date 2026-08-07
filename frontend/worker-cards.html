@@ -113,6 +113,7 @@
 
       <div class="tabs">
         <div class="tab on" id="tab-cards" onclick="showTab('cards')">Cards</div>
+        <div class="tab" id="tab-cert" onclick="showTab('cert')">Certificates</div>
         <div class="tab" id="tab-exp" onclick="showTab('exp')">Expiring soon</div>
       </div>
 
@@ -124,6 +125,15 @@
         <div class="drop" id="drop">Take a photo, drop images here, or paste a screenshot (Ctrl/Cmd + V) — details are read automatically.</div>
         <div class="grid" id="cards"></div>
         <p class="empty" id="cards-empty" style="display:none">No cards yet. Add the worker's permit and training cards.</p>
+      </div>
+
+      <div id="view-cert" style="display:none">
+        <div class="toolbar">
+          <button class="btn b-red" onclick="openCertModal()">＋ Add certificate</button>
+        </div>
+        <p style="font-size:12.5px;color:#6B7280;margin:-4px 0 12px">Full certificates (PDF or image, A4 portrait or landscape). Multiple per worker.</p>
+        <div class="grid" id="certs"></div>
+        <p class="empty" id="certs-empty" style="display:none">No certificates uploaded yet.</p>
       </div>
 
       <div id="view-exp" style="display:none">
@@ -208,6 +218,20 @@
       <div id="m-savebar" style="display:flex;gap:9px;margin-top:14px">
         <button class="btn b-gray" style="flex:1" onclick="closeModal()">Cancel</button>
         <button class="btn b-red" style="flex:1" id="m-save" onclick="saveCard()">Save card</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="certFile" accept="image/*,application/pdf" style="display:none">
+  <div class="modal" id="certmodal">
+    <div class="sheet">
+      <h3>Add certificate</h3>
+      <div class="drop" id="cert-drop" onclick="document.getElementById('certFile').click()">Tap to choose a PDF or image (A4 portrait or landscape)</div>
+      <div id="cert-prev" style="display:none;max-height:min(58vh,520px);margin:10px 0;background:#F8FAFC;border-radius:10px;overflow:auto;text-align:center;padding:6px"></div>
+      <div class="fld"><label>Title</label><input id="cert-title" placeholder="e.g. WSQ Statement of Attainment"></div>
+      <div style="display:flex;gap:9px;margin-top:12px">
+        <button class="btn b-gray" style="flex:1" onclick="closeCertModal()">Cancel</button>
+        <button class="btn b-red" style="flex:1" id="cert-save" onclick="saveCert()">Save certificate</button>
       </div>
     </div>
   </div>
@@ -390,10 +414,71 @@
 
     function showTab(t){
       document.getElementById("tab-cards").classList.toggle("on",t==="cards");
+      document.getElementById("tab-cert").classList.toggle("on",t==="cert");
       document.getElementById("tab-exp").classList.toggle("on",t==="exp");
       document.getElementById("view-cards").style.display=t==="cards"?"block":"none";
+      document.getElementById("view-cert").style.display=t==="cert"?"block":"none";
       document.getElementById("view-exp").style.display=t==="exp"?"block":"none";
       if(t==="exp") loadExpiring();
+      if(t==="cert") loadCerts();
+    }
+
+    // ---- Certificates (PDF / image documents) ----
+    let CERTS=[], CERT_FILE=null, PDFJS=null;
+    function loadPdfJs(){ if(window.pdfjsLib) return Promise.resolve(); if(PDFJS) return PDFJS;
+      PDFJS=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        s.onload=()=>{ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }catch(e){} res(); }; s.onerror=rej; document.head.appendChild(s); });
+      return PDFJS; }
+    async function loadCerts(){ const r=await vmmsApi("/api/v1/worker-certificates?worker_id="+WORKER.id); CERTS=r.ok?await r.json():[]; renderCerts(); }
+    function renderCerts(){
+      const g=document.getElementById("certs"); document.getElementById("certs-empty").style.display=CERTS.length?"none":"block";
+      g.innerHTML=CERTS.map(c=>{ const isPdf=c.file_type==="pdf";
+        const thumb=isPdf?`<div class="imgrow" style="height:210px;display:flex;align-items:center;justify-content:center;background:#F8FAFC;color:#B91C1C;font-weight:800;font-size:15px;cursor:pointer" onclick="viewCert('${esc(c.file_path)}','pdf')">📄 PDF</div>`
+          :`<div class="imgrow"><img src="${esc(c.file_path)}" style="width:100%;height:210px;object-fit:contain;background:#F8FAFC;cursor:zoom-in" onclick="openLightbox(this.src)"></div>`;
+        return `<div class="card">${thumb}<div class="meta"><div class="lbl">${esc(c.title||"Certificate")}</div><div class="dates">${isPdf?"PDF":"Image"} · ${fmt((c.created_at||"").slice(0,10))}</div></div>
+          <div class="acts">
+            <button onclick="viewCert('${esc(c.file_path)}','${c.file_type}')">View</button>
+            <button onclick="downloadCert('${esc(c.file_path)}','${esc((c.title||'certificate').replace(/[^\w -]/g,''))}','${c.file_type}')">Download</button>
+            <button style="margin-left:auto;color:#B91C1C;background:#FEE2E2" onclick="delCert('${c.id}')">Delete</button>
+          </div></div>`;
+      }).join("");
+    }
+    function viewCert(u,t){ if(t==="pdf") window.open(u,"_blank"); else openLightbox(u); }
+    function downloadCert(u,name,t){ const a=document.createElement("a"); a.href=u; a.download=(name||"certificate")+"."+(t==="pdf"?"pdf":"jpg"); a.target="_blank"; document.body.appendChild(a); a.click(); a.remove(); }
+    async function delCert(id){ if(!confirm("Delete this certificate?"))return; const r=await vmmsApi("/api/v1/worker-certificates/"+id,{method:"DELETE"}); if(r.ok){ CERTS=CERTS.filter(x=>x.id!==id); renderCerts(); toast("Deleted"); } }
+    function openCertModal(){ CERT_FILE=null; document.getElementById("cert-title").value=""; const p=document.getElementById("cert-prev"); p.style.display="none"; p.innerHTML=""; document.getElementById("certmodal").classList.add("show"); }
+    function closeCertModal(){ document.getElementById("certmodal").classList.remove("show"); CERT_FILE=null; }
+    document.getElementById("certFile").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; if(f) onCertFile(f); });
+    async function onCertFile(file){
+      CERT_FILE=file;
+      document.getElementById("cert-title").value=file.name.replace(/\.[^.]+$/,"");
+      const prev=document.getElementById("cert-prev"); prev.style.display="block"; prev.innerHTML="Loading preview…";
+      const isPdf=file.type==="application/pdf"||/\.pdf$/i.test(file.name);
+      if(isPdf){
+        try{ await loadPdfJs(); const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; const pg=await pdf.getPage(1);
+          const vp=pg.getViewport({scale:1}); const scale=Math.min(1.6,900/vp.width); const v2=pg.getViewport({scale});
+          const c=document.createElement("canvas"); c.width=v2.width; c.height=v2.height; await pg.render({canvasContext:c.getContext("2d"),viewport:v2}).promise;
+          c.style.maxWidth="100%"; c.style.height="auto"; prev.innerHTML=""; prev.appendChild(c);
+        }catch(e){ prev.innerHTML='<div style="padding:24px;color:#6B7280">📄 '+esc(file.name)+'</div>'; }
+      } else {
+        const url=URL.createObjectURL(file); prev.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+      }
+    }
+    async function saveCert(){
+      if(!CERT_FILE){ toast("Choose a file first"); return; }
+      const btn=document.getElementById("cert-save"); btn.disabled=true; btn.textContent="Saving…";
+      try{
+        const isPdf=CERT_FILE.type==="application/pdf"||/\.pdf$/i.test(CERT_FILE.name);
+        const ext=isPdf?"pdf":"jpg";
+        const blob=isPdf?CERT_FILE:await compressImage(CERT_FILE,2200,0.85);
+        const path=`worker-certs/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+        const url=await storeImage(blob,path);
+        const title=document.getElementById("cert-title").value.trim()||CERT_FILE.name.replace(/\.[^.]+$/,"");
+        const r=await vmmsApi("/api/v1/worker-certificates",{method:"POST",body:JSON.stringify({worker_id:WORKER.id,title,file_path:url,file_type:isPdf?"pdf":"image"})});
+        if(!r.ok)throw new Error();
+        closeCertModal(); loadCerts(); toast("Certificate saved");
+      }catch(e){ toast("Could not save certificate"); }
+      finally{ btn.disabled=false; btn.textContent="Save certificate"; }
     }
 
     async function loadCards(){
