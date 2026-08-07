@@ -37,6 +37,11 @@
     .toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;}
     .btn{border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;}
     .tbtn{padding:9px 13px !important;font-size:13px !important;}
+    .cropper-point{width:16px !important;height:16px !important;opacity:.95 !important;background:#C00000 !important;}
+    .cropper-point.point-se,.cropper-point.point-sw,.cropper-point.point-ne,.cropper-point.point-nw{width:20px !important;height:20px !important;border-radius:3px;}
+    .cropper-line{background:#C00000 !important;opacity:.6 !important;}
+    .cropper-view-box{outline:1px solid rgba(192,0,0,.9) !important;}
+    .sheet{max-width:520px !important;}
     #m-sides{display:flex;}
     .sideslot{flex:1;text-align:center;}
     .sideslot .sl{font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;}
@@ -142,7 +147,7 @@
 
       <div id="m-capture" style="display:none">
         <div id="m-caphd" style="font-size:13px;font-weight:800;color:#111827;margin-bottom:6px">Front side</div>
-        <div id="m-imgwrap" style="max-height:300px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
+        <div id="m-imgwrap" style="max-height:min(64vh,560px);margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
         <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Crop to the card edges, or tap Auto-scan / Auto card ratio.</div>
         <div id="m-warn" style="display:none;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:8px;padding:7px 10px;margin:0 0 8px">⚠ Photo looks blurry — consider retaking for clearer text.</div>
         <div id="m-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
@@ -153,9 +158,10 @@
           <button type="button" class="btn b-red tbtn" id="btn-blackout" style="display:none" onclick="blackoutSelection()">Black out box</button>
           <button type="button" class="btn b-gray tbtn" id="btn-undo" style="display:none" onclick="undoRedact()">Undo</button>
         </div>
-        <div style="display:flex;gap:9px;margin:0 0 4px">
+        <div style="display:flex;gap:9px;margin:0 0 4px;flex-wrap:wrap">
           <button class="btn b-gray tbtn" style="flex:1" onclick="cancelSide()">Cancel</button>
-          <button class="btn b-red tbtn" style="flex:1" id="m-use" onclick="useThisSide()">Use this side</button>
+          <button class="btn b-gray tbtn" style="flex:1" onclick="pickNewForSide()">New photo</button>
+          <button class="btn b-red tbtn" style="flex:1;min-width:120px" id="m-use" onclick="useThisSide()">Use this side</button>
         </div>
       </div>
 
@@ -239,7 +245,7 @@
     function loadRedactImage(){
       const R=REDACT; const url=rebuildWork().toDataURL("image/jpeg",0.9);
       const img=resetImgWrap();
-      img.onload=()=>{ if(R.cropper){R.cropper.destroy();} R.cropper=new Cropper(img,{viewMode:1,autoCropArea:0.25,aspectRatio:NaN,background:false,movable:false,zoomable:false,rotatable:false}); };
+      img.onload=()=>{ if(R.cropper){R.cropper.destroy();} R.cropper=new Cropper(img,{viewMode:1,autoCropArea:0.5,aspectRatio:NaN,background:false,movable:false,zoomable:true,rotatable:false,minCropBoxWidth:26,minCropBoxHeight:20}); };
       img.src=url;
     }
     function blackoutSelection(){
@@ -263,7 +269,16 @@
         else { sb.textContent=(w==="front"?"＋ Add front":"＋ Add back"); rm.style.display="none"; } });
     }
     function removeSide(w){ const s=SIDES[w]; if(s&&s.blob&&s.url)URL.revokeObjectURL(s.url); SIDES[w]=null; renderSides(); }
-    function captureSide(which){ CURSIDE=which; sideInput.value=""; sideInput.click(); }
+    async function captureSide(which){
+      CURSIDE=which; const s=SIDES[which];
+      if(s && (s.blob || s.url)){
+        if(s.blob){ onSideFile(s.blob); return; }
+        try{ const resp=await fetch(s.url,{mode:"cors"}); if(!resp.ok) throw 0; onSideFile(await resp.blob()); return; }
+        catch(e){ toast("Couldn't reload that image — choose a new photo."); }
+      }
+      sideInput.value=""; sideInput.click();
+    }
+    function pickNewForSide(){ sideInput.value=""; sideInput.click(); }
     sideInput.addEventListener("change",async e=>{ const f=e.target.files[0]; e.target.value=""; if(f) onSideFile(await compressImage(f)); });
     function startAddCard(preBlob){
       EDIT_ID=null; SIDES={front:null,back:null};
