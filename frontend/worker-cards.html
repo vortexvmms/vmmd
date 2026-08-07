@@ -128,7 +128,9 @@
       <h3 id="m-title">Add card</h3>
       <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
       <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 8px">Drag / resize the box to crop freely to the card edges.</div>
+      <div id="m-warn" style="display:none;font-size:12px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:8px;padding:7px 10px;margin:0 0 8px">⚠ Photo looks blurry — consider retaking for clearer text.</div>
       <div id="m-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+        <button type="button" class="btn b-dark tbtn" id="btn-scan" onclick="autoScan()">⤢ Auto-scan</button>
         <button type="button" class="btn b-gray tbtn" id="btn-ratio" onclick="setCardRatio()">Auto card ratio</button>
         <button type="button" class="btn b-gray tbtn" id="btn-free" style="display:none" onclick="setFreeCrop()">Free crop</button>
         <button type="button" class="btn b-gray tbtn" id="btn-redact" onclick="startRedact()">✎ Black out numbers</button>
@@ -156,6 +158,14 @@
           <option value="Apply Workplace Safety and Health in Construction Sites"><option value="Metal Scaffold Erector"><option value="First Aid / CPR+AED">
         </datalist>
       </div>
+      <div class="fld"><label>Training institute</label>
+        <input id="m-inst" list="instlist" placeholder="e.g. Wong Fong Academy">
+        <datalist id="instlist">
+          <option value="Eversafe Academy"><option value="Wong Fong Academy"><option value="WF Academy"><option value="NTUC LearningHub">
+          <option value="BCA Academy"><option value="Singapore Safety Academy"><option value="SISO"><option value="Kaplan"><option value="Avanta Global">
+        </datalist>
+      </div>
+      <div class="fld"><label>Certificate / student no.</label><input id="m-cert" placeholder="e.g. WPH-WSH-3080-1.1-00687"></div>
       <div class="fld"><label>Issued date</label><input id="m-issued" type="date"></div>
       <div class="fld"><label>Expiry date (optional)</label><input id="m-expiry" type="date"></div>
       <div style="display:flex;gap:9px;margin-top:14px">
@@ -186,6 +196,7 @@
       CROPPER.destroy(); CROPPER=null;
       REDACT={orig:cc, rects:[], cropper:null};
       document.getElementById("m-crophint").textContent="Move / resize the box over the numbers, tap ‘Black out box’. Repeat as needed, then Save.";
+      document.getElementById("btn-scan").style.display="none";
       document.getElementById("btn-ratio").style.display="none";
       document.getElementById("btn-free").style.display="none";
       document.getElementById("btn-redact").style.display="none";
@@ -224,15 +235,18 @@
       document.getElementById("m-crophint").textContent="Crop, then optionally black out numbers.";
       document.getElementById("m-crophint").style.display="block";
       document.getElementById("m-tools").style.display="flex";
+      document.getElementById("btn-scan").style.display="inline-block";
       document.getElementById("btn-ratio").style.display="inline-block";
       document.getElementById("btn-free").style.display="none";
       document.getElementById("btn-redact").style.display="inline-block";
       document.getElementById("btn-blackout").style.display="none";
       document.getElementById("btn-undo").style.display="none";
+      document.getElementById("m-warn").style.display="none";
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
       const img=resetImgWrap();
       img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
+      checkBlur(blob);
     }
     function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
     const BLOCK=["operation_manager","general_manager"];
@@ -324,6 +338,7 @@
           <div class="cat">${CATLBL[c.category]||"Document"}</div>
           <div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div>
           <div class="dates">${c.issued_date?"Issued "+fmt(c.issued_date):""}${c.expiry_date?" · Expiry "+fmt(c.expiry_date):""}</div>
+          ${(c.institute||c.cert_no)?`<div class="dates" style="margin-top:2px">${esc(c.institute||"")}${c.institute&&c.cert_no?" · ":""}${esc(c.cert_no||"")}</div>`:""}
           ${expiryBadge(c)}
         </div>
         <div class="acts">
@@ -394,20 +409,40 @@
       document.getElementById("m-tools").style.display="flex";
       document.getElementById("btn-ratio").style.display="inline-block";
       document.getElementById("btn-free").style.display="none";
+      document.getElementById("btn-scan").style.display="inline-block";
       document.getElementById("btn-redact").style.display="inline-block";
       document.getElementById("btn-blackout").style.display="none";
       document.getElementById("btn-undo").style.display="none";
       document.getElementById("m-cat").value="course";
       document.getElementById("m-label").value="";
+      document.getElementById("m-inst").value="";
+      document.getElementById("m-cert").value="";
       document.getElementById("m-issued").value="";
       document.getElementById("m-expiry").value="";
+      document.getElementById("m-warn").style.display="none";
       document.getElementById("modal").classList.add("show");
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
       const img=resetImgWrap();
       img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
+      checkBlur(blob);
       runOCR(blob);
     }
+    async function enhanceForOCR(blob){
+      try{ const bmp=await createImageBitmap(blob); const c=document.createElement("canvas"); c.width=bmp.width; c.height=bmp.height; const x=c.getContext("2d"); x.filter="grayscale(1) contrast(1.6) brightness(1.05)"; x.drawImage(bmp,0,0); return await new Promise(r=>c.toBlob(r,"image/jpeg",0.92)); }
+      catch(e){ return blob; }
+    }
+    async function blurScore(blob){
+      try{ const bmp=await createImageBitmap(blob); const W=340,H=Math.max(1,Math.round(bmp.height*(340/bmp.width)));
+        const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d"); x.drawImage(bmp,0,0,W,H);
+        const d=x.getImageData(0,0,W,H).data; const g=new Float64Array(W*H);
+        for(let i=0,p=0;i<d.length;i+=4,p++) g[p]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+        let s=0,s2=0,n=0;
+        for(let y=1;y<H-1;y++)for(let xx=1;xx<W-1;xx++){const k=y*W+xx;const lap=4*g[k]-g[k-1]-g[k+1]-g[k-W]-g[k+W];s+=lap;s2+=lap*lap;n++;}
+        const m=s/n; return s2/n-m*m;
+      }catch(e){ return 9999; }
+    }
+    async function checkBlur(blob){ const v=await blurScore(blob); document.getElementById("m-warn").style.display=(v<70)?"block":"none"; }
     function guessLabel(t){
       t=t.toLowerCase();
       const map=[["manage work at height","Manage Work at Height"],["work at height","Work at Height"],["confined space","Perform Work in Confined Space Operation"],["chemical","SWSHPP (WSH in Chemical/Process)"],["swshpp","SWSHPP (WSH in Chemical/Process)"],["management in construction","WSH Management in Construction Industry"],["scaffold","Metal Scaffold Erector"],["first aid","First Aid / CPR+AED"],["visit pass","__visit"],["work permit","__wp"]];
@@ -418,21 +453,73 @@
       const m=[...t.matchAll(/(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{2,4})/g)];
       return m.map(x=>{let d=x[1].padStart(2,"0"),mo=x[2].padStart(2,"0"),y=x[3];if(y.length===2)y="20"+y;return `${y}-${mo}-${d}`;});
     }
+    const INSTS=["Eversafe Academy","Wong Fong Academy","WF Academy","NTUC LearningHub","BCA Academy","Singapore Safety Academy","SISO","Kaplan","Avanta Global"];
     async function runOCR(blob){
       const o=document.getElementById("m-ocr"); o.style.display="block"; o.textContent="Reading text…";
       try{
         if(!window.Tesseract){ await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
-        const {data}=await Tesseract.recognize(blob,"eng");
-        const txt=data.text||"";
+        const eb=await enhanceForOCR(blob);
+        const {data}=await Tesseract.recognize(eb,"eng");
+        const txt=data.text||""; const tl=txt.toLowerCase();
         const g=guessLabel(txt);
         if(g==="__visit"){document.getElementById("m-cat").value="visit_pass";}
         else if(g==="__wp"){document.getElementById("m-cat").value="work_permit";}
         else if(g && !document.getElementById("m-label").value){document.getElementById("m-label").value=g;}
+        // institute
+        for(const nm of INSTS){ if(tl.includes(nm.toLowerCase())){ if(!document.getElementById("m-inst").value) document.getElementById("m-inst").value=(nm==="WF Academy"?"Wong Fong Academy":nm); break; } }
+        // certificate / student / serial number
+        const cm=txt.match(/WPH-[A-Z0-9.\-]{4,}/i) || txt.match(/(?:student|serial|cert(?:ificate)?)\s*(?:number|no\.?|#)?[:\s]*([A-Z0-9][A-Z0-9.\-\/]{3,})/i);
+        if(cm && !document.getElementById("m-cert").value){ document.getElementById("m-cert").value=(cm[1]||cm[0]).trim(); }
+        // dates
         const ds=parseDates(txt);
         if(ds.length && !document.getElementById("m-issued").value) document.getElementById("m-issued").value=ds[0];
         if(ds.length>1 && !document.getElementById("m-expiry").value) document.getElementById("m-expiry").value=ds[ds.length-1];
-        o.textContent="Details read — please check and correct.";
+        // validity period -> compute expiry from issued
+        let calc=false;
+        const vm=txt.match(/valid(?:ity)?\s*(?:for|:|is)?\s*(\d{1,2})\s*(year|yr|month|mth)/i);
+        const iss=document.getElementById("m-issued").value;
+        if(vm && iss && !document.getElementById("m-expiry").value){
+          const n=parseInt(vm[1],10), unit=vm[2].toLowerCase(); const dt=new Date(iss+"T00:00:00");
+          if(unit.indexOf("mo")===0||unit.indexOf("mth")===0) dt.setMonth(dt.getMonth()+n); else dt.setFullYear(dt.getFullYear()+n);
+          document.getElementById("m-expiry").value=dt.toISOString().slice(0,10); calc=true;
+        }
+        o.textContent=calc?"Details read — expiry calculated from validity. Please verify.":"Details read — please check and correct.";
       }catch(e){ o.textContent="Couldn't auto-read — enter details manually."; }
+    }
+
+    // ---- optional Auto-scan (edge detect + perspective correct via OpenCV/jscanify) ----
+    let CVREADY=null;
+    function _loadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector('script[data-x="'+src+'"]')){res();return;} const s=document.createElement("script"); s.src=src; s.dataset.x=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+    function loadCV(){
+      if(window.jscanify && window.cv && window.cv.Mat) return Promise.resolve();
+      if(CVREADY) return CVREADY;
+      CVREADY=new Promise((res,rej)=>{
+        _loadScript("https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.9.0/dist/opencv.js").then(()=>{
+          const done=()=>_loadScript("https://cdn.jsdelivr.net/npm/jscanify@1.2.0/src/jscanify.min.js").then(res).catch(rej);
+          if(window.cv && window.cv.Mat) done(); else window.cv={onRuntimeInitialized:done};
+        }).catch(rej);
+      });
+      return CVREADY;
+    }
+    async function autoScan(){
+      const o=document.getElementById("m-ocr"); o.style.display="block"; o.textContent="Auto-scanning…";
+      try{
+        await loadCV();
+        const src=new Image(); src.src=PENDING.url; await src.decode();
+        const scanner=new jscanify();
+        const outW=1000, outH=Math.round(1000/ATM);
+        const canvas=scanner.extractPaper(src, outW, outH);
+        const url=canvas.toDataURL("image/jpeg",0.92);
+        const nb=await (await fetch(url)).blob();
+        if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url);
+        PENDING={blob:nb,url};
+        if(CROPPER){CROPPER.destroy();CROPPER=null;}
+        const img=resetImgWrap();
+        img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
+        img.src=url;
+        document.getElementById("m-warn").style.display="none";
+        o.textContent="Auto-scanned — adjust the crop if needed.";
+      }catch(e){ o.textContent="Auto-scan unavailable — please crop manually."; }
     }
 
     function editCard(id){
@@ -447,15 +534,18 @@
       document.getElementById("m-ocr").style.display="none";
       document.getElementById("m-cat").value=c.category||"course";
       document.getElementById("m-label").value=c.label||"";
+      document.getElementById("m-inst").value=c.institute||"";
+      document.getElementById("m-cert").value=c.cert_no||"";
       document.getElementById("m-issued").value=c.issued_date||"";
       document.getElementById("m-expiry").value=c.expiry_date||"";
+      document.getElementById("m-warn").style.display="none";
       document.getElementById("modal").classList.add("show");
     }
     function closeModal(){document.getElementById("modal").classList.remove("show"); if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; NEWIMG=false; document.getElementById("m-edittools").style.display="none"; const mi=document.getElementById("m-img"); if(mi)mi.onload=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
 
     async function saveCard(){
       const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
-      const payload={category:document.getElementById("m-cat").value,label:document.getElementById("m-label").value.trim(),issued_date:document.getElementById("m-issued").value||null,expiry_date:document.getElementById("m-expiry").value||null};
+      const payload={category:document.getElementById("m-cat").value,label:document.getElementById("m-label").value.trim(),institute:document.getElementById("m-inst").value.trim(),cert_no:document.getElementById("m-cert").value.trim(),issued_date:document.getElementById("m-issued").value||null,expiry_date:document.getElementById("m-expiry").value||null};
       try{
         if(EDIT_ID){
           if(NEWIMG){
