@@ -186,8 +186,18 @@
           </datalist>
         </div>
         <div class="fld"><label>Certificate / student no.</label><input id="m-cert" placeholder="e.g. WPH-WSH-3080-1.1-00687"></div>
-        <div class="fld"><label>Issued date</label><input id="m-issued" type="date"></div>
-        <div class="fld"><label>Expiry date (optional)</label><input id="m-expiry" type="date"></div>
+        <div class="fld"><label>Issued date <span style="color:#9CA3AF;font-weight:400">(front)</span></label><input id="m-issued" type="date"></div>
+        <div class="fld"><label>Validity <span style="color:#9CA3AF;font-weight:400">(from back of card)</span></label>
+          <select id="m-validity" onchange="recalcExpiry()">
+            <option value="">No expiry (supervisor / not shown)</option>
+            <option value="2">2 years from issue</option>
+            <option value="3">3 years from issue</option>
+            <option value="4">4 years from issue</option>
+            <option value="5">5 years from issue</option>
+            <option value="custom">Custom expiry date</option>
+          </select>
+        </div>
+        <div class="fld"><label>Expiry date</label><input id="m-expiry" type="date"></div>
       </div>
       <div id="m-savebar" style="display:flex;gap:9px;margin-top:14px">
         <button class="btn b-gray" style="flex:1" onclick="closeModal()">Cancel</button>
@@ -260,6 +270,7 @@
       document.getElementById("m-title").textContent="Add card";
       document.getElementById("m-cat").value="course";
       ["m-label","m-inst","m-cert","m-issued","m-expiry"].forEach(id=>document.getElementById(id).value="");
+      document.getElementById("m-validity").value=""; recalcExpiry();
       document.getElementById("m-ocr").style.display="none";
       document.getElementById("modal").classList.add("show");
       renderSides(); showSidesView();
@@ -281,7 +292,7 @@
       const img=resetImgWrap();
       img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
-      checkBlur(blob); runOCR(blob);
+      checkBlur(blob);
     }
     async function useThisSide(){
       const blob=REDACT?await redactedBlob():(CROPPER?await croppedBlob():PENDING.blob);
@@ -290,9 +301,19 @@
       SIDES[CURSIDE]={blob,url:URL.createObjectURL(blob),changed:true};
       if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;
       CURSIDE=null; showSidesView(); renderSides();
+      runOCR(blob);   // read the crisp cropped card
     }
     function cancelSide(){ if(CROPPER){CROPPER.destroy();CROPPER=null;} if(REDACT&&REDACT.cropper){REDACT.cropper.destroy();} REDACT=null; if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null; CURSIDE=null; showSidesView(); }
     function openLightbox(u){document.getElementById("lb-img").src=u;document.getElementById("lightbox").style.display="flex";}
+    // ---- validity → expiry ----
+    function addYears(iso,n){ const d=new Date(iso+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return d.toISOString().slice(0,10); }
+    function recalcExpiry(){
+      const v=document.getElementById("m-validity").value, iss=document.getElementById("m-issued").value, exp=document.getElementById("m-expiry");
+      if(v==="custom"){ exp.disabled=false; return; }
+      if(v===""){ exp.value=""; exp.disabled=true; return; }
+      exp.disabled=true; exp.value = iss ? addYears(iss, parseInt(v,10)) : "";
+    }
+    document.getElementById("m-issued").addEventListener("change",function(){ const v=document.getElementById("m-validity").value; if(v&&v!=="custom") recalcExpiry(); });
     const BLOCK=["operation_manager","general_manager"];
     let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
     const fileInput=document.getElementById("fileInput");
@@ -441,7 +462,11 @@
       if(f){ e.preventDefault(); startAddCard(await compressImage(f)); toast("Screenshot pasted"); }
     });
     async function enhanceForOCR(blob){
-      try{ const bmp=await createImageBitmap(blob); const c=document.createElement("canvas"); c.width=bmp.width; c.height=bmp.height; const x=c.getContext("2d"); x.filter="grayscale(1) contrast(1.6) brightness(1.05)"; x.drawImage(bmp,0,0); return await new Promise(r=>c.toBlob(r,"image/jpeg",0.92)); }
+      try{ const bmp=await createImageBitmap(blob); let w=bmp.width,h=bmp.height;
+        const target=1500; if(w<target){ const s=target/w; w=Math.round(w*s); h=Math.round(h*s); }
+        const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
+        x.filter="grayscale(1) contrast(1.4) brightness(1.05)"; x.drawImage(bmp,0,0,w,h);
+        return await new Promise(r=>c.toBlob(r,"image/jpeg",0.95)); }
       catch(e){ return blob; }
     }
     async function blurScore(blob){
@@ -461,10 +486,20 @@
       for(const[k,v]of map){ if(t.includes(k))return v; }
       return "";
     }
-    function parseDates(t){
-      const m=[...t.matchAll(/(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{2,4})/g)];
-      return m.map(x=>{let d=x[1].padStart(2,"0"),mo=x[2].padStart(2,"0"),y=x[3];if(y.length===2)y="20"+y;return `${y}-${mo}-${d}`;});
+    const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    function toISO(d,mo,y){ d=+d; mo=+mo; if(String(y).length===2)y="20"+y; y=+y;
+      if(!(mo>=1&&mo<=12&&d>=1&&d<=31&&y>=2000&&y<=2100)) return null;
+      return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; }
+    function extractDates(t){
+      const out=[]; let m;
+      const reNum=/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})/g;
+      while((m=reNum.exec(t))){ const iso=toISO(m[1],m[2],m[3]); if(iso) out.push({iso,idx:m.index}); }
+      const reMon=/(\d{1,2})\s*[-\/.,\s]+\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*[-\/.,\s]+\s*(\d{2,4})/gi;
+      while((m=reMon.exec(t))){ const iso=toISO(m[1],MON[m[2].toLowerCase()],m[3]); if(iso) out.push({iso,idx:m.index}); }
+      return out.sort((a,b)=>a.idx-b.idx);
     }
+    function nearestDate(dates,lower,words){ let ki=-1; for(const w of words){ const p=lower.indexOf(w); if(p>=0){ki=p;break;} } if(ki<0)return null; let best=null,bd=1e9; dates.forEach(d=>{const dist=Math.abs(d.idx-ki); if(dist<bd){bd=dist;best=d;}}); return best; }
+    function parseDates(t){ return extractDates(t).map(d=>d.iso); }
     const INSTS=["Eversafe Academy","Wong Fong Academy","WF Academy","NTUC LearningHub","BCA Academy","Singapore Safety Academy","SISO","Kaplan","Avanta Global"];
     async function runOCR(blob){
       const o=document.getElementById("m-ocr"); o.style.display="block"; o.textContent="Reading text…";
@@ -482,20 +517,20 @@
         // certificate / student / serial number
         const cm=txt.match(/WPH-[A-Z0-9.\-]{4,}/i) || txt.match(/(?:student|serial|cert(?:ificate)?)\s*(?:number|no\.?|#)?[:\s]*([A-Z0-9][A-Z0-9.\-\/]{3,})/i);
         if(cm && !document.getElementById("m-cert").value){ document.getElementById("m-cert").value=(cm[1]||cm[0]).trim(); }
-        // dates
-        const ds=parseDates(txt);
-        if(ds.length && !document.getElementById("m-issued").value) document.getElementById("m-issued").value=ds[0];
-        if(ds.length>1 && !document.getElementById("m-expiry").value) document.getElementById("m-expiry").value=ds[ds.length-1];
-        // validity period -> compute expiry from issued
-        let calc=false;
-        const vm=txt.match(/valid(?:ity)?\s*(?:for|:|is)?\s*(\d{1,2})\s*(year|yr|month|mth)/i);
-        const iss=document.getElementById("m-issued").value;
-        if(vm && iss && !document.getElementById("m-expiry").value){
-          const n=parseInt(vm[1],10), unit=vm[2].toLowerCase(); const dt=new Date(iss+"T00:00:00");
-          if(unit.indexOf("mo")===0||unit.indexOf("mth")===0) dt.setMonth(dt.getMonth()+n); else dt.setFullYear(dt.getFullYear()+n);
-          document.getElementById("m-expiry").value=dt.toISOString().slice(0,10); calc=true;
-        }
-        o.textContent=calc?"Details read — expiry calculated from validity. Please verify.":"Details read — please check and correct.";
+        // dates + validity (issued on front; validity/expiry on back)
+        const dates=extractDates(txt);
+        const issEl=document.getElementById("m-issued"), expEl=document.getElementById("m-expiry"), valEl=document.getElementById("m-validity");
+        if(dates.length && !issEl.value){ const a=nearestDate(dates,tl,["date of issue","issued","issue date","issue"]); issEl.value=a?a.iso:dates[0].iso; }
+        let note="Details read — please check and correct.";
+        if(valEl.value==="" && !expEl.value){
+          const ea=nearestDate(dates,tl,["expiry","expire","valid until","valid till","valid to"]);
+          const explicitExp=(ea && ea.iso!==issEl.value)?ea.iso:null;
+          let vy=null; const vm=txt.match(/valid[^\d]{0,15}(\d{1,2})\s*year/i)||txt.match(/(\d{1,2})\s*year[s]?\s+(?:from|validity)/i)||txt.match(/expir[^\d]{0,15}(\d{1,2})\s*year/i)||txt.match(/renew[^\d]{0,20}(\d{1,2})\s*year/i);
+          if(vm){ const n=parseInt(vm[1],10); if(n>=1&&n<=10) vy=n; }
+          if(explicitExp){ valEl.value="custom"; expEl.disabled=false; expEl.value=explicitExp; note="Expiry read from card — please verify."; }
+          else if(vy){ valEl.value=(["2","3","4","5"].indexOf(""+vy)>=0?""+vy:"custom"); recalcExpiry(); if(valEl.value==="custom"&&issEl.value){ expEl.value=addYears(issEl.value,vy); } note="Expiry set from "+vy+"-year validity — please verify."; }
+        } else if(valEl.value && valEl.value!=="custom"){ recalcExpiry(); }
+        o.textContent=note;
       }catch(e){ o.textContent="Couldn't auto-read — enter details manually."; }
     }
 
@@ -547,6 +582,9 @@
       document.getElementById("m-cert").value=c.cert_no||"";
       document.getElementById("m-issued").value=c.issued_date||"";
       document.getElementById("m-expiry").value=c.expiry_date||"";
+      (function(){ const iss=c.issued_date, exp=c.expiry_date, valEl=document.getElementById("m-validity"), expEl=document.getElementById("m-expiry");
+        let vsel=""; if(exp&&iss){ let yrs=null; for(let n=2;n<=5;n++){ if(addYears(iss,n)===exp){yrs=n;break;} } vsel=yrs?String(yrs):"custom"; } else if(exp&&!iss){ vsel="custom"; }
+        valEl.value=vsel; expEl.disabled=(vsel!==""&&vsel!=="custom"); })();
       document.getElementById("modal").classList.add("show");
       renderSides(); showSidesView();
     }
