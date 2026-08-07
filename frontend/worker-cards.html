@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Worker Cards</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};</script>
+  <style>
+    .wc-wrap{max-width:1100px;margin:0 auto;padding:16px;}
+    .pick{position:relative;}
+    .pick input{width:100%;border:1px solid #D1D5DB;border-radius:10px;padding:11px 13px;font-size:15px;}
+    .pres{position:absolute;left:0;right:0;top:52px;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:30;max-height:300px;overflow:auto;display:none;}
+    .pres a{display:block;padding:10px 13px;font-size:14px;color:#1F2937;text-decoration:none;border-top:1px solid #F3F4F6;cursor:pointer;}
+    .pres a:first-child{border-top:none;} .pres a:hover{background:#F9FAFB;}
+    .whead{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:15px 16px;margin:14px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+    .whead .nm{font-size:20px;font-weight:800;color:#111827;} .whead .cd{font-size:13px;color:#6B7280;}
+    .fin{display:flex;align-items:center;gap:7px;margin-left:auto;}
+    .fin input{border:1px solid #D1D5DB;border-radius:8px;padding:7px 10px;font-size:14px;width:130px;text-transform:uppercase;}
+    .tabs{display:flex;gap:8px;margin-bottom:12px;}
+    .tab{border:1px solid #E5E7EB;background:#fff;border-radius:10px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;color:#374151;}
+    .tab.on{background:#C00000;color:#fff;border-color:#C00000;}
+    .toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;}
+    .btn{border:none;border-radius:10px;padding:11px 16px;font-size:14px;font-weight:700;cursor:pointer;}
+    .b-red{background:#C00000;color:#fff;} .b-dark{background:#111827;color:#fff;} .b-out{background:#fff;color:#C00000;border:1px solid #C00000;} .b-gray{background:#F3F4F6;color:#374151;}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px;}
+    @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr);}}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;}
+    .card img{width:100%;height:220px;object-fit:contain;background:#F8FAFC;display:block;}
+    .card .meta{padding:11px 13px;}
+    .card .cat{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#9CA3AF;}
+    .card .lbl{font-size:15px;font-weight:700;color:#111827;margin-top:2px;}
+    .card .dates{font-size:12.5px;color:#6B7280;margin-top:5px;}
+    .badge{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:20px;margin-top:7px;}
+    .b-valid{background:#DCFCE7;color:#166534;} .b-soon{background:#FEF3C7;color:#92400E;} .b-exp{background:#FEE2E2;color:#991B1B;}
+    .card .acts{display:flex;gap:6px;border-top:1px solid #F3F4F6;padding:9px 13px;}
+    .card .acts button{border:none;background:#F3F4F6;color:#374151;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;}
+    .empty{text-align:center;color:#9CA3AF;padding:40px 0;font-size:14px;}
+    .drop{border:2px dashed #D1D5DB;border-radius:14px;padding:22px;text-align:center;color:#6B7280;font-size:14px;background:#fff;margin-bottom:14px;cursor:pointer;}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:16px;}
+    .modal.show{display:flex;}
+    .sheet{background:#fff;border-radius:16px;max-width:460px;width:100%;max-height:92vh;overflow:auto;padding:18px;}
+    .sheet h3{font-size:16px;font-weight:800;margin-bottom:12px;}
+    .sheet img{width:100%;max-height:230px;object-fit:contain;background:#F8FAFC;border-radius:10px;margin-bottom:12px;}
+    .fld{margin-bottom:11px;} .fld label{display:block;font-size:12.5px;font-weight:700;color:#374151;margin-bottom:4px;}
+    .fld input,.fld select{width:100%;border:1px solid #D1D5DB;border-radius:9px;padding:10px;font-size:14px;}
+    .ocr{font-size:12px;color:#6B7280;margin:-4px 0 10px;}
+    #toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;font-size:13.5px;padding:10px 16px;border-radius:22px;display:none;z-index:80;}
+  </style>
+</head>
+<body class="wc min-h-screen" style="background:#EEF0F3">
+
+  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
+    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold">Worker Cards</h1>
+      <p class="text-red-100 text-xs">Work permit, visit pass &amp; training certificates</p>
+    </div>
+  </header>
+
+  <div class="wc-wrap">
+    <div class="pick">
+      <input id="wsearch" placeholder="Search worker by name or ID…" autocomplete="off">
+      <div class="pres" id="pres"></div>
+    </div>
+
+    <div id="panel" style="display:none">
+      <div class="whead">
+        <div>
+          <div class="nm" id="wname">—</div>
+          <div class="cd" id="wcode"></div>
+        </div>
+        <div class="fin">
+          <label style="font-size:12.5px;font-weight:700;color:#374151">FIN</label>
+          <input id="wfin" placeholder="e.g. G372L" disabled>
+          <button class="btn b-gray" id="finsave" style="display:none;padding:7px 12px;font-size:12.5px" onclick="saveFin()">Save</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab on" id="tab-cards" onclick="showTab('cards')">Cards</div>
+        <div class="tab" id="tab-exp" onclick="showTab('exp')">Expiring soon</div>
+      </div>
+
+      <div id="view-cards">
+        <div class="toolbar">
+          <button class="btn b-red" onclick="fileInput.click()">＋ Add card (photo)</button>
+          <button class="btn b-dark" onclick="generateSheet()">Generate SIC sheet (PDF)</button>
+        </div>
+        <div class="drop" id="drop">Take a photo or drop card images here — the details are read automatically.</div>
+        <div class="grid" id="cards"></div>
+        <p class="empty" id="cards-empty" style="display:none">No cards yet. Add the worker's permit and training cards.</p>
+      </div>
+
+      <div id="view-exp" style="display:none">
+        <div class="grid" id="expiring"></div>
+        <p class="empty" id="exp-empty" style="display:none">No cards expiring in the next 90 days.</p>
+      </div>
+    </div>
+
+    <p class="empty" id="nopick">Search and select a worker to view their cards.</p>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
+
+  <div class="modal" id="modal">
+    <div class="sheet">
+      <h3 id="m-title">Add card</h3>
+      <img id="m-img" alt="">
+      <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
+      <div class="fld"><label>Type</label>
+        <select id="m-cat">
+          <option value="work_permit">Work Permit</option>
+          <option value="visit_pass">Visit Pass</option>
+          <option value="course" selected>Training / course card</option>
+          <option value="other">Other document</option>
+        </select>
+      </div>
+      <div class="fld"><label>Label / course name</label>
+        <input id="m-label" list="courselist" placeholder="e.g. Manage Work at Height">
+        <datalist id="courselist">
+          <option value="Manage Work at Height"><option value="Work at Height for Workers"><option value="Perform Work in Confined Space Operation">
+          <option value="WSH Management in Construction Industry"><option value="SWSHPP (WSH in Chemical/Process)"><option value="Supervise Work in Confined Space">
+          <option value="Apply Workplace Safety and Health in Construction Sites"><option value="Metal Scaffold Erector"><option value="First Aid / CPR+AED">
+        </datalist>
+      </div>
+      <div class="fld"><label>Issued date</label><input id="m-issued" type="date"></div>
+      <div class="fld"><label>Expiry date (optional)</label><input id="m-expiry" type="date"></div>
+      <div style="display:flex;gap:9px;margin-top:14px">
+        <button class="btn b-gray" style="flex:1" onclick="closeModal()">Cancel</button>
+        <button class="btn b-red" style="flex:1" id="m-save" onclick="saveCard()">Save card</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    requireLogin();
+    const BLOCK=["operation_manager","general_manager"];
+    let ME=null, WORKER=null, CARDS=[], TESS=null, EDIT_ID=null, PENDING=null;
+    const fileInput=document.getElementById("fileInput");
+
+    function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",2600);}
+    function fmt(iso){if(!iso)return "";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;}
+
+    async function boot(){
+      const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
+      ME=await r.json();
+      if(BLOCK.indexOf(ME.role)!==-1){document.querySelector(".wc-wrap").innerHTML='<p class="empty">This page is not available for your role.</p>';return;}
+    }
+    boot();
+
+    let searchT=null;
+    document.getElementById("wsearch").addEventListener("input",function(){
+      clearTimeout(searchT); const q=this.value.trim();
+      if(!q){document.getElementById("pres").style.display="none";return;}
+      searchT=setTimeout(()=>doSearch(q),250);
+    });
+    async function doSearch(q){
+      const r=await vmmsApi("/api/v1/workers?search="+encodeURIComponent(q));
+      const box=document.getElementById("pres");
+      if(!r.ok){box.style.display="none";return;}
+      const list=(await r.json()).slice(0,20);
+      box.innerHTML=list.length?list.map(w=>`<a onclick='selectWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'>${esc(w.name)} <span style="color:#9CA3AF">· ${esc(w.worker_code)}${w.fin?" · "+esc(w.fin):""}</span></a>`).join(""):'<a style="color:#9CA3AF">No match</a>';
+      box.style.display="block";
+    }
+    document.addEventListener("click",e=>{if(!e.target.closest(".pick"))document.getElementById("pres").style.display="none";});
+
+    function selectWorker(w){
+      WORKER=w;
+      document.getElementById("pres").style.display="none";
+      document.getElementById("wsearch").value="";
+      document.getElementById("nopick").style.display="none";
+      document.getElementById("panel").style.display="block";
+      document.getElementById("wname").textContent=w.name;
+      document.getElementById("wcode").textContent="Worker ID: "+w.worker_code;
+      const fin=document.getElementById("wfin"); fin.value=w.fin||"";
+      if(isFull(ME.role)){ fin.disabled=false; document.getElementById("finsave").style.display="inline-block"; }
+      showTab("cards"); loadCards();
+    }
+    async function saveFin(){
+      const v=document.getElementById("wfin").value.trim().toUpperCase();
+      const r=await vmmsApi("/api/v1/workers/"+WORKER.id,{method:"PATCH",body:JSON.stringify({fin:v})});
+      if(r.ok){WORKER.fin=v;toast("FIN saved");}else{toast("Could not save FIN");}
+    }
+
+    function showTab(t){
+      document.getElementById("tab-cards").classList.toggle("on",t==="cards");
+      document.getElementById("tab-exp").classList.toggle("on",t==="exp");
+      document.getElementById("view-cards").style.display=t==="cards"?"block":"none";
+      document.getElementById("view-exp").style.display=t==="exp"?"block":"none";
+      if(t==="exp") loadExpiring();
+    }
+
+    async function loadCards(){
+      const r=await vmmsApi("/api/v1/worker-cards?worker_id="+WORKER.id);
+      CARDS=r.ok?await r.json():[];
+      renderCards();
+    }
+    function expiryBadge(c){
+      if(!c.expiry_date) return "";
+      const d=Math.round((new Date(c.expiry_date)-new Date())/86400000);
+      if(d<0) return '<span class="badge b-exp">Expired</span>';
+      if(d<=60) return `<span class="badge b-soon">Expires in ${d}d</span>`;
+      return '<span class="badge b-valid">Valid</span>';
+    }
+    const CATLBL={work_permit:"Work Permit",visit_pass:"Visit Pass",course:"Training card",other:"Document"};
+    function renderCards(){
+      const g=document.getElementById("cards");
+      document.getElementById("cards-empty").style.display=CARDS.length?"none":"block";
+      g.innerHTML=CARDS.map((c,i)=>`<div class="card">
+        <img src="${esc(c.image_path)}" alt="">
+        <div class="meta">
+          <div class="cat">${CATLBL[c.category]||"Document"}</div>
+          <div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div>
+          <div class="dates">${c.issued_date?"Issued "+fmt(c.issued_date):""}${c.expiry_date?" · Expiry "+fmt(c.expiry_date):""}</div>
+          ${expiryBadge(c)}
+        </div>
+        <div class="acts">
+          <button onclick="editCard('${c.id}')">Edit</button>
+          <button onclick="move(${i},-1)" ${i===0?"disabled":""}>↑</button>
+          <button onclick="move(${i},1)" ${i===CARDS.length-1?"disabled":""}>↓</button>
+          <button style="margin-left:auto;color:#B91C1C;background:#FEE2E2" onclick="delCard('${c.id}')">Delete</button>
+        </div></div>`).join("");
+    }
+    async function move(i,dir){
+      const j=i+dir; if(j<0||j>=CARDS.length) return;
+      const a=CARDS[i],b=CARDS[j]; CARDS[i]=b; CARDS[j]=a; renderCards();
+      await vmmsApi("/api/v1/worker-cards/"+a.id,{method:"PATCH",body:JSON.stringify({position:j})});
+      await vmmsApi("/api/v1/worker-cards/"+b.id,{method:"PATCH",body:JSON.stringify({position:i})});
+    }
+    async function delCard(id){
+      if(!confirm("Delete this card?"))return;
+      const r=await vmmsApi("/api/v1/worker-cards/"+id,{method:"DELETE"});
+      if(r.ok){CARDS=CARDS.filter(c=>c.id!==id);renderCards();toast("Deleted");}
+    }
+
+    // ---- image compress + upload (same R2 pipeline as DPR/PR) ----
+    async function compressImage(file,maxDim=1600,q=0.75){
+      try{ if(!file.type||!file.type.startsWith("image/"))return file;
+        const bmp=await createImageBitmap(file); let w=bmp.width,h=bmp.height;
+        const s=Math.min(1,maxDim/Math.max(w,h)); w=Math.round(w*s); h=Math.round(h*s);
+        const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",q)); return (blob&&blob.size<file.size)?blob:file;
+      }catch(e){return file;}
+    }
+    async function storeImage(blob,path){
+      const type=blob.type||"image/jpeg"; const s=getSession();
+      try{
+        const url=`${VMMS_CONFIG.BACKEND_URL}/api/v1/storage/upload?path=${encodeURIComponent(path)}&content_type=${encodeURIComponent(type)}`;
+        const r=await fetch(url,{method:"PUT",headers:{"Authorization":"Bearer "+s.access_token,"Content-Type":type},body:blob});
+        if(r.ok){const j=await r.json(); if(j.public_url)return j.public_url;}
+      }catch(e){}
+      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+s.access_token,"apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE,"Content-Type":type,"x-upsert":"true"},body:blob});
+      if(!r.ok)throw new Error("upload "+r.status);
+      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
+    }
+
+    // ---- add flow (with OCR autofill) ----
+    let QUEUE=[];
+    fileInput.addEventListener("change",e=>{ QUEUE=[...e.target.files]; fileInput.value=""; nextInQueue(); });
+    document.getElementById("drop").addEventListener("click",()=>fileInput.click());
+    document.getElementById("drop").addEventListener("dragover",e=>{e.preventDefault();});
+    document.getElementById("drop").addEventListener("drop",e=>{e.preventDefault(); QUEUE=[...e.dataTransfer.files].filter(f=>f.type.startsWith("image/")); nextInQueue();});
+
+    async function nextInQueue(){
+      if(!QUEUE.length) return;
+      const file=QUEUE.shift();
+      const blob=await compressImage(file);
+      PENDING={blob,url:URL.createObjectURL(blob)};
+      EDIT_ID=null;
+      document.getElementById("m-title").textContent="Add card";
+      document.getElementById("m-img").src=PENDING.url;
+      document.getElementById("m-cat").value="course";
+      document.getElementById("m-label").value="";
+      document.getElementById("m-issued").value="";
+      document.getElementById("m-expiry").value="";
+      document.getElementById("modal").classList.add("show");
+      runOCR(blob);
+    }
+    function guessLabel(t){
+      t=t.toLowerCase();
+      const map=[["manage work at height","Manage Work at Height"],["work at height","Work at Height"],["confined space","Perform Work in Confined Space Operation"],["chemical","SWSHPP (WSH in Chemical/Process)"],["swshpp","SWSHPP (WSH in Chemical/Process)"],["management in construction","WSH Management in Construction Industry"],["scaffold","Metal Scaffold Erector"],["first aid","First Aid / CPR+AED"],["visit pass","__visit"],["work permit","__wp"]];
+      for(const[k,v]of map){ if(t.includes(k))return v; }
+      return "";
+    }
+    function parseDates(t){
+      const m=[...t.matchAll(/(\d{1,2})\s*[\/\-\.]\s*(\d{1,2})\s*[\/\-\.]\s*(\d{2,4})/g)];
+      return m.map(x=>{let d=x[1].padStart(2,"0"),mo=x[2].padStart(2,"0"),y=x[3];if(y.length===2)y="20"+y;return `${y}-${mo}-${d}`;});
+    }
+    async function runOCR(blob){
+      const o=document.getElementById("m-ocr"); o.style.display="block"; o.textContent="Reading text…";
+      try{
+        if(!window.Tesseract){ await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);}); }
+        const {data}=await Tesseract.recognize(blob,"eng");
+        const txt=data.text||"";
+        const g=guessLabel(txt);
+        if(g==="__visit"){document.getElementById("m-cat").value="visit_pass";}
+        else if(g==="__wp"){document.getElementById("m-cat").value="work_permit";}
+        else if(g && !document.getElementById("m-label").value){document.getElementById("m-label").value=g;}
+        const ds=parseDates(txt);
+        if(ds.length && !document.getElementById("m-issued").value) document.getElementById("m-issued").value=ds[0];
+        if(ds.length>1 && !document.getElementById("m-expiry").value) document.getElementById("m-expiry").value=ds[ds.length-1];
+        o.textContent="Details read — please check and correct.";
+      }catch(e){ o.textContent="Couldn't auto-read — enter details manually."; }
+    }
+
+    function editCard(id){
+      const c=CARDS.find(x=>x.id===id); if(!c)return;
+      EDIT_ID=id; PENDING=null;
+      document.getElementById("m-title").textContent="Edit card";
+      document.getElementById("m-img").src=c.image_path;
+      document.getElementById("m-ocr").style.display="none";
+      document.getElementById("m-cat").value=c.category||"course";
+      document.getElementById("m-label").value=c.label||"";
+      document.getElementById("m-issued").value=c.issued_date||"";
+      document.getElementById("m-expiry").value=c.expiry_date||"";
+      document.getElementById("modal").classList.add("show");
+    }
+    function closeModal(){document.getElementById("modal").classList.remove("show"); if(PENDING&&PENDING.url)URL.revokeObjectURL(PENDING.url); PENDING=null;}
+
+    async function saveCard(){
+      const btn=document.getElementById("m-save"); btn.disabled=true; btn.textContent="Saving…";
+      const payload={category:document.getElementById("m-cat").value,label:document.getElementById("m-label").value.trim(),issued_date:document.getElementById("m-issued").value||null,expiry_date:document.getElementById("m-expiry").value||null};
+      try{
+        if(EDIT_ID){
+          const r=await vmmsApi("/api/v1/worker-cards/"+EDIT_ID,{method:"PATCH",body:JSON.stringify(payload)});
+          if(!r.ok)throw new Error();
+        }else{
+          const path=`worker-cards/${WORKER.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
+          const url=await storeImage(PENDING.blob,path);
+          payload.worker_id=WORKER.id; payload.image_path=url; payload.position=CARDS.length;
+          const r=await vmmsApi("/api/v1/worker-cards",{method:"POST",body:JSON.stringify(payload)});
+          if(!r.ok)throw new Error();
+        }
+        closeModal(); await loadCards(); toast("Saved");
+        if(!EDIT_ID && QUEUE.length) setTimeout(nextInQueue,300);
+      }catch(e){ toast("Could not save card"); }
+      finally{ btn.disabled=false; btn.textContent="Save card"; }
+    }
+
+    async function loadExpiring(){
+      const r=await vmmsApi("/api/v1/worker-cards/expiring?days=90");
+      const list=r.ok?await r.json():[];
+      const g=document.getElementById("expiring");
+      document.getElementById("exp-empty").style.display=list.length?"none":"block";
+      g.innerHTML=list.map(c=>{const w=c.workers||{};const d=Math.round((new Date(c.expiry_date)-new Date())/86400000);
+        return `<div class="card"><img src="${esc(c.image_path)}" alt=""><div class="meta"><div class="cat">${esc(w.name||"")} · ${esc(w.worker_code||"")}</div><div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div><div class="dates">Expiry ${fmt(c.expiry_date)}</div>${d<0?'<span class="badge b-exp">Expired</span>':`<span class="badge b-soon">Expires in ${d}d</span>`}</div></div>`;
+      }).join("");
+    }
+
+    // ---- SIC sheet (browser Print / PDF) ----
+    function generateSheet(){
+      if(!CARDS.length){toast("No cards to print");return;}
+      const name=esc(WORKER.name), fin=esc(WORKER.fin||"");
+      const cells=CARDS.map(c=>`<div class="cell"><img src="${esc(c.image_path)}"></div>`).join("");
+      const w=window.open("","_sic");
+      if(!w){toast("Allow pop-ups, then try again");return;}
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${name}${fin?" ["+fin+"]":""}</title>
+        <style>
+          @page{size:A4;margin:12mm;}
+          body{font-family:Arial,sans-serif;margin:0;color:#111;}
+          .hd{display:flex;justify-content:space-between;align-items:baseline;font-weight:bold;font-size:15px;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:12px;}
+          .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+          .cell{border:1px solid #ddd;border-radius:6px;padding:6px;display:flex;align-items:center;justify-content:center;min-height:190px;}
+          .cell img{max-width:100%;max-height:230px;object-fit:contain;}
+        </style></head><body>
+        <div class="hd"><span>${name}</span><span>${fin}</span></div>
+        <div class="grid">${cells}</div>
+        <script>
+          var imgs=document.images,n=imgs.length,done=0;
+          if(!n){window.print();}
+          for(var i=0;i<n;i++){var im=imgs[i];if(im.complete){if(++done===n)setTimeout(function(){window.print();},250);}else{im.onload=im.onerror=function(){if(++done===n)setTimeout(function(){window.print();},250);};}}
+        <\/script></body></html>`);
+      w.document.close();
+    }
+
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>
