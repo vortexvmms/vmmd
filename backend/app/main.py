@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.62.0")  # worker card institute + cert no.
+app = FastAPI(title="VCMS API", version="0.63.0")  # worker card front/back images
 
 app.add_middleware(
     CORSMiddleware,
@@ -3363,7 +3363,8 @@ class CardIn(BaseModel):
     worker_id: str
     category: str = "course"          # work_permit | visit_pass | course | other
     label: str | None = None
-    image_path: str                   # public R2/Supabase URL
+    image_path: str                   # front image (public R2/Supabase URL)
+    back_image_path: str | None = None
     issued_date: str | None = None    # YYYY-MM-DD
     expiry_date: str | None = None
     institute: str | None = None
@@ -3380,6 +3381,7 @@ class CardPatch(BaseModel):
     cert_no: str | None = None
     position: int | None = None
     image_path: str | None = None
+    back_image_path: str | None = None
 
 
 @app.get("/api/v1/worker-cards/expiring")
@@ -3426,7 +3428,7 @@ async def list_worker_cards(worker_id: str, user: dict = Depends(get_current_use
         r = await client.get(
             f"{REST}/worker_cards",
             params={"worker_id": f"eq.{worker_id}",
-                    "select": "id,worker_id,category,label,image_path,issued_date,expiry_date,institute,cert_no,position",
+                    "select": "id,worker_id,category,label,image_path,back_image_path,issued_date,expiry_date,institute,cert_no,position",
                     "order": "position.asc,created_at.asc"},
             headers=supabase_headers(user["token"]))
         if r.status_code != 200:
@@ -3440,6 +3442,7 @@ async def add_worker_card(body: CardIn, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not allowed")
     rec = {"worker_id": body.worker_id, "category": (body.category or "course"),
            "label": (body.label or None), "image_path": body.image_path,
+           "back_image_path": body.back_image_path or None,
            "issued_date": body.issued_date or None, "expiry_date": body.expiry_date or None,
            "institute": body.institute or None, "cert_no": body.cert_no or None,
            "position": body.position or 0, "uploaded_by": user["user_id"]}
@@ -3458,10 +3461,10 @@ async def patch_worker_card(card_id: str, body: CardPatch, user: dict = Depends(
     if user["role"] not in CARD_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     ch = {}
-    for f in ("category", "label", "issued_date", "expiry_date", "institute", "cert_no", "position", "image_path"):
+    for f in ("category", "label", "issued_date", "expiry_date", "institute", "cert_no", "position", "image_path", "back_image_path"):
         v = getattr(body, f)
         if v is not None:
-            ch[f] = (v or None) if f in ("label", "issued_date", "expiry_date", "institute", "cert_no") else v
+            ch[f] = (v or None) if f in ("label", "issued_date", "expiry_date", "institute", "cert_no", "back_image_path") else v
     if not ch:
         raise HTTPException(status_code=400, detail="Nothing to update")
     async with shared_client() as client:
