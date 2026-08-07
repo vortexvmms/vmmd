@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.59.0")  # worker cards / training docs
+app = FastAPI(title="VCMS API", version="0.60.0")  # training matrix dashboard
 
 app.add_middleware(
     CORSMiddleware,
@@ -3394,6 +3394,23 @@ async def worker_cards_expiring(days: int = 90, user: dict = Depends(get_current
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load expiring cards")
         return [x for x in r.json() if x.get("expiry_date")]
+
+
+@app.get("/api/v1/worker-cards/matrix")
+async def worker_cards_matrix(user: dict = Depends(get_current_user)):
+    """All cards with their worker, for the Training Matrix dashboard."""
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/worker_cards",
+            params={"select": "id,worker_id,category,label,issued_date,expiry_date,image_path,"
+                              "workers(name,worker_code,fin,status)",
+                    "order": "created_at.asc"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load matrix")
+        return r.json()
 
 
 @app.get("/api/v1/worker-cards")
