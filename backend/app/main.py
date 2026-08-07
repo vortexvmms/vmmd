@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.63.0")  # worker card front/back images
+app = FastAPI(title="VCMS API", version="0.64.0")  # worker certificates
 
 app.add_middleware(
     CORSMiddleware,
@@ -3487,6 +3487,60 @@ async def delete_worker_card(card_id: str, user: dict = Depends(get_current_user
             headers=supabase_headers(user["token"]))
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete card")
+        return {"ok": True}
+
+
+# ---------------- Worker Certificates (full A4 documents) ----------------
+class CertIn(BaseModel):
+    worker_id: str
+    title: str | None = None
+    file_path: str
+    file_type: str = "image"   # 'pdf' | 'image'
+
+
+@app.get("/api/v1/worker-certificates")
+async def list_worker_certs(worker_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/worker_certificates",
+            params={"worker_id": f"eq.{worker_id}",
+                    "select": "id,worker_id,title,file_path,file_type,created_at",
+                    "order": "created_at.desc"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load certificates")
+        return r.json()
+
+
+@app.post("/api/v1/worker-certificates", status_code=201)
+async def add_worker_cert(body: CertIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    rec = {"worker_id": body.worker_id, "title": (body.title or None),
+           "file_path": body.file_path, "file_type": (body.file_type or "image"),
+           "uploaded_by": user["user_id"]}
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/worker_certificates",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=rec)
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=500, detail="Could not save certificate")
+        return r.json()[0]
+
+
+@app.delete("/api/v1/worker-certificates/{cert_id}")
+async def delete_worker_cert(cert_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.delete(
+            f"{REST}/worker_certificates", params={"id": f"eq.{cert_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete certificate")
         return {"ok": True}
 
 
