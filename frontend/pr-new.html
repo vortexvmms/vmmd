@@ -594,7 +594,12 @@
         .attpage img{ max-width:100%; object-fit:contain; }
         .attn-port img{ max-height:262mm; }
         .attn-land img{ max-height:178mm; }
+        .pbar{ position:sticky; top:0; z-index:9; background:#111827; color:#fff; display:flex; gap:8px; justify-content:flex-end; padding:9px 12px; margin-bottom:10px; }
+        .pbar button{ background:#fff; color:#111; border:none; border-radius:7px; padding:8px 15px; font-weight:bold; font-size:13px; cursor:pointer; }
+        .pbar .cl{ background:#C00000; color:#fff; }
+        @media print{ .pbar{ display:none; } }
       </style></head><body>
+      <div class="pbar"><button onclick="window.print()">Print / Save PDF</button><button class="cl" onclick="window.close()">✕ Close</button></div>
       <div class="hdr">
         <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
         <div class="cats">${bx(d.category==='asset')} Asset<br>${bx(d.category==='consumable')} Consumable<br>${bx(d.category==='rentals')} Rentals</div>

@@ -15,11 +15,18 @@
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};</script>
   <style>
     .wc-wrap{max-width:1100px;margin:0 auto;padding:16px;}
-    .pick{position:relative;}
-    .pick input{width:100%;border:1px solid #D1D5DB;border-radius:10px;padding:11px 13px;font-size:15px;}
-    .pres{position:absolute;left:0;right:0;top:52px;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:30;max-height:300px;overflow:auto;display:none;}
-    .pres a{display:block;padding:10px 13px;font-size:14px;color:#1F2937;text-decoration:none;border-top:1px solid #F3F4F6;cursor:pointer;}
-    .pres a:first-child{border-top:none;} .pres a:hover{background:#F9FAFB;}
+    .kpis3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+    .kcard{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:16px;text-align:center;}
+    .kcard .n{font-size:30px;font-weight:800;line-height:1;} .kcard .l{font-size:12.5px;color:#6B7280;margin-top:6px;}
+    .k-up .n{color:#166534;} .k-pend .n{color:#B45309;}
+    .lfilter{width:100%;border:1px solid #D1D5DB;border-radius:10px;padding:11px 13px;font-size:14px;margin-bottom:12px;}
+    .wlist{display:flex;flex-direction:column;gap:8px;}
+    .wrow{background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;transition:box-shadow .13s,transform .13s;}
+    .wrow:hover{box-shadow:0 6px 16px rgba(0,0,0,.08);transform:translateY(-1px);}
+    .wrow .nm{font-weight:700;color:#111827;font-size:15px;} .wrow .cd{font-size:12px;color:#9CA3AF;margin-top:1px;}
+    .st{font-size:11.5px;font-weight:800;padding:5px 12px;border-radius:20px;white-space:nowrap;}
+    .st-up{background:#DCFCE7;color:#166534;} .st-pend{background:#FEF3C7;color:#92400E;}
+    .backbtn{margin-bottom:12px;}
     .whead{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:15px 16px;margin:14px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
     .whead .nm{font-size:20px;font-weight:800;color:#111827;} .whead .cd{font-size:13px;color:#6B7280;}
     .fin{display:flex;align-items:center;gap:7px;margin-left:auto;}
@@ -33,7 +40,7 @@
     .grid{display:grid;grid-template-columns:1fr;gap:14px;}
     @media(min-width:760px){.grid{grid-template-columns:repeat(2,1fr);}}
     .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;overflow:hidden;}
-    .card img{width:100%;aspect-ratio:1.586/1;object-fit:contain;background:#F8FAFC;display:block;cursor:zoom-in;}
+    .card img{width:100%;height:210px;object-fit:contain;background:#F8FAFC;display:block;cursor:zoom-in;}
     .card .meta{padding:11px 13px;}
     .card .cat{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#9CA3AF;}
     .card .lbl{font-size:15px;font-weight:700;color:#111827;margin-top:2px;}
@@ -60,18 +67,24 @@
   <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
     <div class="flex-1">
-      <h1 class="text-lg font-bold">Worker Cards</h1>
-      <p class="text-red-100 text-xs">Work permit, visit pass &amp; training certificates</p>
+      <h1 class="text-lg font-bold">SIC Submission</h1>
+      <p class="text-red-100 text-xs">Course Cards &amp; Certificates</p>
     </div>
   </header>
 
   <div class="wc-wrap">
-    <div class="pick">
-      <input id="wsearch" placeholder="Search worker by name or ID…" autocomplete="off">
-      <div class="pres" id="pres"></div>
+    <div id="listview">
+      <div class="kpis3">
+        <div class="kcard"><div class="n" id="k-total">—</div><div class="l">Total workers</div></div>
+        <div class="kcard k-up"><div class="n" id="k-updated">—</div><div class="l">Updated</div></div>
+        <div class="kcard k-pend"><div class="n" id="k-pending">—</div><div class="l">Pending</div></div>
+      </div>
+      <input id="lfilter" class="lfilter" placeholder="Filter workers by name or ID…" oninput="renderList()" autocomplete="off">
+      <div class="wlist" id="wlist"></div>
     </div>
 
     <div id="panel" style="display:none">
+      <button class="btn b-gray backbtn" onclick="backToList()">‹ All workers</button>
       <div class="whead">
         <div>
           <div class="nm" id="wname">—</div>
@@ -94,7 +107,7 @@
           <button class="btn b-red" onclick="fileInput.click()">＋ Add card (photo)</button>
           <button class="btn b-dark" onclick="generateSheet()">Generate SIC sheet (PDF)</button>
         </div>
-        <div class="drop" id="drop">Take a photo or drop card images here — the details are read automatically.</div>
+        <div class="drop" id="drop">Take a photo, drop images here, or paste a screenshot (Ctrl/Cmd + V) — details are read automatically.</div>
         <div class="grid" id="cards"></div>
         <p class="empty" id="cards-empty" style="display:none">No cards yet. Add the worker's permit and training cards.</p>
       </div>
@@ -104,8 +117,6 @@
         <p class="empty" id="exp-empty" style="display:none">No cards expiring in the next 90 days.</p>
       </div>
     </div>
-
-    <p class="empty" id="nopick">Search and select a worker to view their cards.</p>
   </div>
 
   <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
@@ -114,7 +125,7 @@
     <div class="sheet">
       <h3 id="m-title">Add card</h3>
       <div id="m-imgwrap" style="max-height:320px;margin-bottom:10px;background:#F8FAFC;border-radius:10px;overflow:hidden"><img id="m-img" alt="" style="display:block;max-width:100%"></div>
-      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 10px">Drag / resize the box to crop to the card edges (ATM-card size).</div>
+      <div id="m-crophint" style="font-size:12px;color:#6B7280;margin:-4px 0 10px">Drag / resize the box to crop freely to the card edges.</div>
       <div class="ocr" id="m-ocr" style="display:none">Reading text…</div>
       <div class="fld"><label>Type</label>
         <select id="m-cat">
@@ -158,45 +169,53 @@
     function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",2600);}
     function fmt(iso){if(!iso)return "";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;}
 
+    let ALLW=[], COUNTS={};
     async function boot(){
       const r=await vmmsApi("/api/v1/me"); if(!r.ok){vmmsLogout();return;}
       ME=await r.json();
       if(BLOCK.indexOf(ME.role)!==-1){document.querySelector(".wc-wrap").innerHTML='<p class="empty">This page is not available for your role.</p>';return;}
+      await loadList();
     }
     boot();
 
-    let searchT=null;
-    document.getElementById("wsearch").addEventListener("input",function(){
-      clearTimeout(searchT); const q=this.value.trim();
-      if(!q){document.getElementById("pres").style.display="none";return;}
-      searchT=setTimeout(()=>doSearch(q),250);
-    });
-    async function doSearch(q){
-      const r=await vmmsApi("/api/v1/workers?search="+encodeURIComponent(q));
-      const box=document.getElementById("pres");
-      if(!r.ok){box.style.display="none";return;}
-      const list=(await r.json()).slice(0,20);
-      box.innerHTML=list.length?list.map(w=>`<a onclick='selectWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'>${esc(w.name)} <span style="color:#9CA3AF">· ${esc(w.worker_code)}${w.fin?" · "+esc(w.fin):""}</span></a>`).join(""):'<a style="color:#9CA3AF">No match</a>';
-      box.style.display="block";
+    async function loadList(){
+      const [rw,rm]=await Promise.all([vmmsApi("/api/v1/workers?status=active"),vmmsApi("/api/v1/worker-cards/matrix")]);
+      ALLW=rw.ok?await rw.json():[];
+      const cards=rm.ok?await rm.json():[];
+      COUNTS={}; cards.forEach(c=>{COUNTS[c.worker_id]=(COUNTS[c.worker_id]||0)+1;});
+      const updated=ALLW.filter(w=>COUNTS[w.id]).length;
+      document.getElementById("k-total").textContent=ALLW.length;
+      document.getElementById("k-updated").textContent=updated;
+      document.getElementById("k-pending").textContent=ALLW.length-updated;
+      renderList();
     }
-    document.addEventListener("click",e=>{if(!e.target.closest(".pick"))document.getElementById("pres").style.display="none";});
-
-    function selectWorker(w){
+    function renderList(){
+      const q=(document.getElementById("lfilter").value||"").trim().toLowerCase();
+      const rows=ALLW.filter(w=>!q||w.name.toLowerCase().includes(q)||(w.worker_code||"").toLowerCase().includes(q));
+      const el=document.getElementById("wlist");
+      el.innerHTML=rows.length?rows.map(w=>{const n=COUNTS[w.id]||0;const up=n>0;
+        return `<div class="wrow" onclick='openWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'><div><div class="nm">${esc(w.name)}</div><div class="cd">${esc(w.worker_code||"")}${w.fin?" · "+esc(w.fin):""}</div></div><span class="st ${up?'st-up':'st-pend'}">${up?("Updated · "+n+" card"+(n>1?"s":"")):"Pending"}</span></div>`;
+      }).join(""):'<p class="empty">No workers match.</p>';
+    }
+    function openWorker(w){
       WORKER=w;
-      document.getElementById("pres").style.display="none";
-      document.getElementById("wsearch").value="";
-      document.getElementById("nopick").style.display="none";
+      document.getElementById("listview").style.display="none";
       document.getElementById("panel").style.display="block";
       document.getElementById("wname").textContent=w.name;
       document.getElementById("wcode").textContent="Worker ID: "+w.worker_code;
       const fin=document.getElementById("wfin"); fin.value=w.fin||"";
       if(isFull(ME.role)){ fin.disabled=false; document.getElementById("finsave").style.display="inline-block"; }
-      showTab("cards"); loadCards();
+      showTab("cards"); loadCards(); window.scrollTo(0,0);
+    }
+    function backToList(){
+      document.getElementById("panel").style.display="none";
+      document.getElementById("listview").style.display="block";
+      loadList(); window.scrollTo(0,0);
     }
     async function saveFin(){
       const v=document.getElementById("wfin").value.trim().toUpperCase();
       const r=await vmmsApi("/api/v1/workers/"+WORKER.id,{method:"PATCH",body:JSON.stringify({fin:v})});
-      if(r.ok){WORKER.fin=v;toast("FIN saved");}else{toast("Could not save FIN");}
+      if(r.ok){WORKER.fin=v; const e=ALLW.find(x=>x.id===WORKER.id); if(e)e.fin=v; toast("FIN saved");}else{toast("Could not save FIN");}
     }
 
     function showTab(t){
@@ -277,6 +296,14 @@
     document.getElementById("drop").addEventListener("click",()=>fileInput.click());
     document.getElementById("drop").addEventListener("dragover",e=>{e.preventDefault();});
     document.getElementById("drop").addEventListener("drop",e=>{e.preventDefault(); QUEUE=[...e.dataTransfer.files].filter(f=>f.type.startsWith("image/")); nextInQueue();});
+    document.addEventListener("paste",e=>{
+      if(!WORKER || document.getElementById("panel").style.display==="none") return;
+      if(document.getElementById("modal").classList.contains("show")) return;
+      const items=(e.clipboardData&&e.clipboardData.items)||[];
+      const imgs=[];
+      for(const it of items){ if(it.type&&it.type.indexOf("image")===0){const f=it.getAsFile(); if(f)imgs.push(f);} }
+      if(imgs.length){ e.preventDefault(); QUEUE=imgs.slice(); nextInQueue(); toast("Screenshot pasted"); }
+    });
 
     async function nextInQueue(){
       if(!QUEUE.length) return;
@@ -293,7 +320,7 @@
       document.getElementById("modal").classList.add("show");
       const img=document.getElementById("m-img");
       if(CROPPER){CROPPER.destroy();CROPPER=null;}
-      img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:ATM,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
+      img.onload=()=>{ if(CROPPER){CROPPER.destroy();} CROPPER=new Cropper(img,{aspectRatio:NaN,viewMode:1,autoCropArea:1,background:false,movable:false,rotatable:true,zoomable:true}); };
       img.src=PENDING.url;
       runOCR(blob);
     }
@@ -394,13 +421,13 @@
           .grid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:8px;}
           .cell{border:1px solid #ccc;border-radius:6px;aspect-ratio:1.586/1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;}
           .cell img{width:100%;height:100%;object-fit:contain;}
+          .toolbar{position:sticky;top:0;background:#111827;color:#fff;display:flex;gap:8px;justify-content:flex-end;padding:9px 12px;margin:-10mm -10mm 10px;}
+          .toolbar button{background:#fff;color:#111;border:none;border-radius:7px;padding:8px 15px;font-weight:bold;font-size:13px;cursor:pointer;}
+          .toolbar .cl{background:#C00000;color:#fff;}
+          @media print{.toolbar{display:none;}}
         </style></head><body>
-        ${pages}
-        <script>
-          var imgs=document.images,n=imgs.length,done=0;
-          if(!n){window.print();}
-          for(var i=0;i<n;i++){var im=imgs[i];if(im.complete){if(++done===n)setTimeout(function(){window.print();},250);}else{im.onload=im.onerror=function(){if(++done===n)setTimeout(function(){window.print();},250);};}}
-        <\/script></body></html>`);
+        <div class="toolbar"><button onclick="window.print()">Print / Save PDF</button><button class="cl" onclick="window.close()">✕ Close</button></div>
+        ${pages}</body></html>`);
       w.document.close();
     }
 
