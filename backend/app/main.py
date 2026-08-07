@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.60.0")  # training matrix dashboard
+app = FastAPI(title="VCMS API", version="0.61.0")  # worker card photo re-edit
 
 app.add_middleware(
     CORSMiddleware,
@@ -3375,6 +3375,7 @@ class CardPatch(BaseModel):
     issued_date: str | None = None
     expiry_date: str | None = None
     position: int | None = None
+    image_path: str | None = None
 
 
 @app.get("/api/v1/worker-cards/expiring")
@@ -3452,7 +3453,7 @@ async def patch_worker_card(card_id: str, body: CardPatch, user: dict = Depends(
     if user["role"] not in CARD_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     ch = {}
-    for f in ("category", "label", "issued_date", "expiry_date", "position"):
+    for f in ("category", "label", "issued_date", "expiry_date", "position", "image_path"):
         v = getattr(body, f)
         if v is not None:
             ch[f] = (v or None) if f in ("label", "issued_date", "expiry_date") else v
