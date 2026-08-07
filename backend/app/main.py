@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.58.0")  # personal to-do (Eisenhower)
+app = FastAPI(title="VCMS API", version="0.59.0")  # worker cards / training docs
 
 app.add_middleware(
     CORSMiddleware,
@@ -272,6 +272,7 @@ class WorkerCreate(BaseModel):
 class WorkerUpdate(BaseModel):
     name: str | None = None
     status: str | None = None  # active | on_leave | inactive
+    fin: str | None = None     # work-permit / FIN number (for card sheets)
 
 
 VALID_STATUS = {"active", "on_leave", "inactive"}
@@ -280,7 +281,7 @@ VALID_STATUS = {"active", "on_leave", "inactive"}
 @app.get("/api/v1/workers")
 async def list_workers(search: str = "", status: str = "",
                        user: dict = Depends(get_current_user)):
-    params = {"select": "id,worker_code,name,status,updated_at", "order": "name.asc"}
+    params = {"select": "id,worker_code,name,status,fin,updated_at", "order": "name.asc"}
     if status:
         if status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="Invalid status filter")
@@ -374,6 +375,8 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
         if body.status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="Invalid status")
         changes["status"] = body.status
+    if body.fin is not None:
+        changes["fin"] = body.fin.strip().upper() or None
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
@@ -3348,6 +3351,116 @@ async def todos_delete(todo_id: str, user: dict = Depends(get_current_user)):
             headers=supabase_headers(user["token"]))
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete task")
+        return {"ok": True}
+
+
+# ---------------- Worker Cards / Training documents ----------------
+# Everyone except Operation Manager and General Manager maintains worker cards.
+CARD_ROLES = tuple(r for r in ALL_ROLES if r not in ("operation_manager", "general_manager"))
+
+
+class CardIn(BaseModel):
+    worker_id: str
+    category: str = "course"          # work_permit | visit_pass | course | other
+    label: str | None = None
+    image_path: str                   # public R2/Supabase URL
+    issued_date: str | None = None    # YYYY-MM-DD
+    expiry_date: str | None = None
+    position: int | None = None
+
+
+class CardPatch(BaseModel):
+    category: str | None = None
+    label: str | None = None
+    issued_date: str | None = None
+    expiry_date: str | None = None
+    position: int | None = None
+
+
+@app.get("/api/v1/worker-cards/expiring")
+async def worker_cards_expiring(days: int = 90, user: dict = Depends(get_current_user)):
+    """Cards that expire within `days` (for the compliance / renewal view)."""
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    from datetime import date, timedelta
+    until = (date.today() + timedelta(days=max(0, days))).isoformat()
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/worker_cards",
+            params={"select": "id,worker_id,category,label,image_path,issued_date,expiry_date,"
+                              "workers(name,worker_code,fin)",
+                    "expiry_date": f"lte.{until}", "order": "expiry_date.asc"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load expiring cards")
+        return [x for x in r.json() if x.get("expiry_date")]
+
+
+@app.get("/api/v1/worker-cards")
+async def list_worker_cards(worker_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/worker_cards",
+            params={"worker_id": f"eq.{worker_id}",
+                    "select": "id,worker_id,category,label,image_path,issued_date,expiry_date,position",
+                    "order": "position.asc,created_at.asc"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load cards")
+        return r.json()
+
+
+@app.post("/api/v1/worker-cards", status_code=201)
+async def add_worker_card(body: CardIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    rec = {"worker_id": body.worker_id, "category": (body.category or "course"),
+           "label": (body.label or None), "image_path": body.image_path,
+           "issued_date": body.issued_date or None, "expiry_date": body.expiry_date or None,
+           "position": body.position or 0, "uploaded_by": user["user_id"]}
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/worker_cards",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=rec)
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=500, detail="Could not save card")
+        return r.json()[0]
+
+
+@app.patch("/api/v1/worker-cards/{card_id}")
+async def patch_worker_card(card_id: str, body: CardPatch, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    ch = {}
+    for f in ("category", "label", "issued_date", "expiry_date", "position"):
+        v = getattr(body, f)
+        if v is not None:
+            ch[f] = (v or None) if f in ("label", "issued_date", "expiry_date") else v
+    if not ch:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    async with shared_client() as client:
+        r = await client.patch(
+            f"{REST}/worker_cards", params={"id": f"eq.{card_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json=ch)
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not update card")
+        return (r.json() or [{}])[0]
+
+
+@app.delete("/api/v1/worker-cards/{card_id}")
+async def delete_worker_card(card_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in CARD_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.delete(
+            f"{REST}/worker_cards", params={"id": f"eq.{card_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete card")
         return {"ok": True}
 
 
