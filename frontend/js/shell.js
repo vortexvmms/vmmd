@@ -117,7 +117,9 @@
       }
       document.getElementById("vcms-rn").innerHTML = railHTML(viewRole);
 
-      var ph = document.querySelector("body > header") || document.querySelector("header");
+      // The shared brand header has just been inserted as the first header.
+      // Select the page's original header explicitly, not the newly inserted one.
+      var ph = Array.prototype.find.call(document.querySelectorAll("header"), function(h){ return h !== brand; });
       if (ph && ph !== brand) ph.classList.add("vcms-pagebar");
       document.body.classList.add("vcms-shelled");
     } catch (e) {}
