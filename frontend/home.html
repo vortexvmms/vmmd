@@ -66,6 +66,12 @@
     .titem{ display:flex; gap:8px; align-items:flex-start; font-size:13px; padding:4px 0; } .titem .dot{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
     .tbtn{ display:block; text-align:center; background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:13px; padding:10px; border-radius:10px; margin-top:12px; }
     .backdrop{ display:none; } .mgreet{ display:none; }
+    .desktop-only{ display:block; }
+    .command-status{ background:linear-gradient(135deg,#17191D,#2B3037);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 7px 18px rgba(0,0,0,.12); }
+    .command-status .cs-title{ font-size:15px;font-weight:800;margin-bottom:3px; }.command-status .cs-copy{ font-size:12.5px;color:#E5E7EB;line-height:1.4; }.command-status .cs-pill{ flex:none;border-radius:20px;background:#FEF3C7;color:#92400E;font-size:11px;font-weight:800;padding:6px 11px; }
+    .quick-actions{ display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px; }.quick-actions a{min-width:0;background:#fff;border:1px solid var(--line);border-radius:11px;padding:10px 6px;text-align:center;text-decoration:none;color:#25292E;font-size:11.5px;font-weight:700;transition:transform .14s,box-shadow .14s,border-color .14s}.quick-actions a:hover{transform:translateY(-2px);box-shadow:0 7px 15px rgba(0,0,0,.08);border-color:#D1A2A2}.quick-actions b{display:block;color:var(--brand);font-size:17px;margin-bottom:3px}
+    .desk-stack{ display:grid;gap:12px;margin-top:12px; }.mini-card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}.mini-head{padding:11px 13px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:800;display:flex;justify-content:space-between;align-items:center}.mini-body{padding:10px 13px}.mini-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #F1F3F5;font-size:12px}.mini-row:last-child{border-bottom:0}.mini-row .count{font-weight:800;border-radius:15px;padding:2px 8px;background:#F3F4F6}.leave-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.leave-box{border:1px solid var(--line);border-radius:10px;padding:9px;text-align:center}.leave-box b{display:block;font-size:20px}.leave-box span{font-size:10.5px;color:var(--muted);font-weight:700}.timeline-row{display:grid;grid-template-columns:48px 1fr auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid #F1F3F5;font-size:11.5px}.timeline-row:last-child{border-bottom:0}.timeline-row time{font-weight:800;color:#6B7280}.timeline-row strong{display:block;font-size:12px}.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}.site-status{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:14px}.site-status.ok{background:#DCFCE7;color:#166534}.site-status.wait{background:#FEF3C7;color:#92400E}
+    @media(min-width:901px){.kpis{grid-template-columns:repeat(5,1fr);gap:9px}.kpi{padding:10px 12px;border-radius:12px}.kpi .ico{width:29px;height:29px;margin-bottom:5px}.kpi .n{font-size:22px}.kpi .l{font-size:11.5px}.kpi .d{display:none}.mobile-updates{display:none!important}.home-wrap{grid-template-columns:minmax(0,1fr) 330px;max-width:1460px}.content{padding:14px 18px}.tasks{top:80px}.dt-desktop-status{display:table-cell!important}}
     .mnav{ display:none; }
     .mnav .msec{ font-size:11px; font-weight:800; color:#9AA1AB; text-transform:uppercase; letter-spacing:.05em; margin:16px 2px 8px; }
     .mnav .mgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
@@ -74,6 +80,7 @@
     .mrswitch{ display:none; }
     @media (max-width:1000px){ .home-wrap{ grid-template-columns:1fr; } .tasks{ position:static; } }
     @media (max-width:900px){
+      .desktop-only{ display:none !important; }
       .side{ display:none !important; } .burger{ display:none !important; }
       .brand{ padding:0 52px 0 12px; gap:9px; height:54px; border-bottom:none; box-shadow:none; } .brand .logo{ height:32px; border-radius:8px; } .brand .bt{ font-size:19px; }
       .hsearch{ display:none; } .gcard{ display:none; } #rswitch{ display:none !important; } .logout{ height:40px; padding:7px 12px; background:var(--brand2); border-color:var(--brand2); transform:none; box-shadow:none; }
@@ -114,9 +121,16 @@
             </div>
             <div class="mnav" id="mnav"></div>
             <div class="SECT" id="subgreet"></div>
+            <div class="desktop-only command-status">
+              <div><div class="cs-title">Daily operational status</div><div class="cs-copy" id="daily-status">Loading today’s manpower and submission status…</div></div>
+              <span class="cs-pill" id="daily-status-pill">CHECKING</span>
+            </div>
+            <div class="desktop-only quick-actions" aria-label="Quick actions">
+              <a href="request.html"><b>＋</b>Request manpower</a><a href="attendance.html"><b>✓</b>Attendance</a><a href="whatsapp.html"><b>◉</b>WhatsApp</a><a href="dpr.html"><b>▤</b>Create DPR</a><a href="pr-new.html"><b>＋</b>Create PR</a><a href="verify.html"><b>◷</b>Verify end time</a>
+            </div>
             <div class="kpis" id="kpis"></div>
-            <div class="SECT" style="margin-top:18px">UPDATES FOR THIS DAY</div>
-            <div class="updates">
+            <div class="SECT mobile-updates" style="margin-top:18px">UPDATES FOR THIS DAY</div>
+            <div class="updates mobile-updates">
               <div class="upd"><h4>🌅 Morning · attendance</h4>
                 <div><span class="pill p-pend">PENDING</span><span id="m-pend" style="font-size:12.5px;color:#374151"></span></div>
                 <div style="margin-top:8px"><span class="pill p-done">DONE</span><span id="m-done" style="font-size:12.5px;color:#374151"></span></div>
@@ -128,14 +142,21 @@
                 <div id="e-remind" class="hidden" style="display:flex;gap:8px;margin-top:10px"><button class="rbtn" style="background:#111827;color:#fff" onclick="copyReminder('evening')">Copy reminder</button><button class="rbtn" style="background:#16A34A;color:#fff" onclick="shareReminder('evening')">Share to WhatsApp</button></div>
               </div>
             </div>
-            <div class="SECT" style="margin-top:18px">SITE SUMMARY · MONTH TO DATE</div>
+            <div class="SECT" style="margin-top:14px">SITE OPERATIONS · MONTH TO DATE</div>
             <div class="panel" style="overflow:auto">
-              <table class="dt"><thead><tr><th>Site</th><th class="r">On day</th><th class="r">Normal h</th><th class="r">OT h</th></tr></thead><tbody id="sites"></tbody><tfoot id="sites-foot"></tfoot></table>
+              <table class="dt"><thead><tr><th>Site</th><th class="r">Workers</th><th class="r">Normal h</th><th class="r">OT h</th><th class="dt-desktop-status" style="display:none">Status</th></tr></thead><tbody id="sites"></tbody><tfoot id="sites-foot"></tfoot></table>
             </div>
           </div>
-          <div class="tasks">
-            <div class="th">Today tasks for you<a href="todo.html" style="color:#fff;font-size:12px;font-weight:700;text-decoration:none;opacity:.9">Edit ›</a></div>
-            <div class="tb" id="tasks-body"><p style="color:#9CA3AF;font-size:13px">Loading…</p></div>
+          <div>
+            <div class="tasks">
+              <div class="th">Today tasks for you<a href="todo.html" style="color:#fff;font-size:12px;font-weight:700;text-decoration:none;opacity:.9">Edit ›</a></div>
+              <div class="tb" id="tasks-body"><p style="color:#9CA3AF;font-size:13px">Loading…</p></div>
+            </div>
+            <div class="desktop-only desk-stack">
+              <section class="mini-card"><div class="mini-head">Action required <a href="dashboard.html" style="color:#C00000;text-decoration:none">View ›</a></div><div class="mini-body" id="exceptions"><div class="mini-row"><span>Checking submissions…</span></div></div></section>
+              <section class="mini-card"><div class="mini-head">Leave today <a href="dashboard.html" style="color:#C00000;text-decoration:none">Details ›</a></div><div class="mini-body leave-grid"><div class="leave-box"><b id="desk-mc">0</b><span>MC</span></div><div class="leave-box"><b id="desk-al">0</b><span>AL</span></div><div class="leave-box"><b id="desk-ul">0</b><span>UL</span></div></div></section>
+              <section class="mini-card"><div class="mini-head">Updates timeline <span style="color:#6B7280;font-size:10px">TODAY</span></div><div class="mini-body"><div class="timeline-row"><time>08:00</time><div><strong>Attendance</strong><span id="desk-morning">Checking…</span></div><span id="desk-morning-dot" class="status-dot" style="background:#D97706"></span></div><div class="timeline-row"><time>17:00</time><div><strong>End times</strong><span id="desk-evening">Checking…</span></div><span id="desk-evening-dot" class="status-dot" style="background:#D97706"></span></div></div></section>
+            </div>
           </div>
         </div>
       </div>
@@ -264,13 +285,24 @@
         document.getElementById("e-pend").textContent=ep.length?ep.join(", "):"None — all submitted ✓";
         document.getElementById("e-done").textContent=ed.length?ed.join(", "):"None yet";
         MPEND=mp; EPEND=ep; RDATE=d.date;
+        const actionCount=mp.length+ep.length;
+        const ds=document.getElementById("daily-status"), dsp=document.getElementById("daily-status-pill");
+        if(ds) ds.textContent=`${d.today_allocated||0} workers allocated across ${d.total_sites||0} active sites. ${d.on_leave||0} worker${Number(d.on_leave||0)===1?" is":"s are"} on leave. ${actionCount?actionCount+" site updates require attention.":"All site updates are complete."}`;
+        if(dsp){ dsp.textContent=actionCount?"ACTION REQUIRED":"OPERATING NORMALLY"; dsp.style.background=actionCount?"#FEF3C7":"#DCFCE7"; dsp.style.color=actionCount?"#92400E":"#166534"; }
+        const mc=document.getElementById("desk-mc"), al=document.getElementById("desk-al"), ul=document.getElementById("desk-ul");
+        if(mc) mc.textContent=d.today_mc??0;if(al) al.textContent=d.today_al??0;if(ul) ul.textContent=d.today_ul??0;
+        const dm=document.getElementById("desk-morning"), de=document.getElementById("desk-evening");
+        if(dm) dm.textContent=mp.length?`${md.length}/${md.length+mp.length} sites submitted`:"All sites submitted";
+        if(de) de.textContent=ep.length?`${ed.length}/${ed.length+ep.length} sites submitted`:"All sites submitted";
+        const dmd=document.getElementById("desk-morning-dot"), ded=document.getElementById("desk-evening-dot");if(dmd) dmd.style.background=mp.length?"#D97706":"#16A34A";if(ded) ded.style.background=ep.length?"#D97706":"#16A34A";
+        const ex=document.getElementById("exceptions");if(ex){let eh="";if(mp.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#D97706"></i>Attendance pending</span><span class="count">${mp.length}</span></div>`;if(ep.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#C00000"></i>End time pending</span><span class="count">${ep.length}</span></div>`;if(!eh)eh='<div class="mini-row"><span><i class="status-dot" style="background:#16A34A"></i>No operational exceptions</span><span class="count">✓</span></div>';ex.innerHTML=eh;}
         const canR=isCoordinator(ME.role);
         document.getElementById("m-remind").classList.toggle("hidden", !(canR&&mp.length));
         document.getElementById("e-remind").classList.toggle("hidden", !(canR&&ep.length));
         const ss=d.site_summary||[];
-        document.getElementById("sites").innerHTML=ss.map(s=>`<tr><td style="font-weight:600;color:#111827">${esc(s.site_name)}</td><td class="r">${s.today}</td><td class="r">${s.month_nh}</td><td class="r" style="${s.month_ot>0?'color:#A32D2D;font-weight:700':''}">${s.month_ot}</td></tr>`).join("");
+        document.getElementById("sites").innerHTML=ss.map(s=>{const wait=mp.includes(s.site_name)||ep.includes(s.site_name);return `<tr><td style="font-weight:600;color:#111827">${esc(s.site_name)}</td><td class="r">${s.today}</td><td class="r">${s.month_nh}</td><td class="r" style="${s.month_ot>0?'color:#A32D2D;font-weight:700':''}">${s.month_ot}</td><td class="dt-desktop-status" style="display:none"><span class="site-status ${wait?'wait':'ok'}">${wait?'Update pending':'On track'}</span></td></tr>`}).join("");
         const tDay=ss.reduce((a,s)=>a+s.today,0), tNh=ss.reduce((a,s)=>a+s.month_nh,0), tOt=ss.reduce((a,s)=>a+s.month_ot,0);
-        document.getElementById("sites-foot").innerHTML=`<tr style="font-weight:800;background:#F8FAFC"><td>Total</td><td class="r">${tDay}</td><td class="r">${Math.round(tNh*10)/10}</td><td class="r">${Math.round(tOt*10)/10}</td></tr>`;
+        document.getElementById("sites-foot").innerHTML=`<tr style="font-weight:800;background:#F8FAFC"><td>Total</td><td class="r">${tDay}</td><td class="r">${Math.round(tNh*10)/10}</td><td class="r">${Math.round(tOt*10)/10}</td><td class="dt-desktop-status" style="display:none"></td></tr>`;
       } else { document.getElementById("kpis").innerHTML='<p style="color:#9CA3AF">Manpower dashboard unavailable.</p>'; }
     }
     async function loadTasks(){
