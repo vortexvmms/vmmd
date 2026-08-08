@@ -19,9 +19,9 @@
     .brand{ height:60px; background:var(--brand); color:#fff; display:flex; align-items:center; gap:14px; padding:0 64px 0 12px; position:sticky; top:0; z-index:50; }
     .brand .logo{ height:40px; width:auto; background:#fff; border-radius:8px; padding:3px; flex:none; }
     .brand .bt{ font-size:22px; font-weight:800; letter-spacing:.02em; }
-    .brand-center{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:17px; font-weight:800; color:#fff; white-space:nowrap; pointer-events:none; }
-    @media(max-width:1300px){ .brand-center{ display:none; } }
-    .brand .grow{ flex:1; }
+    .brand-center{ position:static; transform:none; flex:1 1 auto; min-width:0; padding:0 18px; text-align:center; overflow:hidden; text-overflow:ellipsis; font-size:clamp(13px,1.05vw,17px); font-weight:800; color:#fff; white-space:nowrap; pointer-events:none; }
+    @media(max-width:1450px){ .brand-center{ display:none; } }
+    .brand .grow{ display:none; }
     .hsearch{ position:relative; }
     .hsearch input{ border:none; border-radius:10px; height:40px; box-sizing:border-box; padding:0 12px 0 32px; font-size:13px; width:190px; background:#fff; color:#111; }
     .hsearch svg{ position:absolute; left:10px; top:12px; width:15px; height:15px; color:#9CA3AF; }
