@@ -53,7 +53,7 @@
     table.st { border-collapse:collapse; width:100%; }
     /* line-height fills the row so single-line text is vertically centred in the
        exported PDF too (html2canvas renders vertical-align:middle at the bottom). */
-    table.st td, table.st th { border:1px solid #000; padding:0 6px; line-height:22px; white-space:nowrap; }
+    table.st td, table.st th { border:1px solid #000; padding:3px 6px; line-height:1.25; white-space:nowrap; vertical-align:bottom; }
     table.st td.wrap, table.st th.wrap { white-space:normal; line-height:1.4; padding:4px 6px; }
     table.st th { background:#eee; font-weight:bold; text-align:center; }
     .st .c { text-align:center; }
@@ -226,6 +226,15 @@
   <datalist id="trades"></datalist>
   <div id="sheetmask"></div>
   <div id="sheet"></div>
+  <div id="iospdf" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:2147483647;align-items:center;justify-content:center;padding:20px">
+    <div style="width:min(420px,100%);background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.3)">
+      <h3 style="font-size:18px;font-weight:800;margin:0 0 7px">PDF is ready</h3>
+      <p style="font-size:13px;color:#64748B;margin:0 0 16px">On iPhone, tap Share PDF, then choose <b>Save to Files</b>.</p>
+      <button id="iosshare" onclick="sharePreparedPdf()" style="width:100%;border:0;border-radius:10px;background:#C00000;color:#fff;font-weight:800;padding:12px">Share PDF / Save to Files</button>
+      <a id="iosdownload" style="display:block;text-align:center;margin-top:12px;color:#374151;font-weight:700" download>Download PDF</a>
+      <button onclick="closePreparedPdf()" style="width:100%;border:0;background:transparent;color:#64748B;font-weight:700;padding:12px 0 0">Close</button>
+    </div>
+  </div>
 
   <script>
     requireLogin();
@@ -570,7 +579,8 @@
     }
 
     // ---- PDF ----
-    function buildSheet(){
+    function buildSheet(forPrint){
+      const co = forPrint ? "" : ' crossorigin="anonymous"';
       const d=collect(); const mp=d.manpower, eq=d.equipment, mt=d.materials;
       const noSum=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0);
       const totSum=mp.reduce((a,r)=>a+(parseFloat(r.total)||0),0);
@@ -581,7 +591,7 @@
       const mtRows=mt.map(r=>`<tr><td>${e(r.name)}</td><td class="c">${e(r.qty)}</td><td class="c">${e(r.unit)}</td><td>${e(r.remarks)}</td></tr>`).join("") || '<tr><td colspan="4">&nbsp;</td></tr>';
       let html=`<div class="dpr-sheet"><div class="page1"><div class="page1-top">
         <div class="dpr-top">
-          <img class="dpr-logo" src="${DPR_LOGO}" crossorigin="anonymous" alt="Vortex">
+          <img class="dpr-logo" src="${DPR_LOGO}"${co} alt="Vortex">
           <div class="proj">${e(d.project_title)}</div>
           <div class="logo-spacer"></div>
         </div>
@@ -610,13 +620,13 @@
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
           <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
-          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}" crossorigin="anonymous" style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
+          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}"${co} style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
         </table>
         </div></div>`;
       if(PHOTOS.length){
         html+=`<div class="photos-block"><div class="photos-head" style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
-        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}" crossorigin="anonymous"></div></div>`).join("");
+        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}"${co}></div></div>`).join("");
         html+=`</div></div>`;
       }
       return html+`</div>`;
@@ -626,6 +636,42 @@
       return Promise.all(imgs.map(im=> (im.complete && im.naturalWidth) ? Promise.resolve()
         : new Promise(res=>{ im.onload=()=>res(); im.onerror=()=>res(); setTimeout(res,4000); })));
     }
+    const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    let IOS_PDF_FILE=null, IOS_PDF_URL="";
+    function loadPdfLibraries(){
+      if(window.html2canvas&&window.jspdf) return Promise.resolve();
+      return new Promise(resolve=>vmmsLoadScripts([
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+      ],resolve));
+    }
+    async function prepareIosPdf(el,filename,hide){
+      try{
+        await loadPdfLibraries();
+        if(!window.html2canvas||!window.jspdf) throw new Error("PDF tools unavailable");
+        const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:"#ffffff",windowWidth:Math.max(el.scrollWidth,760)});
+        const pdf=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"portrait"});
+        const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),margin=7;
+        const ratio=Math.min((pw-margin*2)/canvas.width,(ph-margin*2)/canvas.height);
+        const w=canvas.width*ratio,h=canvas.height*ratio;
+        pdf.addImage(canvas.toDataURL("image/jpeg",.94),"JPEG",(pw-w)/2,margin,w,h);
+        const blob=pdf.output("blob");
+        IOS_PDF_FILE=new File([blob],filename+".pdf",{type:"application/pdf"});
+        if(IOS_PDF_URL) URL.revokeObjectURL(IOS_PDF_URL);
+        IOS_PDF_URL=URL.createObjectURL(blob);
+        const a=document.getElementById("iosdownload"); a.href=IOS_PDF_URL; a.download=IOS_PDF_FILE.name;
+        document.getElementById("iospdf").style.display="flex";
+      }catch(e){ alert("Could not build the PDF. Please try again."); }
+      finally{ hide(); }
+    }
+    async function sharePreparedPdf(){
+      if(!IOS_PDF_FILE) return;
+      try{
+        if(navigator.canShare&&navigator.canShare({files:[IOS_PDF_FILE]})) await navigator.share({files:[IOS_PDF_FILE],title:IOS_PDF_FILE.name});
+        else document.getElementById("iosdownload").click();
+      }catch(e){ if(e.name!=="AbortError") document.getElementById("iosdownload").click(); }
+    }
+    function closePreparedPdf(){ document.getElementById("iospdf").style.display="none"; }
     async function downloadPdf(){
       const el=document.getElementById("sheet"), mask=document.getElementById("sheetmask");
       el.innerHTML=buildSheet();
@@ -642,11 +688,14 @@
       const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,60);
       const hide=function(){ el.classList.remove("cap"); mask.classList.remove("on"); };
       setTimeout(hide, 15000); // safety: never leave the mask stuck
-      vmmsDownloadPdf("sheet", `${iow}_${dateVal()}`, {landscape:false, onePage:true, onDone:hide});
+      const filename=`${iow}_${dateVal()}`;
+      if(IS_IOS) await prepareIosPdf(el,filename,hide);
+      else vmmsDownloadPdf("sheet", filename, {landscape:false, onePage:true, onDone:hide});
     }
 
     // ---- Print / PDF (native browser render → correct vertical alignment, sharp text) ----
     function printSheet(){
+      if(IS_IOS){ downloadPdf(); return; }
       const styles=[...document.querySelectorAll("style")].map(s=>s.textContent).join("\n");
       const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,60);
       const w=window.open("","_dprprint");
@@ -664,12 +713,17 @@
           @media print{ .pbar{display:none;} }
         </style>
         <script>
+          function ready(){
+            document.querySelectorAll(".pcell .imgwrap img").forEach(function(im){ im.classList.add((im.naturalWidth&&im.naturalHeight&&im.naturalHeight>im.naturalWidth)?"pt":"ls"); });
+            var b=document.getElementById("prbtn"); if(b){ b.disabled=false; b.textContent="Print / Save PDF"; }
+          }
           window.addEventListener("load",function(){
-            document.querySelectorAll(".pcell .imgwrap img").forEach(function(im){
-              im.classList.add((im.naturalWidth&&im.naturalHeight&&im.naturalHeight>im.naturalWidth)?"pt":"ls"); });
-            setTimeout(function(){ window.focus(); window.print(); }, 450);
+            var imgs=[].slice.call(document.images), left=imgs.length, n=left, b=document.getElementById("prbtn");
+            if(!left){ ready(); return; }
+            function tick(){ if(b) b.textContent="Loading photos… ("+(n-left)+"/"+n+")"; if(left===0) ready(); }
+            imgs.forEach(function(im){ if(im.complete){ left--; tick(); } else { im.onload=im.onerror=function(){ left--; tick(); }; } });
           });
-        <\/script></head><body><div class="pbar"><button onclick="window.print()">Print / Save PDF</button><button class="cl" onclick="window.close()">✕ Close</button></div><div id="sheet">${buildSheet()}</div></body></html>`);
+        <\/script></head><body><div class="pbar"><button id="prbtn" disabled onclick="window.print()">Loading photos…</button><button class="cl" onclick="window.close()">✕ Close</button></div><div id="sheet">${buildSheet(true)}</div></body></html>`);
       w.document.close();
     }
 
