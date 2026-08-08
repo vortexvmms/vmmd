@@ -43,6 +43,10 @@
     .nav a{ display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; color:#3A3D42; font-size:14px; text-decoration:none; margin:1px 0; transition:transform .14s ease, box-shadow .14s ease, background .14s ease; }
     .nav a:hover{ background:#F6F7F9; transform:translateX(3px); box-shadow:0 4px 12px rgba(0,0,0,.07); }
     .nav a.on{ background:#FDE8E8; color:var(--brand); font-weight:700; } .nav a.on:hover{ background:#FBDCDC; } .nav a svg{ width:19px; height:19px; flex:none; }
+    /* Premium compact desktop navigation. Mobile uses its own unchanged menu. */
+    .nav .grp-toggle{width:100%;height:36px;margin:6px 0 2px;padding:0 9px;border:0;border-top:1px solid #E2E6EB;background:linear-gradient(90deg,#F1F3F6,#F8F9FA);color:#747F8F;display:flex;align-items:center;justify-content:space-between;border-radius:7px;cursor:pointer;font:800 10.5px Arial,sans-serif;letter-spacing:.09em;text-transform:uppercase;text-align:left}
+    .nav .grp-toggle:hover{color:#A91515;background:#ECEFF3}.nav .grp-toggle .chev{font-size:15px;line-height:1;transition:transform .18s ease}.nav .grp-toggle[aria-expanded="false"] .chev{transform:rotate(-90deg)}
+    .nav .grp-items{display:block}.nav .grp-items.is-closed{display:none}.nav a{min-height:38px;padding:7px 10px;font-size:13.5px}.nav a svg{width:18px;height:18px}
     .main{ flex:1; min-width:0; }
     .content{ padding:18px; width:100%; }
     .home-wrap{ display:grid; grid-template-columns:1fr 320px; gap:16px; max-width:1320px; margin:0 auto; }
@@ -220,9 +224,17 @@
       const cur=location.pathname.split("/").pop()||"home.html";
       const nav=navFor(role); NAVITEMS=[];
       nav.forEach(s=>s.items.forEach(it=>NAVITEMS.push(it)));
-      document.getElementById("nav").innerHTML=nav.map(s=>(s.grp?`<div class="grp">${s.grp}</div>`:"")+s.items.map(([l,h,ic])=>`<a href="${h}" class="${h===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("")).join("");
+      let saved={}; try{saved=JSON.parse(localStorage.getItem("vcms_nav_groups")||"{}")}catch(e){}
+      document.getElementById("nav").innerHTML=nav.map((s,i)=>{
+        const links=s.items.map(([l,h,ic])=>`<a href="${h}" class="${h===cur?"on":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[ic]||IC.home}</svg>${esc(l)}</a>`).join("");
+        if(!s.grp) return links;
+        const key=s.grp.toLowerCase().replace(/[^a-z0-9]+/g,"-");
+        const active=s.items.some(it=>it[1]===cur), open=active||saved[key]===true;
+        return `<button type="button" class="grp-toggle" data-group="${key}" aria-expanded="${open}"><span>${esc(s.grp)}</span><span class="chev">⌄</span></button><div class="grp-items${open?"":" is-closed"}" data-items="${key}">${links}</div>`;
+      }).join("");
       renderMobileMenu(role);
     }
+    document.getElementById("nav").addEventListener("click",e=>{const b=e.target.closest(".grp-toggle");if(!b)return;const key=b.dataset.group,box=document.querySelector(`.grp-items[data-items="${key}"]`),open=b.getAttribute("aria-expanded")!=="true";b.setAttribute("aria-expanded",String(open));if(box)box.classList.toggle("is-closed",!open);let saved={};try{saved=JSON.parse(localStorage.getItem("vcms_nav_groups")||"{}")}catch(x){}saved[key]=open;try{localStorage.setItem("vcms_nav_groups",JSON.stringify(saved))}catch(x){}});
     /* mobile home menu — grouped into 3 sections (like old layout) */
     function mobileSections(role){
       const nav=navFor(role);
