@@ -82,6 +82,7 @@
         "#vcms-brand .res{position:absolute;top:44px;left:0;right:0;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);overflow:hidden;display:none;z-index:60;}#vcms-brand .res a{display:block;padding:9px 12px;font-size:13px;color:#334155;text-decoration:none;}#vcms-brand .res a:hover{background:#F3F4F6;}" +
         "#vcms-brand .gc{background:#fff;color:#111;border:1px solid #D9DDE3;border-radius:10px;height:42px;box-sizing:border-box;padding:0 8px 0 14px;display:flex;align-items:center;gap:10px;max-width:330px;}#vcms-brand .gc .g1{font-weight:800;font-size:14px;line-height:1.1;white-space:nowrap;}#vcms-brand .gc .g2{font-size:11px;color:#6B7280;white-space:nowrap;}#vcms-brand .gc .chip{background:#C00000;color:#fff;font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;white-space:nowrap;}" +
         "#vcms-brand select{border:1px solid #D9DDE3;border-radius:10px;height:42px;box-sizing:border-box;padding:0 10px;font-size:12px;font-weight:700;background:#fff;color:#111;}" +
+        "#vcms-project-context{display:flex;align-items:center;gap:6px;color:#fff;font-size:11px;font-weight:700;}#vcms-project-context select{max-width:240px;}" +
         "#vcms-brand .lo{background:#17191D;color:#fff;border:1px solid #17191D;border-radius:10px;height:42px;box-sizing:border-box;padding:0 16px;font-weight:700;font-size:13px;cursor:pointer;flex:none;transition:transform .14s,box-shadow .14s;}#vcms-brand .lo:hover{transform:translateY(-1px);box-shadow:0 5px 12px rgba(0,0,0,.25);}" +
         "#vcms-rail{position:fixed;left:0;top:64px;bottom:0;width:236px;background:linear-gradient(180deg,#FFFFFF 0%,#F7F8FA 100%);border-right:1px solid #DDE1E6;box-shadow:5px 0 18px rgba(16,24,40,.035);display:flex;flex-direction:column;z-index:40;font-family:Arial,system-ui,sans-serif;}" +
         "#vcms-rail .rn{flex:1;overflow:auto;padding:8px 10px 16px;scrollbar-width:thin;scrollbar-color:#C9CED6 transparent;}#vcms-rail .rn::-webkit-scrollbar{width:5px;}#vcms-rail .rn::-webkit-scrollbar-thumb{background:#C9CED6;border-radius:9px;}" +
@@ -108,6 +109,7 @@
         (role==="admin"?'<select id="vcms-rswitch"></select>':"") +
         '<button class="lo" onclick="vmmsLogout()">Log Out</button>';
       document.body.insertBefore(brand, document.body.firstChild);
+      if (window.vcmsProjectContext) window.vcmsProjectContext.mount(brand);
 
       var rail = document.createElement("aside");
       rail.id = "vcms-rail";

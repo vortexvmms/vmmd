@@ -8,6 +8,8 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
   POST   /api/v1/attendance/bulk_end         set one end time for the whole site
   POST   /api/v1/attendance/submit           submit & lock the site's day
 """
+from __future__ import annotations
+
 import os
 import time
 import json as _json
@@ -19,7 +21,18 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.64.0")  # worker certificates
+from app.core.roles import (
+    ALL_ROLES,
+    ATTENDANCE_ROLES,
+    COORDINATOR_ROLES,
+    FULL_ROLES,
+    MANAGER_ROLES,
+    SUPERVISOR_ROLES,
+)
+from app.modules.projects.router import ProjectModuleContext, build_projects_router
+from app.modules.schedule.router import build_schedule_router
+
+app = FastAPI(title="VCMS API", version="0.65.0")  # Phase 0 project foundation
 
 app.add_middleware(
     CORSMiddleware,
@@ -127,16 +140,8 @@ def require_service():
                    "in the backend (Render) environment, then try again.")
 
 
-# ---------------- Role tiers (Rev 6) ----------------
-# FULL       — admin, general_manager, operation_manager, hr_assistant  (everything)
-# MANAGER    — main_sup (Site Manager), wshc_lead  (all but workers/sites/allocation/users)
-# SUPERVISOR — site_sup, safety_sup, wshc, logistics_sup  (own site attendance/requests)
-FULL_ROLES = ("admin", "general_manager", "operation_manager", "hr_assistant")
-MANAGER_ROLES = ("main_sup", "wshc_lead")
-SUPERVISOR_ROLES = ("site_sup", "safety_sup", "wshc", "logistics_sup")
-ATTENDANCE_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # who can do attendance / requests
-COORDINATOR_ROLES = FULL_ROLES + MANAGER_ROLES                     # who can generate broadcast messages
-ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
+# ---------------- Canonical role tiers ----------------
+# Defined once in app.core.roles and mirrored by the migration/RLS policy.
 
 
 # --- identity cache -------------------------------------------------------
@@ -233,6 +238,16 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
             "new_value": new_value,
         },
     )
+
+
+app.include_router(build_projects_router(ProjectModuleContext(
+    get_current_user=get_current_user,
+    shared_client=shared_client,
+    rest_url=REST,
+    supabase_headers=supabase_headers,
+    audit=audit,
+)))
+app.include_router(build_schedule_router(get_current_user))
 
 
 # ---------------- basics ----------------
@@ -414,11 +429,13 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
 class SiteCreate(BaseModel):
     site_code: str
     site_name: str
+    project_id: str | None = None
 
 
 class SiteUpdate(BaseModel):
     site_name: str | None = None
     status: str | None = None  # active | archived
+    project_id: str | None = None
 
 
 class SupervisorAssign(BaseModel):
@@ -430,7 +447,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.get(
             f"{REST}/sites",
-            params={"select": "id,site_code,site_name,status,site_supervisors(user_id,users(name))",
+            params={"select": "id,site_code,site_name,project_id,status,site_supervisors(user_id,users(name))",
                     "order": "site_name.asc"},
             headers=supabase_headers(user["token"]),
         )
@@ -443,7 +460,8 @@ async def list_sites(user: dict = Depends(get_current_user)):
                 u = link.get("users") or {}
                 sups.append({"user_id": link["user_id"], "name": u.get("name", "?")})
             out.append({"id": s["id"], "site_code": s["site_code"],
-                        "site_name": s["site_name"], "status": s["status"],
+                        "site_name": s["site_name"], "project_id": s.get("project_id"),
+                        "status": s["status"],
                         "supervisors": sups})
         return out
 
@@ -461,7 +479,8 @@ async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
         r = await client.post(
             f"{REST}/sites",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json={"site_code": code, "site_name": name, "status": "active"},
+            json={"site_code": code, "site_name": name, "project_id": body.project_id,
+                  "status": "active"},
         )
         if r.status_code == 409:
             raise HTTPException(status_code=409, detail=f"Site code {code} already exists")
@@ -484,6 +503,8 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
         if body.status not in ("active", "archived"):
             raise HTTPException(status_code=400, detail="Invalid status")
         changes["status"] = body.status
+    if body.project_id is not None:
+        changes["project_id"] = body.project_id
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
@@ -2879,6 +2900,7 @@ class ProjectIn(BaseModel):
     location: str | None = None
     item_of_work: str | None = None
     site_id: str | None = None
+    project_id: str | None = None
 
 
 @app.get("/api/v1/dpr/projects")
@@ -2902,7 +2924,8 @@ async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
             json={"title": body.title, "to_party": body.to_party, "attention": body.attention,
                   "location": body.location, "item_of_work": body.item_of_work,
-                  "site_id": body.site_id, "created_by": user["user_id"]})
+                  "site_id": body.site_id, "project_id": body.project_id,
+                  "created_by": user["user_id"]})
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()

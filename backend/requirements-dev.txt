@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest==8.*
+eval-type-backport==0.3.*
