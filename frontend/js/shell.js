@@ -33,6 +33,7 @@
         if (t === "supervisor") return [
           {items:[["Home","home.html","home"],["To-do","todo.html","chk"]]},
           {grp:"Daily",items:[["Request manpower","request.html","cal"],["Attendance","attendance.html","chk"],["WhatsApp","whatsapp.html","chat"]]},
+          {grp:"Planning",items:[["Project Schedule","schedule.html","cal"]]},
           {grp:"Site progress",items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"],["Reports","reports.html","doc"]]},
           {grp:"Procurement",items:[["New PR","pr-new.html","cart"]]},
           {grp:"Admin",items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]]},
@@ -40,6 +41,7 @@
         var full = [
           {items:[["Home","home.html","home"],["To-do","todo.html","chk"]]},
           {grp:"Manpower",items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]]},
+          {grp:"Planning",items:[["Project Schedule","schedule.html","cal"]]},
           {grp:"Site progress",items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"],["Reports","reports.html","doc"]]},
           {grp:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
           {grp:"Admin",items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]]},

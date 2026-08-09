@@ -30,7 +30,7 @@ from app.core.roles import (
     SUPERVISOR_ROLES,
 )
 from app.modules.projects.router import ProjectModuleContext, build_projects_router
-from app.modules.schedule.router import build_schedule_router
+from app.modules.schedule.router import ScheduleModuleContext, build_schedule_router
 
 app = FastAPI(title="VCMS API", version="0.65.0")  # Phase 0 project foundation
 
@@ -247,7 +247,12 @@ app.include_router(build_projects_router(ProjectModuleContext(
     supabase_headers=supabase_headers,
     audit=audit,
 )))
-app.include_router(build_schedule_router(get_current_user))
+app.include_router(build_schedule_router(ScheduleModuleContext(
+    get_current_user=get_current_user,
+    shared_client=shared_client,
+    rest_url=REST,
+    supabase_headers=supabase_headers,
+)))
 
 
 # ---------------- basics ----------------
