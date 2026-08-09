@@ -39,6 +39,7 @@ class WbsReorder(BaseModel):
 class ActivityCreate(BaseModel):
     project_id: UUID
     wbs_id: UUID
+    calendar_id: UUID | None = None
     code: str = Field(min_length=1, max_length=60)
     name: str = Field(min_length=1, max_length=240)
     description: str | None = None
@@ -62,6 +63,7 @@ class ActivityCreate(BaseModel):
 
 class ActivityUpdate(BaseModel):
     wbs_id: UUID | None = None
+    calendar_id: UUID | None = None
     code: str | None = Field(default=None, min_length=1, max_length=60)
     name: str | None = Field(default=None, min_length=1, max_length=240)
     description: str | None = None
@@ -91,3 +93,56 @@ class RelationshipUpdate(BaseModel):
     relationship_type: Literal["FS", "SS", "FF", "SF"] | None = None
     lag_days: int | None = Field(default=None, ge=-3650, le=3650)
     is_active: bool | None = None
+
+
+class CalendarCreate(BaseModel):
+    project_id: UUID
+    name: str = Field(min_length=1, max_length=120)
+    hours_per_day: float = Field(default=8, gt=0, le=24)
+    is_default: bool = False
+
+
+class CalendarUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    hours_per_day: float | None = Field(default=None, gt=0, le=24)
+    is_default: bool | None = None
+    is_active: bool | None = None
+
+
+class WeekdayRule(BaseModel):
+    day_of_week: int = Field(ge=0, le=6)
+    is_working: bool
+    work_hours: float = Field(ge=0, le=24)
+
+    @model_validator(mode="after")
+    def validate_hours(self):
+        if self.is_working and self.work_hours <= 0:
+            raise ValueError("A working day must have positive work hours")
+        if not self.is_working and self.work_hours != 0:
+            raise ValueError("A non-working day must have zero work hours")
+        return self
+
+
+class CalendarWorkweekUpdate(BaseModel):
+    rules: list[WeekdayRule] = Field(min_length=7, max_length=7)
+
+    @model_validator(mode="after")
+    def require_all_weekdays(self):
+        if {rule.day_of_week for rule in self.rules} != set(range(7)):
+            raise ValueError("Workweek must contain each weekday exactly once")
+        return self
+
+
+class CalendarExceptionCreate(BaseModel):
+    exception_date: date
+    name: str = Field(min_length=1, max_length=160)
+    is_working: bool = False
+    work_hours: float = Field(default=0, ge=0, le=24)
+
+    @model_validator(mode="after")
+    def validate_hours(self):
+        if self.is_working and self.work_hours <= 0:
+            raise ValueError("A working exception must have positive work hours")
+        if not self.is_working and self.work_hours != 0:
+            raise ValueError("A non-working exception must have zero work hours")
+        return self

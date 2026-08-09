@@ -62,3 +62,14 @@ def test_phase1_activity_logic_migration_contract():
     assert "public.validate_activity_relationship" in sql
     assert "alter table public.activity_relationships enable row level security" in sql
     assert "values ('0004'" in sql
+
+
+def test_phase1_project_calendar_migration_contract():
+    sql = (ROOT / "db" / "migrations" / "0005_phase1_project_calendars.sql").read_text()
+    for required in ("public.schedule_calendars", "public.calendar_workweek", "public.calendar_exceptions", "day_of_week", "work_hours"):
+        assert required in sql
+    assert "uq_project_default_calendar" in sql
+    assert "public.set_calendar_workweek" in sql
+    assert "public.validate_activity_calendar_scope" in sql
+    assert "alter table public.schedule_calendars enable row level security" in sql
+    assert "values('0005'" in sql

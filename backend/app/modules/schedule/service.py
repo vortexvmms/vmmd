@@ -85,7 +85,7 @@ class WbsService:
 
 
 class ActivityService:
-    SELECT = "id,project_id,schedule_id,wbs_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,status,percent_complete,sort_order,is_active,created_at,updated_at"
+    SELECT = "id,project_id,schedule_id,wbs_id,calendar_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,status,percent_complete,sort_order,is_active,created_at,updated_at"
 
     def __init__(self, client, rest_url: str, headers: dict):
         self.client, self.rest, self.headers = client, rest_url, headers
@@ -193,6 +193,7 @@ class RelationshipService:
             raise HTTPException(status_code=400, detail="Select active activities from this project")
         return rows[0]
 
+
     async def create(self, body, user: dict):
         self.require_editor(user)
         project_id = str(body.project_id)
@@ -224,4 +225,60 @@ class RelationshipService:
         rows = r.json() if r.status_code == 200 else []
         if not rows:
             raise HTTPException(status_code=404, detail="Activity relationship not found")
+        return rows[0]
+
+
+class CalendarService:
+    SELECT = "id,project_id,name,hours_per_day,is_default,is_active,created_at,updated_at,calendar_workweek(day_of_week,is_working,work_hours),calendar_exceptions(id,exception_date,name,is_working,work_hours)"
+
+    def __init__(self, client, rest_url: str, headers: dict):
+        self.client, self.rest, self.headers = client, rest_url, headers
+
+    @staticmethod
+    def require_editor(user: dict):
+        if not can_administer_projects(user.get("role", "")):
+            raise HTTPException(status_code=403, detail="Not allowed to edit project calendars")
+
+    async def list(self, project_id: str):
+        r = await self.client.get(f"{self.rest}/schedule_calendars", params={"project_id": f"eq.{project_id}", "is_active": "eq.true", "select": self.SELECT, "order": "is_default.desc,name.asc"}, headers=self.headers)
+        if r.status_code != 200: raise HTTPException(status_code=500, detail="Could not load project calendars")
+        return {"calendars": r.json()}
+
+    async def create(self, body, user: dict):
+        self.require_editor(user)
+        values = body.model_dump(mode="json")
+        values.update(name=body.name.strip(), created_by=user["user_id"], updated_by=user["user_id"])
+        r = await self.client.post(f"{self.rest}/schedule_calendars", headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        rows = r.json() if r.status_code in (200, 201) else []
+        if not rows: raise HTTPException(status_code=400, detail="Could not create project calendar")
+        return rows[0]
+
+    async def update(self, calendar_id: str, body, user: dict):
+        self.require_editor(user)
+        values = body.model_dump(exclude_unset=True, mode="json")
+        if not values: raise HTTPException(status_code=400, detail="Nothing to update")
+        if "name" in values: values["name"] = values["name"].strip()
+        if values.get("is_active") is False: values["archived_at"] = datetime.now(timezone.utc).isoformat()
+        values["updated_by"] = user["user_id"]
+        r = await self.client.patch(f"{self.rest}/schedule_calendars", params={"id": f"eq.{calendar_id}"}, headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows: raise HTTPException(status_code=404, detail="Project calendar not found")
+        return rows[0]
+
+    async def update_workweek(self, calendar_id: str, body, user: dict):
+        self.require_editor(user)
+        r = await self.client.post(f"{self.rest}/rpc/set_calendar_workweek", headers=self.headers, json={"p_calendar_id": calendar_id, "p_rules": [rule.model_dump(mode="json") for rule in body.rules]})
+        if r.status_code != 200: raise HTTPException(status_code=400, detail="Could not save working-day rules")
+        return {"updated": r.json()}
+
+    async def create_exception(self, calendar_id: str, body, user: dict):
+        self.require_editor(user)
+        calendar_response = await self.client.get(f"{self.rest}/schedule_calendars", params={"id": f"eq.{calendar_id}", "is_active": "eq.true", "select": "id,project_id", "limit": "1"}, headers=self.headers)
+        calendars = calendar_response.json() if calendar_response.status_code == 200 else []
+        if not calendars: raise HTTPException(status_code=404, detail="Project calendar not found")
+        values = body.model_dump(mode="json")
+        values.update(calendar_id=calendar_id, project_id=calendars[0]["project_id"], created_by=user["user_id"], updated_by=user["user_id"])
+        r = await self.client.post(f"{self.rest}/calendar_exceptions", headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        rows = r.json() if r.status_code in (200, 201) else []
+        if not rows: raise HTTPException(status_code=400, detail="Could not add calendar exception")
         return rows[0]

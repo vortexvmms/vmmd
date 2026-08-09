@@ -3,8 +3,8 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends
 
-from .schemas import ActivityCreate, ActivityUpdate, RelationshipCreate, RelationshipUpdate, WbsCreate, WbsReorder, WbsUpdate
-from .service import ActivityService, RelationshipService, WbsService
+from .schemas import ActivityCreate, ActivityUpdate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, RelationshipCreate, RelationshipUpdate, WbsCreate, WbsReorder, WbsUpdate
+from .service import ActivityService, CalendarService, RelationshipService, WbsService
 
 
 @dataclass(frozen=True)
@@ -27,9 +27,12 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     def relationship_service(client, user):
         return RelationshipService(client, context.rest_url, context.supabase_headers(user["token"]))
 
+    def calendar_service(client, user):
+        return CalendarService(client, context.rest_url, context.supabase_headers(user["token"]))
+
     @router.get("/capabilities")
     async def capabilities(user: dict = Depends(context.get_current_user)):
-        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic"], "planned": ["calendars", "resources", "baseline", "progress"]}
+        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars"], "planned": ["resources", "baseline", "progress"]}
 
     @router.get("/wbs")
     async def list_wbs(project_id: str, user: dict = Depends(context.get_current_user)):
@@ -80,5 +83,30 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     async def update_relationship(relationship_id: str, body: RelationshipUpdate, user: dict = Depends(context.get_current_user)):
         async with context.shared_client() as client:
             return await relationship_service(client, user).update(relationship_id, body, user)
+
+    @router.get("/calendars")
+    async def list_calendars(project_id: str, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await calendar_service(client, user).list(project_id)
+
+    @router.post("/calendars", status_code=201)
+    async def create_calendar(body: CalendarCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await calendar_service(client, user).create(body, user)
+
+    @router.patch("/calendars/{calendar_id}")
+    async def update_calendar(calendar_id: str, body: CalendarUpdate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await calendar_service(client, user).update(calendar_id, body, user)
+
+    @router.put("/calendars/{calendar_id}/workweek")
+    async def update_workweek(calendar_id: str, body: CalendarWorkweekUpdate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await calendar_service(client, user).update_workweek(calendar_id, body, user)
+
+    @router.post("/calendars/{calendar_id}/exceptions", status_code=201)
+    async def create_calendar_exception(calendar_id: str, body: CalendarExceptionCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await calendar_service(client, user).create_exception(calendar_id, body, user)
 
     return router
