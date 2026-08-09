@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException
 
@@ -383,3 +383,42 @@ class ProgressService:
         r=await self.client.post(f"{self.rest}/rpc/record_activity_progress",headers=self.headers,json={f"p_{key}":value for key,value in values.items()})
         if r.status_code!=200: raise HTTPException(status_code=400,detail="Could not save activity progress")
         return {"progress_id":r.json()}
+
+
+class ReportService:
+    TYPES={"summary","lookahead","critical","progress","overdue","variance","resources"}
+    def __init__(self,client,rest_url: str,headers: dict): self.client,self.rest,self.headers=client,rest_url,headers
+    async def _get(self,table,params):
+        r=await self.client.get(f"{self.rest}/{table}",params=params,headers=self.headers)
+        if r.status_code!=200: raise HTTPException(status_code=500,detail=f"Could not load report {table}")
+        return r.json()
+    async def project_controls(self,project_id: str,report_type: str,data_date: str|None,lookahead_days: int):
+        if report_type not in self.TYPES: raise HTTPException(status_code=400,detail="Unknown project-controls report")
+        if lookahead_days<1 or lookahead_days>90: raise HTTPException(status_code=400,detail="Lookahead must be between 1 and 90 days")
+        try: as_of=date.fromisoformat(data_date) if data_date else date.today()
+        except ValueError as exc: raise HTTPException(status_code=400,detail="Invalid report data date") from exc
+        activities=await self._get("schedule_activities",{"project_id":f"eq.{project_id}","is_active":"eq.true","select":ActivityService.SELECT+",wbs_nodes(code,name)","order":"sort_order.asc,code.asc"})
+        assignments=await self._get("activity_resource_assignments",{"project_id":f"eq.{project_id}","is_active":"eq.true","select":"activity_id,budgeted_cost"})
+        baselines=await self._get("schedule_baselines",{"project_id":f"eq.{project_id}","status":"eq.active","select":"id,name,data_date,created_at,baseline_activity_snapshots(activity_id,early_finish)","order":"created_at.desc","limit":"1"})
+        costs={}
+        for item in assignments: costs[item["activity_id"]]=costs.get(item["activity_id"],0)+float(item.get("budgeted_cost") or 0)
+        baseline=baselines[0] if baselines else None; baseline_dates={}
+        if baseline:
+            for snap in baseline.get("baseline_activity_snapshots") or []: baseline_dates[snap["activity_id"]]=snap.get("early_finish")
+        rows=[]
+        for a in activities:
+            current_start=a.get("early_start") or a["planned_start"]; current_finish=a.get("early_finish") or a["planned_finish"]
+            finish_date=date.fromisoformat(current_finish); base_finish=baseline_dates.get(a["id"])
+            variance=(finish_date-date.fromisoformat(base_finish)).days if base_finish else None
+            rows.append({"activity_id":a["id"],"code":a["code"],"name":a["name"],"wbs_code":(a.get("wbs_nodes") or {}).get("code",""),"wbs_name":(a.get("wbs_nodes") or {}).get("name",""),"activity_type":a["activity_type"],"status":a["status"],"percent_complete":float(a.get("percent_complete") or 0),"planned_start":a["planned_start"],"planned_finish":a["planned_finish"],"current_start":current_start,"current_finish":current_finish,"actual_start":a.get("actual_start"),"actual_finish":a.get("actual_finish"),"is_critical":bool(a.get("is_critical")),"total_float":a.get("total_float"),"baseline_finish":base_finish,"finish_variance_days":variance,"budgeted_cost":round(costs.get(a["id"],0),2),"is_overdue":a["status"]!="complete" and finish_date<as_of})
+        all_rows=list(rows); end=as_of+timedelta(days=lookahead_days)
+        if report_type=="lookahead": rows=[r for r in rows if r["status"]!="complete" and date.fromisoformat(r["current_start"])<=end and date.fromisoformat(r["current_finish"])>=as_of]
+        elif report_type=="critical": rows=[r for r in rows if r["is_critical"] and r["status"]!="complete"]
+        elif report_type=="progress": rows=[r for r in rows if r["percent_complete"]>0 or r["actual_start"]]
+        elif report_type=="overdue": rows=[r for r in rows if r["is_overdue"]]
+        elif report_type=="variance": rows=[r for r in rows if r["finish_variance_days"] not in(None,0)]
+        elif report_type=="resources": rows=[r for r in rows if r["budgeted_cost"]>0]
+        total_weight=sum(max(1,int(a.get("duration_days") or 0)) for a in activities) or 1
+        earned=sum(max(1,int(a.get("duration_days") or 0))*float(a.get("percent_complete") or 0) for a in activities)
+        summary={"total_activities":len(all_rows),"not_started":sum(r["status"]=="not_started" for r in all_rows),"in_progress":sum(r["status"]=="in_progress" for r in all_rows),"complete":sum(r["status"]=="complete" for r in all_rows),"critical_open":sum(r["is_critical"] and r["status"]!="complete" for r in all_rows),"overdue":sum(r["is_overdue"] for r in all_rows),"overall_percent":round(earned/total_weight,2),"budgeted_cost":round(sum(r["budgeted_cost"] for r in all_rows),2)}
+        return {"report_type":report_type,"data_date":as_of.isoformat(),"lookahead_days":lookahead_days,"baseline":baseline and {k:baseline.get(k) for k in("id","name","data_date")},"summary":summary,"rows":rows}

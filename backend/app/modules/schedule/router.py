@@ -4,7 +4,7 @@ from typing import Callable
 from fastapi import APIRouter, Depends
 
 from .schemas import ActivityCreate, ActivityUpdate, BaselineCreate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, MasterResourceCreate, ProgressUpdateCreate, ProjectResourceCreate, RelationshipCreate, RelationshipUpdate, ResourceAssignmentCreate, ResourceAssignmentUpdate, ScheduleCalculateRequest, WbsCreate, WbsReorder, WbsUpdate
-from .service import ActivityService, CalculationService, CalendarService, ProgressService, RelationshipService, ResourceService, WbsService
+from .service import ActivityService, CalculationService, CalendarService, ProgressService, ReportService, RelationshipService, ResourceService, WbsService
 
 
 @dataclass(frozen=True)
@@ -39,9 +39,12 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     def progress_service(client, user):
         return ProgressService(client, context.rest_url, context.supabase_headers(user["token"]))
 
+    def report_service(client, user):
+        return ReportService(client, context.rest_url, context.supabase_headers(user["token"]))
+
     @router.get("/capabilities")
     async def capabilities(user: dict = Depends(context.get_current_user)):
-        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars", "resources", "resource_assignments", "calculation", "gantt", "baselines", "progress", "dpr_integration"], "planned": []}
+        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars", "resources", "resource_assignments", "calculation", "gantt", "baselines", "progress", "dpr_integration", "reports"], "planned": []}
 
     @router.get("/wbs")
     async def list_wbs(project_id: str, user: dict = Depends(context.get_current_user)):
@@ -162,5 +165,9 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     @router.post("/progress",status_code=201)
     async def record_progress(body: ProgressUpdateCreate, user: dict = Depends(context.get_current_user)):
         async with context.shared_client() as client: return await progress_service(client,user).record(body)
+
+    @router.get("/reports/project-controls")
+    async def project_controls_report(project_id: str, report_type: str = "summary", data_date: str | None = None, lookahead_days: int = 14, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client: return await report_service(client,user).project_controls(project_id,report_type,data_date,lookahead_days)
 
     return router
