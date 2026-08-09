@@ -19,23 +19,45 @@
       body { background: white; }
       #tablebox { box-shadow: none; }
     }
+    @media (min-width:900px) {
+      body.vcms-shelled .reports-page-title { gap:12px; }
+      body.vcms-shelled .reports-page-title h1 { font-size:22px; line-height:1.2; }
+      body.vcms-shelled .reports-page-title p { margin:0; padding-left:12px; border-left:1px solid #D1D5DB; line-height:22px; }
+      #reports-main { max-width:none !important; margin:0 !important; padding:28px 34px 40px !important; }
+      #controls { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; padding:22px 24px; margin-bottom:18px; }
+      #controls > * { margin:0 !important; }
+      #controls .report-kind { grid-column:1 / 5; }
+      #controls #project-controls { grid-column:5 / 10; }
+      #controls .report-date-row { grid-column:5 / 9; }
+      #controls .report-attendance-row { grid-column:9 / 13; }
+      #controls #wsearch { grid-column:1 / 9; min-height:44px; }
+      #controls .run-report { grid-column:9 / 13; min-height:44px; }
+      body.project-report #controls .report-date-row { grid-column:10 / 13; }
+      #monthly-timesheet-link { display:none !important; }
+      #actions { max-width:560px; margin-left:auto; }
+      #summary { grid-template-columns:repeat(8,minmax(0,1fr)) !important; gap:12px; }
+      #summary > div { min-height:82px; display:flex; flex-direction:column; justify-content:center; }
+      #tablebox { min-height:260px; border:1px solid #E5E7EB; }
+      #tbl { font-size:13px; }
+      #tbl th,#tbl td { padding:12px 14px; white-space:nowrap; }
+    }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
   <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
     <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-    <div class="flex-1">
+    <div class="flex-1 reports-page-title">
       <h1 class="text-lg font-bold">Reports</h1>
       <p class="text-red-100 text-xs" id="count">Set filters and Run</p>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
+  <main id="reports-main" class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
     <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 space-y-3">
-      <div><label class="text-xs text-gray-500">Report</label><select id="report-type" class="w-full border border-gray-300 rounded-lg p-2 bg-white"><option value="attendance">Workforce attendance</option><option value="schedule_summary">Schedule summary</option><option value="lookahead">Lookahead</option><option value="critical">Critical activities</option><option value="progress">Progress status</option><option value="overdue">Overdue activities</option><option value="variance">Baseline variance</option><option value="resources">Resource budget</option></select></div>
+      <div class="report-kind"><label class="text-xs text-gray-500">Report</label><select id="report-type" class="w-full border border-gray-300 rounded-lg p-2 bg-white"><option value="attendance">Workforce attendance</option><option value="schedule_summary">Schedule summary</option><option value="lookahead">Lookahead</option><option value="critical">Critical activities</option><option value="progress">Progress status</option><option value="overdue">Overdue activities</option><option value="variance">Baseline variance</option><option value="resources">Resource budget</option></select></div>
       <div id="project-controls" class="hidden flex gap-2"><select id="project" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white"><option value="">Loading projects…</option></select><select id="lookahead-days" class="border border-gray-300 rounded-lg p-2 bg-white"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="21">21 days</option><option value="30">30 days</option></select></div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 report-date-row">
         <div class="flex-1">
           <label class="text-xs text-gray-500">From</label>
           <input id="from" type="date" class="w-full border border-gray-300 rounded-lg p-2">
@@ -45,7 +67,7 @@
           <input id="to" type="date" class="w-full border border-gray-300 rounded-lg p-2">
         </div>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 report-attendance-row">
         <select id="site" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white">
           <option value="">All sites</option>
         </select>
@@ -57,8 +79,8 @@
       </div>
       <input id="wsearch" type="search" placeholder="Filter by worker name (optional)"
              class="w-full border border-gray-300 rounded-lg p-2">
-      <button onclick="run()" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Run Report</button>
-      <a href="timesheet.html" class="block text-center border-2 border-red-700 text-red-700 font-bold py-2.5 rounded-lg">Monthly Timesheet →</a>
+      <button onclick="run()" class="run-report w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg">Run Report</button>
+      <a id="monthly-timesheet-link" href="timesheet.html" class="block text-center border-2 border-red-700 text-red-700 font-bold py-2.5 rounded-lg">Monthly Timesheet →</a>
     </div>
 
     <div id="actions" class="hidden flex gap-3 mb-3">
@@ -86,6 +108,7 @@
       const today = new Date().toISOString().slice(0,10);
       document.getElementById("from").value = today.slice(0,8) + "01";
       document.getElementById("to").value = today;
+      if(window.innerWidth>=900 && !document.querySelector('#report-type option[value="monthly_timesheet"]')) document.getElementById("report-type").insertAdjacentHTML("beforeend",'<option value="monthly_timesheet">Monthly attendance sheet</option>');
       const rs = await vmmsApi("/api/v1/sites");
       if (rs.ok) {
         const sites = (await rs.json()).filter(s => s.status === "active");
@@ -169,7 +192,7 @@
     }
 
     document.getElementById("view").addEventListener("change", () => { if (DATA.length) render(); });
-    document.getElementById("report-type").addEventListener("change",e=>{const project=e.target.value!=="attendance";document.getElementById("project-controls").classList.toggle("hidden",!project);document.getElementById("site").parentElement.classList.toggle("hidden",project);document.getElementById("wsearch").classList.toggle("hidden",project);});
+    document.getElementById("report-type").addEventListener("change",e=>{if(e.target.value==="monthly_timesheet"&&window.innerWidth>=900){location.href="timesheet.html";return;}const project=e.target.value!=="attendance";document.body.classList.toggle("project-report",project);document.getElementById("project-controls").classList.toggle("hidden",!project);document.getElementById("site").parentElement.classList.toggle("hidden",project);document.getElementById("wsearch").classList.toggle("hidden",project);});
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
