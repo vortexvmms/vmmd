@@ -31,6 +31,13 @@
     return active;
   }
 
+  function displayName(project) {
+    if (!project) return "";
+    var linkedSites = Array.isArray(project.sites) ? project.sites : [];
+    var activeSite = linkedSites.find(function (site) { return site.status === "active"; }) || linkedSites[0];
+    return (activeSite && activeSite.site_name) || project.project_name || project.project_code || "Project";
+  }
+
   async function init() {
     if (initialized) return active;
     if (typeof vmmsApi !== "function" || typeof getSession !== "function" || !getSession()) return null;
@@ -52,7 +59,7 @@
     var select = wrap.querySelector("select");
     init().then(function () {
       select.innerHTML = projects.length
-        ? projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.project_code + " — " + p.project_name) + '</option>'; }).join("")
+        ? projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(displayName(p)) + '</option>'; }).join("")
         : '<option value="">No active projects</option>';
       select.disabled = !projects.length;
       select.value = active ? active.id : "";
@@ -69,6 +76,7 @@
     getActive: function () { return active; },
     getActiveId: function () { return active && active.id; },
     getAuthorizedProjects: function () { return projects.slice(); },
+    displayName: displayName,
     select: selectAuthorized,
     requireActiveId: function () {
       if (!active) throw new Error("Select an active project before continuing");

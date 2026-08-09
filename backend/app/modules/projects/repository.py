@@ -4,7 +4,8 @@ class ProjectRepository:
     SELECT = ("id,project_code,project_name,description,client_name,"
               "planned_start_date,planned_finish_date,actual_start_date,"
               "actual_finish_date,status,timezone,default_calendar_id,"
-              "created_by,created_at,updated_at,archived_at")
+              "created_by,created_at,updated_at,archived_at,"
+              "sites(site_code,site_name,status)")
 
     def __init__(self, client, rest_url: str, headers: dict):
         self.client = client
