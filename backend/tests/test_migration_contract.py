@@ -50,3 +50,15 @@ def test_phase1_activity_migration_contract():
     assert "public.validate_activity_scope" in sql
     assert "alter table public.schedule_activities enable row level security" in sql
     assert "values ('0003'" in sql
+
+
+def test_phase1_activity_logic_migration_contract():
+    sql = (ROOT / "db" / "migrations" / "0004_phase1_activity_logic.sql").read_text()
+    for required in ("public.activity_relationships", "predecessor_id", "successor_id", "relationship_type", "lag_days"):
+        assert required in sql
+    assert "('FS','SS','FF','SF')" in sql
+    assert "Activity logic cannot contain a cycle" in sql
+    assert "uq_active_relationship_pair" in sql
+    assert "public.validate_activity_relationship" in sql
+    assert "alter table public.activity_relationships enable row level security" in sql
+    assert "values ('0004'" in sql

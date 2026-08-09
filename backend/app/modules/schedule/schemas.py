@@ -71,3 +71,23 @@ class ActivityUpdate(BaseModel):
     planned_finish: date | None = None
     sort_order: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
+
+
+class RelationshipCreate(BaseModel):
+    project_id: UUID
+    predecessor_id: UUID
+    successor_id: UUID
+    relationship_type: Literal["FS", "SS", "FF", "SF"] = "FS"
+    lag_days: int = Field(default=0, ge=-3650, le=3650)
+
+    @model_validator(mode="after")
+    def prevent_self_link(self):
+        if self.predecessor_id == self.successor_id:
+            raise ValueError("An activity cannot depend on itself")
+        return self
+
+
+class RelationshipUpdate(BaseModel):
+    relationship_type: Literal["FS", "SS", "FF", "SF"] | None = None
+    lag_days: int | None = Field(default=None, ge=-3650, le=3650)
+    is_active: bool | None = None

@@ -111,6 +111,7 @@ class ActivityService:
             raise HTTPException(status_code=400, detail="Select an active WBS node from this project")
         return rows[0]
 
+
     @staticmethod
     def _validate(values: dict):
         start, finish = values.get("planned_start"), values.get("planned_finish")
@@ -162,4 +163,65 @@ class ActivityService:
         rows = r.json() if r.status_code == 200 else []
         if not rows:
             raise HTTPException(status_code=400, detail="Could not update activity")
+        return rows[0]
+
+
+class RelationshipService:
+    SELECT = "id,project_id,schedule_id,predecessor_id,successor_id,relationship_type,lag_days,is_active,created_at,updated_at"
+
+    def __init__(self, client, rest_url: str, headers: dict):
+        self.client, self.rest, self.headers = client, rest_url, headers
+
+    @staticmethod
+    def require_editor(user: dict):
+        if not can_administer_projects(user.get("role", "")):
+            raise HTTPException(status_code=403, detail="Not allowed to edit activity logic")
+
+    async def list(self, project_id: str, activity_id: str | None = None):
+        params = {"project_id": f"eq.{project_id}", "is_active": "eq.true", "select": self.SELECT, "order": "created_at.asc"}
+        if activity_id:
+            params["or"] = f"(predecessor_id.eq.{activity_id},successor_id.eq.{activity_id})"
+        r = await self.client.get(f"{self.rest}/activity_relationships", params=params, headers=self.headers)
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load activity logic")
+        return {"relationships": r.json()}
+
+    async def _activity(self, activity_id: str, project_id: str):
+        r = await self.client.get(f"{self.rest}/schedule_activities", params={"id": f"eq.{activity_id}", "project_id": f"eq.{project_id}", "is_active": "eq.true", "select": "id,project_id,schedule_id", "limit": "1"}, headers=self.headers)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Select active activities from this project")
+        return rows[0]
+
+    async def create(self, body, user: dict):
+        self.require_editor(user)
+        project_id = str(body.project_id)
+        predecessor = await self._activity(str(body.predecessor_id), project_id)
+        successor = await self._activity(str(body.successor_id), project_id)
+        if predecessor["schedule_id"] != successor["schedule_id"]:
+            raise HTTPException(status_code=400, detail="Activities must belong to the same schedule")
+        values = body.model_dump(mode="json")
+        values.update(schedule_id=predecessor["schedule_id"], created_by=user["user_id"], updated_by=user["user_id"])
+        r = await self.client.post(f"{self.rest}/activity_relationships", headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        if r.status_code == 409:
+            raise HTTPException(status_code=409, detail="This activity relationship already exists")
+        rows = r.json() if r.status_code in (200, 201) else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Relationship rejected; check for circular logic")
+        return rows[0]
+
+    async def update(self, relationship_id: str, body, user: dict):
+        self.require_editor(user)
+        values = body.model_dump(exclude_unset=True, mode="json")
+        if not values:
+            raise HTTPException(status_code=400, detail="Nothing to update")
+        if values.get("is_active") is False:
+            values["archived_at"] = datetime.now(timezone.utc).isoformat()
+        elif values.get("is_active") is True:
+            values["archived_at"] = None
+        values["updated_by"] = user["user_id"]
+        r = await self.client.patch(f"{self.rest}/activity_relationships", params={"id": f"eq.{relationship_id}"}, headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Activity relationship not found")
         return rows[0]

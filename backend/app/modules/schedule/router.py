@@ -3,8 +3,8 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends
 
-from .schemas import ActivityCreate, ActivityUpdate, WbsCreate, WbsReorder, WbsUpdate
-from .service import ActivityService, WbsService
+from .schemas import ActivityCreate, ActivityUpdate, RelationshipCreate, RelationshipUpdate, WbsCreate, WbsReorder, WbsUpdate
+from .service import ActivityService, RelationshipService, WbsService
 
 
 @dataclass(frozen=True)
@@ -24,9 +24,12 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     def activity_service(client, user):
         return ActivityService(client, context.rest_url, context.supabase_headers(user["token"]))
 
+    def relationship_service(client, user):
+        return RelationshipService(client, context.rest_url, context.supabase_headers(user["token"]))
+
     @router.get("/capabilities")
     async def capabilities(user: dict = Depends(context.get_current_user)):
-        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones"], "planned": ["calendars", "logic", "resources", "baseline", "progress"]}
+        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic"], "planned": ["calendars", "resources", "baseline", "progress"]}
 
     @router.get("/wbs")
     async def list_wbs(project_id: str, user: dict = Depends(context.get_current_user)):
@@ -62,5 +65,20 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     async def update_activity(activity_id: str, body: ActivityUpdate, user: dict = Depends(context.get_current_user)):
         async with context.shared_client() as client:
             return await activity_service(client, user).update(activity_id, body, user)
+
+    @router.get("/relationships")
+    async def list_relationships(project_id: str, activity_id: str | None = None, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await relationship_service(client, user).list(project_id, activity_id)
+
+    @router.post("/relationships", status_code=201)
+    async def create_relationship(body: RelationshipCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await relationship_service(client, user).create(body, user)
+
+    @router.patch("/relationships/{relationship_id}")
+    async def update_relationship(relationship_id: str, body: RelationshipUpdate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await relationship_service(client, user).update(relationship_id, body, user)
 
     return router
