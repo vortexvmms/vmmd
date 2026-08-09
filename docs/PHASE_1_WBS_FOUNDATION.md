@@ -19,6 +19,18 @@ stable UUIDs in later Phase 1 migrations.
   create, edit, archive and reorder it.
 - Archive is soft-delete; referenced planning history is not cascaded away.
 
+## Ordering workflow
+
+Move up/down and indent/outdent change only the browser's working copy. The UI
+shows **Changes pending** and sends every node's stable ID, parent ID and order
+to one atomic RPC only when **Save Order** is selected. **Discard** restores the
+last server state. Editing is blocked while ordering changes are pending, and a
+project switch or page exit warns before those changes are lost.
+
+Tests cover pure hierarchy operations, the six-level edge case, descendant depth
+updates, management/supervisor authorization, the single-RPC backend contract,
+and the UI/API request-field contract.
+
 ## Release gate
 
 Apply `0002_phase1_wbs_foundation.sql` only after a fresh backup and successful

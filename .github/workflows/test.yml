@@ -27,3 +27,5 @@ jobs:
       - run: node --check frontend/js/config.js
       - run: node --check frontend/js/shell.js
       - run: node --check frontend/js/schedule-wbs.js
+      - run: node --check frontend/js/wbs-tree.js
+      - run: node frontend/tests/wbs-tree.test.js
