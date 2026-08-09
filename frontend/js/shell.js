@@ -99,7 +99,6 @@
         "body.vcms-shelled .vcms-pagebar .text-red-100{color:#6B7280!important;}}";
       var st = document.createElement("style"); st.id = "vcms-rail-css"; st.textContent = css; document.head.appendChild(st);
 
-      var _hr = new Date().getHours(), _gt = _hr<12?"Good morning":(_hr<17?"Good afternoon":"Good evening");
       var brand = document.createElement("header");
       brand.id = "vcms-brand";
       brand.innerHTML =
@@ -107,7 +106,6 @@
         '<div class="bt">VCMS</div>' +
         '<div class="bc">Vortex Construction Management System</div>' +
         '<div class="grow"></div>' +
-        '<div class="gc"><div><div class="g1">'+esc(_gt)+'</div><div class="g2">'+esc(me&&me.name?me.name:"")+'</div></div><span class="chip">'+esc(ROLE_LABELS[role]||role)+'</span></div>' +
         (role==="admin"?'<select id="vcms-rswitch"></select>':"") +
         '<button class="lo" onclick="vmmsLogout()">Log Out</button>';
       document.body.insertBefore(brand, document.body.firstChild);
