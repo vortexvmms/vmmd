@@ -82,3 +82,84 @@ class WbsService:
         if r.status_code != 200:
             raise HTTPException(status_code=400, detail="Could not save WBS order")
         return {"updated": r.json()}
+
+
+class ActivityService:
+    SELECT = "id,project_id,schedule_id,wbs_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,status,percent_complete,sort_order,is_active,created_at,updated_at"
+
+    def __init__(self, client, rest_url: str, headers: dict):
+        self.client, self.rest, self.headers = client, rest_url, headers
+
+    @staticmethod
+    def require_editor(user: dict):
+        if not can_administer_projects(user.get("role", "")):
+            raise HTTPException(status_code=403, detail="Not allowed to edit activities")
+
+    async def list(self, project_id: str, wbs_id: str | None = None):
+        params = {"project_id": f"eq.{project_id}", "is_active": "eq.true", "select": self.SELECT, "order": "sort_order.asc,code.asc"}
+        if wbs_id:
+            params["wbs_id"] = f"eq.{wbs_id}"
+        r = await self.client.get(f"{self.rest}/schedule_activities", params=params, headers=self.headers)
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load activities")
+        return {"activities": r.json()}
+
+    async def _wbs(self, wbs_id: str, project_id: str):
+        r = await self.client.get(f"{self.rest}/wbs_nodes", params={"id": f"eq.{wbs_id}", "project_id": f"eq.{project_id}", "is_active": "eq.true", "select": "id,project_id,schedule_id", "limit": "1"}, headers=self.headers)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Select an active WBS node from this project")
+        return rows[0]
+
+    @staticmethod
+    def _validate(values: dict):
+        start, finish = values.get("planned_start"), values.get("planned_finish")
+        if start and finish and finish < start:
+            raise HTTPException(status_code=422, detail="Planned finish cannot be before planned start")
+        if values.get("activity_type") == "milestone":
+            if values.get("duration_days") != 0 or start != finish:
+                raise HTTPException(status_code=422, detail="A milestone must have zero duration and one planned date")
+        elif values.get("duration_days", 0) < 1:
+            raise HTTPException(status_code=422, detail="A task must have a duration of at least one day")
+
+    async def create(self, body, user: dict):
+        self.require_editor(user)
+        project_id = str(body.project_id)
+        wbs = await self._wbs(str(body.wbs_id), project_id)
+        values = body.model_dump(mode="json")
+        values.update(schedule_id=wbs["schedule_id"], code=body.code.strip().upper(), name=body.name.strip(), created_by=user["user_id"], updated_by=user["user_id"])
+        r = await self.client.post(f"{self.rest}/schedule_activities", headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        if r.status_code == 409:
+            raise HTTPException(status_code=409, detail="Activity code already exists in this schedule")
+        rows = r.json() if r.status_code in (200, 201) else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Could not create activity")
+        return rows[0]
+
+    async def update(self, activity_id: str, body, user: dict):
+        self.require_editor(user)
+        current_response = await self.client.get(f"{self.rest}/schedule_activities", params={"id": f"eq.{activity_id}", "select": self.SELECT, "limit": "1"}, headers=self.headers)
+        rows = current_response.json() if current_response.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Activity not found")
+        current = rows[0]
+        values = body.model_dump(exclude_unset=True, mode="json")
+        if not values:
+            raise HTTPException(status_code=400, detail="Nothing to update")
+        if "wbs_id" in values:
+            wbs = await self._wbs(values["wbs_id"], current["project_id"])
+            values["schedule_id"] = wbs["schedule_id"]
+        if "code" in values: values["code"] = values["code"].strip().upper()
+        if "name" in values: values["name"] = values["name"].strip()
+        merged = {**current, **values}
+        self._validate(merged)
+        if values.get("is_active") is False:
+            values["archived_at"] = datetime.now(timezone.utc).isoformat()
+        elif values.get("is_active") is True:
+            values["archived_at"] = None
+        values["updated_by"] = user["user_id"]
+        r = await self.client.patch(f"{self.rest}/schedule_activities", params={"id": f"eq.{activity_id}"}, headers={**self.headers, "Prefer": "return=representation"}, json=values)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Could not update activity")
+        return rows[0]

@@ -39,3 +39,14 @@ def test_phase1_wbs_migration_contract():
     assert "public.reorder_wbs_nodes" in sql
     assert "alter table public.wbs_nodes enable row level security" in sql
     assert "values ('0002'" in sql
+
+
+def test_phase1_activity_migration_contract():
+    sql = (ROOT / "db" / "migrations" / "0003_phase1_activities_milestones.sql").read_text()
+    for required in ("public.schedule_activities", "project_id", "schedule_id", "wbs_id", "activity_type", "duration_days"):
+        assert required in sql
+    assert "planned_finish >= planned_start" in sql
+    assert "activity_type = 'milestone' and duration_days = 0" in sql
+    assert "public.validate_activity_scope" in sql
+    assert "alter table public.schedule_activities enable row level security" in sql
+    assert "values ('0003'" in sql
