@@ -175,3 +175,14 @@ class ResourceAssignmentUpdate(BaseModel):
     planned_quantity: float | None = Field(default=None, gt=0)
     unit_rate: float | None = Field(default=None, ge=0)
     is_active: bool | None = None
+
+
+class ScheduleCalculateRequest(BaseModel):
+    project_id: UUID
+
+
+class BaselineCreate(BaseModel):
+    project_id: UUID
+    name: str = Field(min_length=1,max_length=120)
+    description: str | None = None
+    data_date: date

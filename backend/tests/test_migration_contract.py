@@ -84,3 +84,12 @@ def test_phase1_resource_migration_contract():
     assert "uq_active_activity_resource" in sql
     assert "alter table public.resource_master_library enable row level security" in sql
     assert "values('0006'" in sql
+
+
+def test_phase1_gantt_baseline_migration_contract():
+    sql=(ROOT/"db"/"migrations"/"0007_phase1_gantt_baselines.sql").read_text()
+    for required in ("early_start","late_finish","total_float","public.schedule_baselines","public.baseline_activity_snapshots","budgeted_cost"):
+        assert required in sql
+    assert "public.create_schedule_baseline" in sql
+    assert "alter table public.schedule_baselines enable row level security" in sql
+    assert "values('0007'" in sql

@@ -3,8 +3,8 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends
 
-from .schemas import ActivityCreate, ActivityUpdate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, MasterResourceCreate, ProjectResourceCreate, RelationshipCreate, RelationshipUpdate, ResourceAssignmentCreate, ResourceAssignmentUpdate, WbsCreate, WbsReorder, WbsUpdate
-from .service import ActivityService, CalendarService, RelationshipService, ResourceService, WbsService
+from .schemas import ActivityCreate, ActivityUpdate, BaselineCreate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, MasterResourceCreate, ProjectResourceCreate, RelationshipCreate, RelationshipUpdate, ResourceAssignmentCreate, ResourceAssignmentUpdate, ScheduleCalculateRequest, WbsCreate, WbsReorder, WbsUpdate
+from .service import ActivityService, CalculationService, CalendarService, RelationshipService, ResourceService, WbsService
 
 
 @dataclass(frozen=True)
@@ -33,9 +33,12 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     def resource_service(client, user):
         return ResourceService(client, context.rest_url, context.supabase_headers(user["token"]))
 
+    def calculation_service(client, user):
+        return CalculationService(client, context.rest_url, context.supabase_headers(user["token"]))
+
     @router.get("/capabilities")
     async def capabilities(user: dict = Depends(context.get_current_user)):
-        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars", "resources", "resource_assignments"], "planned": ["baseline", "progress"]}
+        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars", "resources", "resource_assignments", "calculation", "gantt", "baselines"], "planned": ["progress"]}
 
     @router.get("/wbs")
     async def list_wbs(project_id: str, user: dict = Depends(context.get_current_user)):
@@ -136,5 +139,17 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     async def update_resource_assignment(assignment_id: str, body: ResourceAssignmentUpdate, user: dict = Depends(context.get_current_user)):
         async with context.shared_client() as client:
             return await resource_service(client, user).update_assignment(assignment_id, body, user)
+
+    @router.post("/calculate")
+    async def calculate(body: ScheduleCalculateRequest, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client: return await calculation_service(client,user).calculate(str(body.project_id),user)
+
+    @router.get("/baselines")
+    async def list_baselines(project_id: str, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client: return await calculation_service(client,user).list_baselines(project_id)
+
+    @router.post("/baselines",status_code=201)
+    async def create_baseline(body: BaselineCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client: return await calculation_service(client,user).create_baseline(body,user)
 
     return router

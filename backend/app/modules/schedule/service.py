@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 
 from app.core.roles import can_administer_projects
+from .scheduler import calculate_schedule
 
 
 class WbsService:
@@ -85,7 +86,7 @@ class WbsService:
 
 
 class ActivityService:
-    SELECT = "id,project_id,schedule_id,wbs_id,calendar_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,status,percent_complete,sort_order,is_active,created_at,updated_at"
+    SELECT = "id,project_id,schedule_id,wbs_id,calendar_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,early_start,early_finish,late_start,late_finish,total_float,is_critical,calculated_at,status,percent_complete,sort_order,is_active,created_at,updated_at"
 
     def __init__(self, client, rest_url: str, headers: dict):
         self.client, self.rest, self.headers = client, rest_url, headers
@@ -306,6 +307,7 @@ class ResourceService:
         if not rows: raise HTTPException(status_code=409 if r.status_code==409 else 400,detail="Could not create master resource")
         return rows[0]
 
+
     async def import_project(self, body, user: dict):
         self.require_editor(user); values=body.model_dump(mode="json"); values.update(created_by=user["user_id"],updated_by=user["user_id"])
         r=await self.client.post(f"{self.rest}/project_resources",headers={**self.headers,"Prefer":"return=representation"},json=values); rows=r.json() if r.status_code in(200,201) else []
@@ -328,3 +330,40 @@ class ResourceService:
         r=await self.client.patch(f"{self.rest}/activity_resource_assignments",params={"id":f"eq.{assignment_id}"},headers={**self.headers,"Prefer":"return=representation"},json=values); rows=r.json() if r.status_code==200 else []
         if not rows: raise HTTPException(status_code=404,detail="Resource assignment not found")
         return rows[0]
+
+
+class CalculationService:
+    def __init__(self, client, rest_url: str, headers: dict): self.client,self.rest,self.headers=client,rest_url,headers
+    @staticmethod
+    def require_editor(user):
+        if not can_administer_projects(user.get("role","")): raise HTTPException(status_code=403,detail="Not allowed to calculate schedules")
+    async def calculate(self, project_id: str, user: dict):
+        self.require_editor(user)
+        async def get(table,params):
+            r=await self.client.get(f"{self.rest}/{table}",params=params,headers=self.headers)
+            if r.status_code!=200: raise HTTPException(status_code=500,detail=f"Could not load {table}")
+            return r.json()
+        activities=await get("schedule_activities",{"project_id":f"eq.{project_id}","is_active":"eq.true","select":ActivityService.SELECT,"order":"sort_order.asc,code.asc"})
+        relationships=await get("activity_relationships",{"project_id":f"eq.{project_id}","is_active":"eq.true","select":"*"})
+        calendars=await get("schedule_calendars",{"project_id":f"eq.{project_id}","is_active":"eq.true","select":"id"})
+        ids=",".join(c["id"] for c in calendars)
+        workweeks=await get("calendar_workweek",{"calendar_id":f"in.({ids})","select":"calendar_id,day_of_week,is_working,work_hours"}) if ids else []
+        exceptions=await get("calendar_exceptions",{"project_id":f"eq.{project_id}","select":"calendar_id,exception_date,is_working"})
+        try: result=calculate_schedule(activities,relationships,calendars,workweeks,exceptions)
+        except ValueError as exc: raise HTTPException(status_code=400,detail=str(exc)) from exc
+        now=datetime.now(timezone.utc).isoformat()
+        for activity_id,values in result.items():
+            values["calculated_at"]=now
+            r=await self.client.patch(f"{self.rest}/schedule_activities",params={"id":f"eq.{activity_id}"},headers=self.headers,json=values)
+            if r.status_code not in(200,204): raise HTTPException(status_code=500,detail="Could not save calculated dates")
+        await self.client.patch(f"{self.rest}/schedules",params={"project_id":f"eq.{project_id}"},headers=self.headers,json={"last_calculated_at":now,"updated_by":user["user_id"]})
+        return {"calculated":len(result),"activities":result,"calculated_at":now}
+    async def list_baselines(self, project_id: str):
+        r=await self.client.get(f"{self.rest}/schedule_baselines",params={"project_id":f"eq.{project_id}","select":"id,project_id,schedule_id,name,description,data_date,status,created_at,baseline_activity_snapshots(*)","order":"created_at.desc"},headers=self.headers)
+        if r.status_code!=200: raise HTTPException(status_code=500,detail="Could not load baselines")
+        return {"baselines":r.json()}
+    async def create_baseline(self, body, user: dict):
+        self.require_editor(user)
+        r=await self.client.post(f"{self.rest}/rpc/create_schedule_baseline",headers=self.headers,json={"p_project_id":str(body.project_id),"p_name":body.name.strip(),"p_description":body.description,"p_data_date":body.data_date.isoformat()})
+        if r.status_code!=200: raise HTTPException(status_code=400,detail="Could not create baseline; calculate the schedule and use a unique name")
+        return {"baseline_id":r.json()}
