@@ -4,11 +4,10 @@
 -- Run SECOND (after schema.sql).
 --
 -- Notes:
--- · The FastAPI backend (Phase 3+) connects with the SECRET key,
---   which bypasses RLS; the backend enforces the same role rules
---   in code. RLS here is defence-in-depth: it protects against
---   anyone querying the database directly with the public key.
--- · Roles: admin | main_sup | site_sup | payroll
+-- · Normal FastAPI data calls forward the signed-in user's JWT, so RLS is an
+--   active authorization boundary. The service key is reserved for explicit
+--   server-side Auth administration and must never reach the browser.
+-- · Canonical roles mirror backend/app/core/roles.py.
 -- ============================================================
 
 -- ---------- helper functions ----------
@@ -36,6 +35,21 @@ as $$
   limit 1;
 $$;
 
+create or replace function public.is_full_role()
+returns boolean language sql stable as $$
+  select public.my_role() in ('admin','general_manager','operation_manager','hr_assistant');
+$$;
+
+create or replace function public.is_manager_role()
+returns boolean language sql stable as $$
+  select public.my_role() in ('main_sup','wshc_lead');
+$$;
+
+create or replace function public.is_supervisor_role()
+returns boolean language sql stable as $$
+  select public.my_role() in ('site_sup','safety_sup','wshc','logistics_sup');
+$$;
+
 create or replace function public.my_site_ids()
 returns setof uuid
 language sql
@@ -58,13 +72,15 @@ alter table public.public_holidays  enable row level security;
 alter table public.settings         enable row level security;
 alter table public.month_locks      enable row level security;
 alter table public.audit_log        enable row level security;
+alter table public.projects         enable row level security;
+alter table public.project_members  enable row level security;
 
 -- ============================================================
 -- USERS: admin manages; everyone may read their own profile
 -- ============================================================
 drop policy if exists users_admin_all on public.users;
 create policy users_admin_all on public.users
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists users_read_self on public.users;
 create policy users_read_self on public.users
@@ -76,7 +92,7 @@ create policy users_read_self on public.users
 -- ============================================================
 drop policy if exists workers_admin_all on public.workers;
 create policy workers_admin_all on public.workers
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists workers_read_all on public.workers;
 create policy workers_read_all on public.workers
@@ -84,14 +100,14 @@ create policy workers_read_all on public.workers
 
 drop policy if exists workers_mainsup_update on public.workers;
 create policy workers_mainsup_update on public.workers
-  for update using (public.my_role() = 'main_sup');
+  for update using (public.is_manager_role()) with check (public.is_manager_role());
 
 -- ============================================================
 -- SITES: admin writes; all signed-in roles read
 -- ============================================================
 drop policy if exists sites_admin_all on public.sites;
 create policy sites_admin_all on public.sites
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists sites_read_all on public.sites;
 create policy sites_read_all on public.sites
@@ -102,7 +118,7 @@ create policy sites_read_all on public.sites
 -- ============================================================
 drop policy if exists sitesup_admin_all on public.site_supervisors;
 create policy sitesup_admin_all on public.site_supervisors
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists sitesup_read_all on public.site_supervisors;
 create policy sitesup_read_all on public.site_supervisors
@@ -114,12 +130,13 @@ create policy sitesup_read_all on public.site_supervisors
 -- ============================================================
 drop policy if exists alloc_admin_mainsup_all on public.allocations;
 create policy alloc_admin_mainsup_all on public.allocations
-  for all using (public.my_role() in ('admin', 'main_sup'));
+  for all using (public.is_full_role() or public.is_manager_role())
+  with check (public.is_full_role() or public.is_manager_role());
 
 drop policy if exists alloc_sitesup_read on public.allocations;
 create policy alloc_sitesup_read on public.allocations
   for select using (
-    public.my_role() = 'site_sup'
+    public.is_supervisor_role()
     and site_id in (select public.my_site_ids())
   );
 
@@ -133,16 +150,16 @@ create policy alloc_payroll_read on public.allocations
 -- ============================================================
 drop policy if exists att_admin_all on public.attendance;
 create policy att_admin_all on public.attendance
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists att_read_mainsup_payroll on public.attendance;
 create policy att_read_mainsup_payroll on public.attendance
-  for select using (public.my_role() in ('main_sup', 'payroll'));
+  for select using (public.is_manager_role() or public.my_role() = 'payroll');
 
 drop policy if exists att_sitesup_read on public.attendance;
 create policy att_sitesup_read on public.attendance
   for select using (
-    public.my_role() = 'site_sup'
+    public.is_supervisor_role()
     and allocation_id in (
       select a.id from public.allocations a
       where a.site_id in (select public.my_site_ids())
@@ -152,7 +169,7 @@ create policy att_sitesup_read on public.attendance
 drop policy if exists att_sitesup_update on public.attendance;
 create policy att_sitesup_update on public.attendance
   for update using (
-    public.my_role() = 'site_sup'
+    public.is_supervisor_role()
     and allocation_id in (
       select a.id from public.allocations a
       where a.site_id in (select public.my_site_ids())
@@ -162,7 +179,7 @@ create policy att_sitesup_update on public.attendance
 drop policy if exists att_sitesup_insert on public.attendance;
 create policy att_sitesup_insert on public.attendance
   for insert with check (
-    public.my_role() in ('admin', 'main_sup', 'site_sup')
+    public.is_full_role() or public.is_manager_role() or public.is_supervisor_role()
   );
 
 -- ============================================================
@@ -170,7 +187,7 @@ create policy att_sitesup_insert on public.attendance
 -- ============================================================
 drop policy if exists ph_admin_all on public.public_holidays;
 create policy ph_admin_all on public.public_holidays
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists ph_read_all on public.public_holidays;
 create policy ph_read_all on public.public_holidays
@@ -178,7 +195,7 @@ create policy ph_read_all on public.public_holidays
 
 drop policy if exists settings_admin_all on public.settings;
 create policy settings_admin_all on public.settings
-  for all using (public.my_role() = 'admin');
+  for all using (public.is_full_role()) with check (public.is_full_role());
 
 drop policy if exists settings_read_all on public.settings;
 create policy settings_read_all on public.settings
@@ -189,7 +206,8 @@ create policy settings_read_all on public.settings
 -- ============================================================
 drop policy if exists ml_admin_payroll_all on public.month_locks;
 create policy ml_admin_payroll_all on public.month_locks
-  for all using (public.my_role() in ('admin', 'payroll'));
+  for all using (public.is_full_role() or public.my_role() = 'payroll')
+  with check (public.is_full_role() or public.my_role() = 'payroll');
 
 drop policy if exists ml_read_all on public.month_locks;
 create policy ml_read_all on public.month_locks
@@ -205,7 +223,36 @@ create policy audit_insert_all on public.audit_log
 
 drop policy if exists audit_admin_read on public.audit_log;
 create policy audit_admin_read on public.audit_log
-  for select using (public.my_role() = 'admin');
+  for select using (public.is_full_role());
+
+-- PROJECTS: management/payroll see all; assigned supervisors see their projects.
+create or replace function public.my_project_ids()
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select p.id from public.projects p
+   where public.is_full_role() or public.is_manager_role() or public.my_role() = 'payroll'
+  union
+  select pm.project_id from public.project_members pm where pm.user_id = public.my_user_id()
+  union
+  select s.project_id from public.sites s
+    join public.site_supervisors ss on ss.site_id = s.id
+   where ss.user_id = public.my_user_id() and s.project_id is not null;
+$$;
+
+drop policy if exists projects_select_authorized on public.projects;
+create policy projects_select_authorized on public.projects for select
+  using (id in (select public.my_project_ids()));
+drop policy if exists projects_manage on public.projects;
+create policy projects_manage on public.projects for all
+  using (public.is_full_role() or public.is_manager_role())
+  with check (public.is_full_role() or public.is_manager_role());
+
+drop policy if exists project_members_select_authorized on public.project_members;
+create policy project_members_select_authorized on public.project_members for select
+  using (project_id in (select public.my_project_ids()));
+drop policy if exists project_members_manage on public.project_members;
+create policy project_members_manage on public.project_members for all
+  using (public.is_full_role() or public.is_manager_role())
+  with check (public.is_full_role() or public.is_manager_role());
 
 -- ============================================================
 -- Done. Now run seed.sql.

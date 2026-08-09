@@ -68,10 +68,16 @@ window.vmmsSetTheme = function (t) {
   (document.head || document.documentElement).appendChild(s);
 })();
 
-// ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
+// ---- Load canonical Project context, then the shared app shell. ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
-  (document.head || document.documentElement).appendChild(sh);
+  var host = document.head || document.documentElement;
+  var pc = document.createElement("script");
+  pc.src = "js/project-context.js";
+  pc.onload = function () {
+    var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
+    host.appendChild(sh);
+  };
+  host.appendChild(pc);
 })();
 
 // ---- Role tiers (Rev 6) — shared by all pages ----
@@ -80,6 +86,12 @@ window.VMMS_TIER = {
   manager: ["main_sup", "wshc_lead"],
   supervisor: ["site_sup", "safety_sup", "wshc", "logistics_sup"],
 };
+window.VCMS_ROLES = Object.freeze([].concat(
+  window.VMMS_TIER.full,
+  window.VMMS_TIER.manager,
+  window.VMMS_TIER.supervisor,
+  ["payroll"]
+));
 window.isFull = function (r) { return VMMS_TIER.full.indexOf(r) !== -1; };
 window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };
 window.isSupervisor = function (r) { return VMMS_TIER.supervisor.indexOf(r) !== -1; };

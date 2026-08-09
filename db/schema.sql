@@ -23,7 +23,11 @@ create table if not exists public.users (
   id          uuid primary key default gen_random_uuid(),
   auth_uid    uuid unique references auth.users (id) on delete set null,
   name        text not null,
-  role        text not null check (role in ('admin', 'main_sup', 'site_sup', 'payroll')),
+  role        text not null check (role in (
+                'admin', 'general_manager', 'operation_manager', 'hr_assistant',
+                'main_sup', 'wshc_lead',
+                'site_sup', 'safety_sup', 'wshc', 'logistics_sup', 'payroll'
+              )),
   status      text not null default 'active' check (status in ('active', 'inactive')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -32,6 +36,31 @@ create table if not exists public.users (
 drop trigger if exists trg_users_updated on public.users;
 create trigger trg_users_updated
   before update on public.users
+  for each row execute function public.set_updated_at();
+
+-- Canonical project identity. Ordered migrations remain the authoritative
+-- change history; this definition keeps fresh bootstrap databases current.
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  project_code text not null unique,
+  project_name text not null,
+  description text,
+  client_name text,
+  planned_start_date date,
+  planned_finish_date date,
+  actual_start_date date,
+  actual_finish_date date,
+  status text not null default 'draft' check (status in ('draft','active','on_hold','completed','archived')),
+  default_calendar_id uuid,
+  timezone text not null default 'Asia/Singapore',
+  created_by uuid references public.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  archived_at timestamptz
+);
+
+drop trigger if exists trg_projects_updated on public.projects;
+create trigger trg_projects_updated before update on public.projects
   for each row execute function public.set_updated_at();
 
 -- ============================================================
@@ -66,6 +95,7 @@ create table if not exists public.sites (
   id          uuid primary key default gen_random_uuid(),
   site_code   text not null unique,
   site_name   text not null,
+  project_id  uuid references public.projects (id) on delete restrict,
   status      text not null default 'active' check (status in ('active', 'archived')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -75,6 +105,14 @@ drop trigger if exists trg_sites_updated on public.sites;
 create trigger trg_sites_updated
   before update on public.sites
   for each row execute function public.set_updated_at();
+
+create table if not exists public.project_members (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  access_level text not null default 'viewer' check (access_level in ('viewer','editor','project_admin')),
+  created_at timestamptz not null default now(),
+  primary key (project_id, user_id)
+);
 
 -- ============================================================
 -- 4. SITE SUPERVISORS  (who may update which site — drives RLS)

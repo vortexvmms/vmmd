@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v2';
+const CACHE = 'vcms-v3-phase0';
 
 self.addEventListener('install', (e) => self.skipWaiting());
 
