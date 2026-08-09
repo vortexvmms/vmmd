@@ -43,7 +43,7 @@
     var wr=await vmmsApi("/api/v1/schedule/wbs?project_id="+encodeURIComponent(pid()));if(!wr.ok)return alert("Add a WBS before adding activities.");
     var nodes=(await wr.json()).nodes||[];if(!nodes.length)return alert("Add a WBS before adding activities.");
     var today=new Date().toISOString().slice(0,10),row=document.createElement("tr");row.id="activity-inline-row";row.className="inline-entry is-selected";
-    row.innerHTML='<td><input id="ai-code" class="inline-grid-input code-input" value="'+e(nextActivityCode())+'"></td><td><select id="ai-type" class="inline-grid-input"><option value="task">Activity</option><option value="milestone">Milestone</option></select></td><td><input id="ai-name" class="inline-grid-input" placeholder="Type activity name"></td><td><select id="ai-wbs" class="inline-grid-input">'+nodes.map(function(n){return'<option value="'+e(n.id)+'">'+e(n.code)+'</option>'}).join("")+'</select></td><td><input id="ai-duration" class="inline-grid-input number-input" type="number" min="0" value="1"></td><td><input id="ai-start" class="inline-grid-input" type="date" value="'+today+'"></td><td><input id="ai-finish" class="inline-grid-input" type="date" value="'+today+'"></td><td>Not started</td><td>0%</td><td><button id="ai-save" class="inline-save">Save ↵</button><button id="ai-cancel">Done</button></td>';
+    row.innerHTML='<td><input id="ai-code" class="inline-grid-input code-input" value="'+e(nextActivityCode())+'"></td><td><select id="ai-type" class="inline-grid-input"><option value="task">Activity</option><option value="milestone">Milestone</option></select></td><td><input id="ai-name" class="inline-grid-input" placeholder="Type activity name"></td><td><select id="ai-wbs" class="inline-grid-input">'+nodes.map(function(n){return'<option value="'+e(n.id)+'">'+e(n.code)+'</option>'}).join("")+'</select></td><td><input id="ai-duration" class="inline-grid-input number-input" type="number" min="0" value="1"></td><td><input id="ai-start" class="inline-grid-input" type="date" value="'+today+'"></td><td><input id="ai-finish" class="inline-grid-input" type="date" value="'+today+'"></td><td class="muted">—</td><td class="muted">—</td><td>Not started</td><td>0%</td><td><button id="ai-save" class="inline-save">Save ↵</button><button id="ai-cancel">Done</button></td>';
     body.prepend(row);var name=row.querySelector("#ai-name"),saving=false;
     row.querySelector("#ai-type").onchange=function(){var milestone=this.value==="milestone";row.querySelector("#ai-duration").value=milestone?0:Math.max(1,Number(row.querySelector("#ai-duration").value)||1);row.querySelector("#ai-duration").disabled=milestone};
     async function save(addAnother){if(saving)return;var value=name.value.trim();if(!value){name.focus();return}saving=true;var type=row.querySelector("#ai-type").value,start=row.querySelector("#ai-start").value;var r=await vmmsApi("/api/v1/schedule/activities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({project_id:pid(),wbs_id:row.querySelector("#ai-wbs").value,code:row.querySelector("#ai-code").value.trim().toUpperCase(),name:value,description:null,activity_type:type,duration_days:type==="milestone"?0:Number(row.querySelector("#ai-duration").value),planned_start:start,planned_finish:type==="milestone"?start:row.querySelector("#ai-finish").value})});if(!r.ok){var d=await r.json();alert(d.detail||"Could not add activity");saving=false;return}window.dispatchEvent(new CustomEvent("vcms:project-changed",{detail:{project:vcmsProjectContext.getActive()}}));if(addAnother)setTimeout(startActivityInline,250)}
@@ -61,6 +61,8 @@
       var el = document.getElementById(id);
       if (el) el.textContent = tabs[id];
     });
+    var relationshipTab = document.getElementById("tab-logic");
+    if (relationshipTab) relationshipTab.classList.add("desktop-logic-tab-hidden");
 
     var wbs = document.getElementById("wbs-panel");
     if (wbs && !wbs.querySelector(".planner-toolbar")) {
@@ -97,7 +99,7 @@
         }
         oldHead.replaceWith(toolbar);
       }
-      var headings = ["Activity ID","Type","Activity Name","WBS","Original Duration","Start","Finish","Status","Complete",""];
+      var headings = ["Activity ID","Type","Activity Name","WBS","Original Duration","Start","Finish","Predecessors","Successors","Status","Complete",""];
       var row = document.querySelector("#activities-table thead tr");
       if (row) row.innerHTML = headings.map(function (h) { return "<th>" + h + "</th>"; }).join("");
       if (card) { card.classList.remove("bg-white","rounded-2xl","p-4"); }
