@@ -69,7 +69,18 @@ def test_phase1_project_calendar_migration_contract():
     for required in ("public.schedule_calendars", "public.calendar_workweek", "public.calendar_exceptions", "day_of_week", "work_hours"):
         assert required in sql
     assert "uq_project_default_calendar" in sql
+    assert "pg_trigger_depth()>1" in sql
     assert "public.set_calendar_workweek" in sql
     assert "public.validate_activity_calendar_scope" in sql
     assert "alter table public.schedule_calendars enable row level security" in sql
     assert "values('0005'" in sql
+
+
+def test_phase1_resource_migration_contract():
+    sql=(ROOT/"db"/"migrations"/"0006_phase1_resources.sql").read_text()
+    for required in ("public.resource_master_library","public.project_resources","public.activity_resource_assignments","budgeted_cost","project_resource_id"):
+        assert required in sql
+    assert "public.validate_resource_assignment_scope" in sql
+    assert "uq_active_activity_resource" in sql
+    assert "alter table public.resource_master_library enable row level security" in sql
+    assert "values('0006'" in sql

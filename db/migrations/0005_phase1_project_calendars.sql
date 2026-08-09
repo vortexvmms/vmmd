@@ -43,6 +43,7 @@ create trigger trg_calendar_exceptions_updated before update on public.calendar_
 
 create or replace function public.prepare_project_calendar() returns trigger language plpgsql set search_path=public as $$
 begin
+  if pg_trigger_depth()>1 then return new; end if;
   if not exists(select 1 from public.schedule_calendars where project_id=new.project_id and is_default and is_active and id<>new.id) then new.is_default:=true; end if;
   if new.is_default and new.is_active then update public.schedule_calendars set is_default=false where project_id=new.project_id and id<>new.id and is_default; end if;
   return new;

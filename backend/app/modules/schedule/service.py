@@ -282,3 +282,49 @@ class CalendarService:
         rows = r.json() if r.status_code in (200, 201) else []
         if not rows: raise HTTPException(status_code=400, detail="Could not add calendar exception")
         return rows[0]
+
+
+class ResourceService:
+    def __init__(self, client, rest_url: str, headers: dict):
+        self.client, self.rest, self.headers = client, rest_url, headers
+
+    @staticmethod
+    def require_editor(user: dict):
+        if not can_administer_projects(user.get("role", "")): raise HTTPException(status_code=403, detail="Not allowed to edit resources")
+
+    async def list(self, project_id: str):
+        common = {"headers": self.headers}
+        master = await self.client.get(f"{self.rest}/resource_master_library", params={"is_active":"eq.true","select":"id,code,name,category,classification,unit,standard_rate","order":"category.asc,code.asc"}, **common)
+        project = await self.client.get(f"{self.rest}/project_resources", params={"project_id":f"eq.{project_id}","is_active":"eq.true","select":"id,project_id,master_resource_id,project_rate,is_active","order":"created_at.asc"}, **common)
+        assignments = await self.client.get(f"{self.rest}/activity_resource_assignments", params={"project_id":f"eq.{project_id}","is_active":"eq.true","select":"id,project_id,schedule_id,activity_id,project_resource_id,planned_quantity,unit_rate,budgeted_cost,is_active","order":"created_at.asc"}, **common)
+        if any(r.status_code != 200 for r in (master,project,assignments)): raise HTTPException(status_code=500, detail="Could not load resources")
+        return {"master_resources":master.json(),"project_resources":project.json(),"assignments":assignments.json()}
+
+    async def create_master(self, body, user: dict):
+        self.require_editor(user); values=body.model_dump(mode="json"); values.update(code=body.code.strip().upper(),name=body.name.strip(),unit=body.unit.strip(),created_by=user["user_id"],updated_by=user["user_id"])
+        r=await self.client.post(f"{self.rest}/resource_master_library",headers={**self.headers,"Prefer":"return=representation"},json=values); rows=r.json() if r.status_code in(200,201) else []
+        if not rows: raise HTTPException(status_code=409 if r.status_code==409 else 400,detail="Could not create master resource")
+        return rows[0]
+
+    async def import_project(self, body, user: dict):
+        self.require_editor(user); values=body.model_dump(mode="json"); values.update(created_by=user["user_id"],updated_by=user["user_id"])
+        r=await self.client.post(f"{self.rest}/project_resources",headers={**self.headers,"Prefer":"return=representation"},json=values); rows=r.json() if r.status_code in(200,201) else []
+        if not rows: raise HTTPException(status_code=409 if r.status_code==409 else 400,detail="Could not import resource into project")
+        return rows[0]
+
+    async def assign(self, body, user: dict):
+        self.require_editor(user); activity=await self.client.get(f"{self.rest}/schedule_activities",params={"id":f"eq.{body.activity_id}","project_id":f"eq.{body.project_id}","is_active":"eq.true","select":"id,schedule_id","limit":"1"},headers=self.headers); rows=activity.json() if activity.status_code==200 else []
+        if not rows: raise HTTPException(status_code=400,detail="Select an active activity from this project")
+        values=body.model_dump(mode="json"); values.update(schedule_id=rows[0]["schedule_id"],created_by=user["user_id"],updated_by=user["user_id"])
+        r=await self.client.post(f"{self.rest}/activity_resource_assignments",headers={**self.headers,"Prefer":"return=representation"},json=values); result=r.json() if r.status_code in(200,201) else []
+        if not result: raise HTTPException(status_code=409 if r.status_code==409 else 400,detail="Could not assign resource to activity")
+        return result[0]
+
+    async def update_assignment(self, assignment_id: str, body, user: dict):
+        self.require_editor(user); values=body.model_dump(exclude_unset=True,mode="json")
+        if not values: raise HTTPException(status_code=400,detail="Nothing to update")
+        if values.get("is_active") is False: values["archived_at"]=datetime.now(timezone.utc).isoformat()
+        values["updated_by"]=user["user_id"]
+        r=await self.client.patch(f"{self.rest}/activity_resource_assignments",params={"id":f"eq.{assignment_id}"},headers={**self.headers,"Prefer":"return=representation"},json=values); rows=r.json() if r.status_code==200 else []
+        if not rows: raise HTTPException(status_code=404,detail="Resource assignment not found")
+        return rows[0]

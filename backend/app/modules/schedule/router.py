@@ -3,8 +3,8 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends
 
-from .schemas import ActivityCreate, ActivityUpdate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, RelationshipCreate, RelationshipUpdate, WbsCreate, WbsReorder, WbsUpdate
-from .service import ActivityService, CalendarService, RelationshipService, WbsService
+from .schemas import ActivityCreate, ActivityUpdate, CalendarCreate, CalendarExceptionCreate, CalendarUpdate, CalendarWorkweekUpdate, MasterResourceCreate, ProjectResourceCreate, RelationshipCreate, RelationshipUpdate, ResourceAssignmentCreate, ResourceAssignmentUpdate, WbsCreate, WbsReorder, WbsUpdate
+from .service import ActivityService, CalendarService, RelationshipService, ResourceService, WbsService
 
 
 @dataclass(frozen=True)
@@ -30,9 +30,12 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     def calendar_service(client, user):
         return CalendarService(client, context.rest_url, context.supabase_headers(user["token"]))
 
+    def resource_service(client, user):
+        return ResourceService(client, context.rest_url, context.supabase_headers(user["token"]))
+
     @router.get("/capabilities")
     async def capabilities(user: dict = Depends(context.get_current_user)):
-        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars"], "planned": ["resources", "baseline", "progress"]}
+        return {"foundation": "phase_1", "project_context_required": True, "implemented": ["wbs", "activities", "milestones", "logic", "calendars", "resources", "resource_assignments"], "planned": ["baseline", "progress"]}
 
     @router.get("/wbs")
     async def list_wbs(project_id: str, user: dict = Depends(context.get_current_user)):
@@ -108,5 +111,30 @@ def build_schedule_router(context: ScheduleModuleContext) -> APIRouter:
     async def create_calendar_exception(calendar_id: str, body: CalendarExceptionCreate, user: dict = Depends(context.get_current_user)):
         async with context.shared_client() as client:
             return await calendar_service(client, user).create_exception(calendar_id, body, user)
+
+    @router.get("/resources")
+    async def list_resources(project_id: str, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await resource_service(client, user).list(project_id)
+
+    @router.post("/resources/master", status_code=201)
+    async def create_master_resource(body: MasterResourceCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await resource_service(client, user).create_master(body, user)
+
+    @router.post("/resources/project", status_code=201)
+    async def import_project_resource(body: ProjectResourceCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await resource_service(client, user).import_project(body, user)
+
+    @router.post("/resources/assignments", status_code=201)
+    async def create_resource_assignment(body: ResourceAssignmentCreate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await resource_service(client, user).assign(body, user)
+
+    @router.patch("/resources/assignments/{assignment_id}")
+    async def update_resource_assignment(assignment_id: str, body: ResourceAssignmentUpdate, user: dict = Depends(context.get_current_user)):
+        async with context.shared_client() as client:
+            return await resource_service(client, user).update_assignment(assignment_id, body, user)
 
     return router

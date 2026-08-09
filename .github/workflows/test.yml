@@ -31,4 +31,5 @@ jobs:
       - run: node --check frontend/js/schedule-activities.js
       - run: node --check frontend/js/schedule-logic.js
       - run: node --check frontend/js/schedule-calendars.js
+      - run: node --check frontend/js/schedule-resources.js
       - run: node frontend/tests/wbs-tree.test.js

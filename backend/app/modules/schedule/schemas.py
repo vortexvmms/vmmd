@@ -146,3 +146,32 @@ class CalendarExceptionCreate(BaseModel):
         if not self.is_working and self.work_hours != 0:
             raise ValueError("A non-working exception must have zero work hours")
         return self
+
+
+class MasterResourceCreate(BaseModel):
+    code: str = Field(min_length=1, max_length=60)
+    name: str = Field(min_length=1, max_length=160)
+    category: Literal["labour", "equipment", "material", "subcontractor"]
+    classification: Literal["direct", "indirect"] | None = None
+    unit: str = Field(min_length=1, max_length=40)
+    standard_rate: float = Field(default=0, ge=0)
+
+
+class ProjectResourceCreate(BaseModel):
+    project_id: UUID
+    master_resource_id: UUID
+    project_rate: float | None = Field(default=None, ge=0)
+
+
+class ResourceAssignmentCreate(BaseModel):
+    project_id: UUID
+    activity_id: UUID
+    project_resource_id: UUID
+    planned_quantity: float = Field(gt=0)
+    unit_rate: float = Field(ge=0)
+
+
+class ResourceAssignmentUpdate(BaseModel):
+    planned_quantity: float | None = Field(default=None, gt=0)
+    unit_rate: float | None = Field(default=None, ge=0)
+    is_active: bool | None = None
