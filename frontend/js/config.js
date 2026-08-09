@@ -71,6 +71,11 @@ window.vmmsSetTheme = function (t) {
 // ---- Load canonical Project context, then the shared app shell. ----
 (function () {
   var host = document.head || document.documentElement;
+  if (/\/schedule\.html$/i.test(location.pathname)) {
+    var workspace = document.createElement("script");
+    workspace.src = "js/schedule-workspace.js";
+    host.appendChild(workspace);
+  }
   var pc = document.createElement("script");
   pc.src = "js/project-context.js";
   pc.onload = function () {
