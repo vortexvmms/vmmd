@@ -186,3 +186,28 @@ class BaselineCreate(BaseModel):
     name: str = Field(min_length=1,max_length=120)
     description: str | None = None
     data_date: date
+
+
+class ProgressUpdateCreate(BaseModel):
+    project_id: UUID
+    activity_id: UUID
+    progress_date: date
+    percent_complete: float = Field(ge=0, le=100)
+    actual_start: date | None = None
+    actual_finish: date | None = None
+    quantity_completed: float | None = Field(default=None, ge=0)
+    remarks: str | None = Field(default=None, max_length=2000)
+    source: Literal["manual", "dpr"] = "manual"
+    dpr_report_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_progress(self):
+        if self.actual_finish and not self.actual_start:
+            raise ValueError("Actual start is required when actual finish is provided")
+        if self.actual_start and self.actual_finish and self.actual_finish < self.actual_start:
+            raise ValueError("Actual finish cannot be before actual start")
+        if self.percent_complete < 100 and self.actual_finish:
+            raise ValueError("Actual finish is only allowed at 100% completion")
+        if self.source == "dpr" and not self.dpr_report_id:
+            raise ValueError("DPR progress requires a report reference")
+        return self

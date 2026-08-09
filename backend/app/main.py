@@ -2580,6 +2580,7 @@ class DailyReport(BaseModel):
     manpower: list[dict] = []
     equipment: list[dict] = []
     materials: list[dict] = []
+    activity_progress: list[dict] = []
     photos: list[dict] = []
     signature_url: str | None = None
     prepared_by_name: str | None = None
@@ -2602,7 +2603,15 @@ async def get_dpr(date: str, site_id: str, user: dict = Depends(get_current_user
             params={"site_id": f"eq.{site_id}", "report_date": f"eq.{date}", "select": "*"},
             headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
-        return rows[0] if rows else {}
+        if not rows:
+            return {}
+        report = rows[0]
+        progress = await client.get(
+            f"{REST}/activity_progress_updates",
+            params={"dpr_report_id": f"eq.{report['id']}", "select": "activity_id,percent_complete,actual_start,actual_finish,quantity_completed,remarks"},
+            headers=supabase_headers(user["token"]))
+        report["activity_progress"] = progress.json() if progress.status_code == 200 else []
+        return report
 
 
 @app.get("/api/v1/dpr/prefill")
@@ -2685,7 +2694,31 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500,
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
-        return rows[0] if rows else {"ok": True}
+        report = rows[0] if rows else None
+        if report:
+            site_project_id = None
+            if body.activity_progress:
+                site_response = await client.get(
+                    f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "project_id", "limit": "1"},
+                    headers=supabase_headers(user["token"]))
+                site_rows = site_response.json() if site_response.status_code == 200 else []
+                site_project_id = site_rows[0].get("project_id") if site_rows else None
+            for item in body.activity_progress or []:
+                if not item.get("activity_id") or item.get("percent_complete") in (None, ""):
+                    continue
+                if not site_project_id or item.get("project_id") != site_project_id:
+                    raise HTTPException(status_code=400, detail="Activity progress must belong to the selected site's project")
+                values = {
+                    "p_project_id": item.get("project_id"), "p_activity_id": item["activity_id"],
+                    "p_progress_date": body.report_date, "p_percent_complete": item["percent_complete"],
+                    "p_actual_start": _nz_date(item.get("actual_start")), "p_actual_finish": _nz_date(item.get("actual_finish")),
+                    "p_quantity_completed": item.get("quantity_completed"), "p_remarks": item.get("remarks"),
+                    "p_source": "dpr", "p_dpr_report_id": report["id"],
+                }
+                rp = await client.post(f"{REST}/rpc/record_activity_progress", headers=supabase_headers(user["token"]), json=values)
+                if rp.status_code != 200:
+                    raise HTTPException(status_code=400, detail="DPR saved, but linked activity progress was rejected")
+        return report or {"ok": True}
 
 
 def _rs_clean(v):

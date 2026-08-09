@@ -86,7 +86,7 @@ class WbsService:
 
 
 class ActivityService:
-    SELECT = "id,project_id,schedule_id,wbs_id,calendar_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,early_start,early_finish,late_start,late_finish,total_float,is_critical,calculated_at,status,percent_complete,sort_order,is_active,created_at,updated_at"
+    SELECT = "id,project_id,schedule_id,wbs_id,calendar_id,code,name,description,activity_type,duration_days,planned_start,planned_finish,early_start,early_finish,late_start,late_finish,total_float,is_critical,calculated_at,actual_start,actual_finish,status,percent_complete,sort_order,is_active,created_at,updated_at"
 
     def __init__(self, client, rest_url: str, headers: dict):
         self.client, self.rest, self.headers = client, rest_url, headers
@@ -367,3 +367,19 @@ class CalculationService:
         r=await self.client.post(f"{self.rest}/rpc/create_schedule_baseline",headers=self.headers,json={"p_project_id":str(body.project_id),"p_name":body.name.strip(),"p_description":body.description,"p_data_date":body.data_date.isoformat()})
         if r.status_code!=200: raise HTTPException(status_code=400,detail="Could not create baseline; calculate the schedule and use a unique name")
         return {"baseline_id":r.json()}
+
+
+class ProgressService:
+    SELECT="id,project_id,schedule_id,activity_id,progress_date,percent_complete,actual_start,actual_finish,quantity_completed,remarks,source,dpr_report_id,created_by,created_at,updated_at"
+    def __init__(self,client,rest_url: str,headers: dict): self.client,self.rest,self.headers=client,rest_url,headers
+    async def list(self,project_id: str,activity_id: str|None=None):
+        params={"project_id":f"eq.{project_id}","select":self.SELECT,"order":"progress_date.desc,updated_at.desc"}
+        if activity_id: params["activity_id"]=f"eq.{activity_id}"
+        r=await self.client.get(f"{self.rest}/activity_progress_updates",params=params,headers=self.headers)
+        if r.status_code!=200: raise HTTPException(status_code=500,detail="Could not load activity progress")
+        return {"progress":r.json()}
+    async def record(self,body):
+        values=body.model_dump(mode="json")
+        r=await self.client.post(f"{self.rest}/rpc/record_activity_progress",headers=self.headers,json={f"p_{key}":value for key,value in values.items()})
+        if r.status_code!=200: raise HTTPException(status_code=400,detail="Could not save activity progress")
+        return {"progress_id":r.json()}

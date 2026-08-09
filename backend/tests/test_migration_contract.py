@@ -93,3 +93,13 @@ def test_phase1_gantt_baseline_migration_contract():
     assert "public.create_schedule_baseline" in sql
     assert "alter table public.schedule_baselines enable row level security" in sql
     assert "values('0007'" in sql
+
+
+def test_phase1_progress_dpr_migration_contract():
+    sql=(ROOT/"db"/"migrations"/"0008_phase1_progress_dpr.sql").read_text()
+    for required in ("public.activity_progress_updates","actual_start","actual_finish","percent_complete","dpr_report_id","public.record_activity_progress"):
+        assert required in sql
+    assert "public.refresh_activity_progress" in sql
+    assert "min(actual_start)" in sql
+    assert "alter table public.activity_progress_updates enable row level security" in sql
+    assert "values('0008'" in sql
