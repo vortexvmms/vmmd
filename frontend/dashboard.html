@@ -111,6 +111,10 @@
           <span class="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-700">DONE</span>
           <p class="text-sm text-gray-700 flex-1" id="m-completed">—</p>
         </div>
+        <div id="m-noalloc-wrap" class="hidden flex items-start gap-2 mt-2">
+          <span class="text-xs font-bold px-2 py-1 rounded-full bg-gray-200 text-gray-600">NO MANPOWER</span>
+          <p class="text-sm text-gray-500 flex-1" id="m-noalloc"></p>
+        </div>
         <div id="m-remind" class="hidden flex gap-2 mt-3 no-print">
           <button onclick="copyReminder('morning')" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy reminder</button>
           <button onclick="shareReminder('morning')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Share to WhatsApp</button>
@@ -365,6 +369,11 @@
 
       document.getElementById("m-pending").textContent   = mPend.length ? mPend.join(", ") : "None — all marked ✓";
       document.getElementById("m-completed").textContent = mDone.length ? mDone.join(", ") : "None yet";
+      // Active sites with no workers allocated for this day (still active, just idle today)
+      const noAlloc = (d.site_summary || []).filter(s => (s.today || 0) === 0).map(s => s.site_name).filter(notLeave);
+      const naWrap = document.getElementById("m-noalloc-wrap");
+      if (noAlloc.length) { document.getElementById("m-noalloc").textContent = noAlloc.join(", "); naWrap.classList.remove("hidden"); }
+      else naWrap.classList.add("hidden");
       document.getElementById("e-pending").textContent   = ePend.length ? ePend.join(", ") : "None — all submitted ✓";
       document.getElementById("e-completed").textContent = eDone.length ? eDone.join(", ") : "None yet";
 
