@@ -13,11 +13,14 @@
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     #att-kpis{display:none}
+    .att-filters{display:flex;gap:7px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}.att-filters::-webkit-scrollbar{display:none}.att-filter{flex:none;border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800}.att-filter.on{background:#252b35;color:#fff;border-color:#252b35}
+    .save-state{min-width:62px;text-align:right}.worker-saving{pointer-events:none;opacity:.72}
     @media(min-width:900px){
       body{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
       body>header>div{max-width:none!important;width:100%!important}
       #att-main{max-width:none!important;padding:20px 24px 100px}
       #att-kpis{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:10px;margin-bottom:14px}
+      .att-filters{padding-bottom:12px}
       .att-kpi{background:#fff;border:1px solid #dce1e8;border-radius:12px;padding:11px 14px;border-top:3px solid #c00000;box-shadow:0 4px 12px rgba(15,23,42,.06)}
       .att-kpi b{display:block;font-size:22px;color:#191e27}.att-kpi span{font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase}
       .att-work{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
@@ -72,9 +75,16 @@
           <button onclick="selectAllPresent()" class="text-xs font-bold text-red-700 underline">Select all present</button>
           <button onclick="selectNoEnd()" class="text-xs font-bold text-red-700 underline">Select those with no end time</button>
         </div>
+        <button onclick="bulkSet(true)" class="mt-3 w-full bg-red-700 text-white font-bold px-3 py-2 rounded-lg text-sm">Apply selected time to workers with no end time</button>
       </div>
     </div>
     </div><div class="att-list">
+    <div class="att-filters" id="att-filters">
+      <button class="att-filter on" data-f="all" onclick="setAttFilter('all')">All</button>
+      <button class="att-filter" data-f="pending" onclick="setAttFilter('pending')">No end time</button>
+      <button class="att-filter" data-f="done" onclick="setAttFilter('done')">Completed</button>
+      <button class="att-filter" data-f="overnight" onclick="setAttFilter('overnight')">Next-day finish</button>
+    </div>
     <div id="list" class="space-y-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers allocated for this site and date.</p>
 
@@ -129,6 +139,7 @@
 
     let ME = null, ROWS = [], SITES = [];
     const SEL = new Set();   // allocation_ids selected for a group end-time apply
+    let ATT_FILTER = "all";
 
     // [value, label, endsNextDay]  — 12AM is midnight of the NEXT day
     const PRESETS = [["12:00", "12PM", false], ["16:00", "4PM", false], ["17:00", "5PM", false], ["18:00", "6PM", false],
@@ -137,6 +148,7 @@
                      ["23:30", "11:30PM", false], ["00:00", "12AM", true],
                      ["01:00", "1AM", true], ["02:00", "2AM", true], ["03:00", "3AM", true],
                      ["04:00", "4AM", true], ["05:00", "5AM", true], ["06:00", "6AM", true]];
+    const COMMON_PRESETS = [["17:00","5PM",false],["19:00","7PM",false],["22:00","10PM",false]];
     // Absence reasons: value, label, highlight colour
     // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
     const REASONS = [["mc", "MC", "bg-yellow-500"],
@@ -164,6 +176,7 @@
       setTimeout(() => t.classList.add("hidden"), long ? 6000 : (ok ? 1400 : 2500));
     }
     function fmtDate(d) { return d.toISOString().slice(0, 10); }
+    function setAttFilter(f){ ATT_FILTER=f; document.querySelectorAll(".att-filter").forEach(b=>b.classList.toggle("on",b.dataset.f===f)); render(); }
 
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
@@ -241,10 +254,12 @@
       document.getElementById("submit-btn").disabled = total === 0 || fullySubmitted;
       document.getElementById("submit-btn").textContent = fullySubmitted ? "Submitted ✓" : "Submit End Times";
 
-      ROWS.forEach(x => {
+      const visibleRows=ROWS.filter(x=>ATT_FILTER==="all" || (ATT_FILTER==="pending"&&x.present&&x.absence_type!=="class"&&!x.end_time) || (ATT_FILTER==="done"&&(!x.present||x.absence_type==="class"||!!x.end_time)) || (ATT_FILTER==="overnight"&&x.end_next_day));
+      const empty=document.getElementById("empty"); empty.classList.toggle("hidden",visibleRows.length>0); empty.textContent=ROWS.length?"No workers in this filter.":"No workers allocated for this site and date.";
+      visibleRows.forEach(x => {
         const absent = x.marked && !x.present;
         const div = document.createElement("div");
-        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 " +
+        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 " + (x._saving ? "worker-saving " : "") +
           (absent ? "border-gray-300 opacity-60" : (!x.marked ? "border-yellow-300" : "border-gray-300"));
         div.innerHTML = `
           <div class="flex items-center gap-2 mb-2">
@@ -275,11 +290,12 @@
                    <button class="clr-class text-xs font-bold text-gray-500 underline">Undo</button>
                  </div>`
               : `<div class="flex items-center flex-wrap gap-1">
-                   ${PRESETS.map(([t, lbl, nd]) =>
+                   ${(x._more?PRESETS:COMMON_PRESETS).map(([t, lbl, nd]) =>
                      `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}">${lbl}</button>`).join("")}
+                   <button class="tmore text-xs font-bold px-2.5 py-1.5 rounded-full bg-gray-200 text-gray-700">${x._more?"Less":"More"}</button>
                    <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}">⋯</button>
-                   <span class="text-xs font-bold ${x._saving ? "text-gray-400" : (x.ot_hours > 0 ? "text-red-700" : "text-gray-500")} ml-auto">
-                     ${x._saving ? `${x.end_time || ""} · saving…` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time")}
+                   <span class="save-state text-xs font-bold ${x._saving ? "text-amber-600" : (x._saved ? "text-green-700" : (x.ot_hours > 0 ? "text-red-700" : "text-gray-500"))} ml-auto">
+                     ${x._saving ? `Saving…` : (x._saved ? `Saved ✓` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"))}
                    </span>
                  </div>
                  <input type="time" step="900" value="${x.end_time || ""}"
@@ -297,6 +313,7 @@
         const clrCls = div.querySelector(".clr-class");
         if (clrCls) clrCls.addEventListener("click", () => mark(x, { present: true, absence_type: "" }, div));
         div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: nextDayFor(x, b.dataset.t) }, div)));
+        const moreBtn=div.querySelector(".tmore"); if(moreBtn) moreBtn.addEventListener("click",()=>{x._more=!x._more;render();});
         const tc = div.querySelector(".tcustom");
         if (tc) tc.addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
         if (ein) ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value, end_next_day: nextDayFor(x, ein.value) }, div); });
@@ -309,6 +326,7 @@
     // background. No full re-fetch, so tapping a time / present / reason feels
     // instant instead of waiting ~1s for two network round-trips each tap.
     async function mark(x, changes, div) {
+      if(x._saving) return;                    // prevent rapid double-taps
       let reason = null;
       if (x.submitted) {
         reason = prompt("This day is already submitted. Reason for the change (required, goes to the audit log):");
@@ -321,32 +339,38 @@
       Object.assign(x, changes);
       x.marked = true;
       x._saving = true;
+      x._saved = false;
       render();                                // instant feedback
       try {
         const opts = {
           method: "PATCH",
           body: JSON.stringify({ allocation_id: x.allocation_id, ...changes, edit_reason: reason }),
         };
-        let r;
-        try {
-          r = await vmmsApi("/api/v1/attendance/mark", opts);
-        } catch (netErr) {                      // dropped connection — retry once
-          await new Promise(res => setTimeout(res, 900));
-          r = await vmmsApi("/api/v1/attendance/mark", opts);
-        }
-        const data = await r.json();
+        const r = await vmmsApi("/api/v1/attendance/mark", opts);
+        const data = await r.json().catch(()=>({}));
         if (!r.ok) throw new Error(data.detail || "Could not save");
         x.normal_hours = data.normal_hours;   // authoritative hours from server
         x.ot_hours = data.ot_hours;
         x.day_type = data.day_type;
         x._saving = false;
+        x._saved = true;
         render();
         toast("✓ Saved", false, true);        // green confirmation
+        setTimeout(()=>{x._saved=false;render();},1400);
       } catch (ex) {
-        Object.assign(x, prev);               // revert on failure
-        x._saving = false;
-        render();
-        toast(ex.message, true);
+        // The write may have reached the database even if the response was
+        // interrupted. Verify once before claiming that the save failed.
+        let verified=null;
+        try{
+          const vr=await vmmsApi(`/api/v1/attendance?date=${document.getElementById("date").value}`);
+          if(vr.ok){const all=await vr.json();const got=all.find(a=>a.allocation_id===x.allocation_id);
+            const sameEnd=changes.end_time===undefined||((got&&got.end_time)||null)===changes.end_time;
+            const samePresent=changes.present===undefined||!!(got&&got.present)===!!changes.present;
+            if(got&&sameEnd&&samePresent) verified=got;
+          }
+        }catch(_){ }
+        if(verified){Object.assign(x,verified);x._saving=false;x._saved=true;render();toast("✓ Saved and verified",false,true);setTimeout(()=>{x._saved=false;render();},1400);}
+        else{Object.assign(x,prev);x._saving=false;render();toast("Could not confirm the save — check your connection and try again",true);}
       }
     }
 
@@ -363,18 +387,20 @@
       } catch (ex) { toast(ex.message, true); }
     }
 
-    async function bulkApply(t) { document.getElementById("bulk-time").value = t; await bulkSet(); }
-    async function bulkSet() {
+    async function bulkApply(t) { document.getElementById("bulk-time").value = t; await bulkSet(false); }
+    async function bulkSet(pendingOnly=false) {
       const t = document.getElementById("bulk-time").value;
       if (!t) { toast("Pick a time first"); return; }
+      const ids=pendingOnly?ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time).map(x=>x.allocation_id):null;
+      if(pendingOnly&&!ids.length){toast("All present workers already have an end time",false,true);return;}
       try {
         const r = await vmmsApi("/api/v1/attendance/bulk_end", {
           method: "POST",
-          body: JSON.stringify({ work_date: document.getElementById("date").value, site_id: document.getElementById("site").value, end_time: t }),
+          body: JSON.stringify({ work_date: document.getElementById("date").value, site_id: document.getElementById("site").value, end_time: t, end_next_day:nextDayFor({start_time:"08:00"},t), allocation_ids:ids }),
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not apply");
-        toast(`End time ${t} set for ${data.updated} present workers — adjust exceptions individually`);
+        toast(`End time ${t} set for ${data.updated} ${pendingOnly?"pending ":"present "}workers — adjust exceptions individually`);
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
@@ -441,6 +467,7 @@
 
     async function submitDay(stage) {
       const morning = stage === "morning";
+      if(!morning){const pending=ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time);if(pending.length){setAttFilter("pending");toast(`${pending.length} present worker(s) still need an end time`,true);return;}}
       if (!morning && !confirm("Submit the end times and lock this day? After this, changes need a reason.")) return;
       try {
         const r = await vmmsApi("/api/v1/attendance/submit", {

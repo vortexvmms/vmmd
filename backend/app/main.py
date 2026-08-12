@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.67.0")  # task deadlines + Home completion
+app = FastAPI(title="VCMS API", version="0.68.0")  # reliable attendance end-time saves
 
 app.add_middleware(
     CORSMiddleware,
@@ -1226,7 +1226,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         ra = await client.get(
             f"{REST}/allocations",
             params={"id": f"eq.{body.allocation_id}",
-                    "select": "id,work_date,site_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at)"},
+                    "select": "id,work_date,site_id,worker_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at)"},
             headers=supabase_headers(user["token"]),
         )
         arows = ra.json() if ra.status_code == 200 else []
@@ -1292,14 +1292,23 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
 
         # split-day: if this worker worked at more than one site today,
         # recalculate the whole day so the 8-hour normal quota is applied once
-        res = await recompute_worker_day(client, user["token"],
-                                         alloc["work_date"], alloc["worker_id"], day_type)
-        if res:
-            normal, ot = res.get(body.allocation_id, (normal, ot))
+        try:
+            res = await recompute_worker_day(client, user["token"],
+                                             alloc["work_date"], alloc["worker_id"], day_type)
+            if res:
+                normal, ot = res.get(body.allocation_id, (normal, ot))
+        except Exception:
+            # The individual attendance row is already saved. A secondary
+            # split-day recalculation must never turn that success into a false
+            # "Failed to fetch" message on the supervisor's phone.
+            pass
 
-        await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
-                    {k: att.get(k) for k in ("present", "end_time")} if att else None,
-                    {"present": present, "end_time": end, "normal": normal, "ot": ot})
+        try:
+            await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
+                        {k: att.get(k) for k in ("present", "end_time")} if att else None,
+                        {"present": present, "end_time": end, "normal": normal, "ot": ot})
+        except Exception:
+            pass
 
         # absence (MC / UL / AL) → notify Operation Manager, Site Manager, HR Assistant
         was_present = att["present"] if att else None
@@ -1316,10 +1325,13 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             except Exception:
                 pass
             code = (absence or "absent").upper()
-            await notify_roles(client, ["operation_manager", "main_sup", "hr_assistant"],
-                               "absence", f"Worker absence — {code}",
-                               f"{wname} marked {code} at {sname2} on {alloc['work_date']}.",
-                               link=f"attendance.html?date={alloc['work_date']}")
+            try:
+                await notify_roles(client, ["operation_manager", "main_sup", "hr_assistant"],
+                                   "absence", f"Worker absence — {code}",
+                                   f"{wname} marked {code} at {sname2} on {alloc['work_date']}.",
+                                   link=f"attendance.html?date={alloc['work_date']}")
+            except Exception:
+                pass
         return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
 
 
@@ -1400,9 +1412,12 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
                                   headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
                                   json={**payload, "allocation_id": a["id"]})
             updated += 1
-        await audit(client, user, "bulk_end", "attendance",
-                    f"{body.work_date}:{body.site_id}", None,
-                    {"end_time": body.end_time, "workers": updated})
+        try:
+            await audit(client, user, "bulk_end", "attendance",
+                        f"{body.work_date}:{body.site_id}", None,
+                        {"end_time": body.end_time, "workers": updated})
+        except Exception:
+            pass
         return {"ok": True, "updated": updated}
 
 
