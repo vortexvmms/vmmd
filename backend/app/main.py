@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.0")  # per-user DPR reminder site selection
+app = FastAPI(title="VCMS API", version="0.71.1")  # refresh DPR site preference before task sync
 
 app.add_middleware(
     CORSMiddleware,
@@ -2972,6 +2972,17 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
     start_d = end_d - timedelta(days=days - 1)
     start, end = start_d.isoformat(), end_d.isoformat()
     async with shared_client() as client:
+        # Read this preference fresh instead of relying on the long-lived identity
+        # cache. An administrator's newly selected sites must take effect at once.
+        rp = await client.get(f"{REST}/users",
+            params={"id": f"eq.{user['user_id']}",
+                    "select": "dpr_reminders,dpr_reminder_sites"},
+            headers=supabase_headers(user["token"]))
+        prefs = (rp.json() or [{}])[0] if rp.status_code == 200 else {}
+        enabled = bool(prefs.get("dpr_reminders", user.get("dpr_reminders", False)))
+        selected_sites = prefs.get("dpr_reminder_sites", user.get("dpr_reminder_sites"))
+        user["dpr_reminders"], user["dpr_reminder_sites"] = enabled, selected_sites
+        _cache_put(user["token"], user)
         ra, rr = await asyncio.gather(
             client.get(f"{REST}/allocations",
                 params={"status": "eq.allocated", "and": f"(work_date.gte.{start},work_date.lte.{end})",
@@ -2990,7 +3001,6 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
             key = (x.get("site_id"), x.get("work_date"))
             if key[0] and key[1] and key not in prepared:
                 missing_map[key] = (x.get("sites") or {}).get("site_name") or "Site"
-        selected_sites = user.get("dpr_reminder_sites")
         if isinstance(selected_sites, list):
             selected = set(selected_sites)
             missing_map = {k: v for k, v in missing_map.items() if k[0] in selected}
@@ -2998,7 +3008,7 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                     "label": date_cls.fromisoformat(day).strftime("%d/%m/%Y")}
                    for (sid, day), name in sorted(missing_map.items(), key=lambda z: z[0][1], reverse=True)]
 
-        if user.get("dpr_reminders"):
+        if enabled:
             re = await client.get(f"{REST}/todos",
                 params={"user_id": f"eq.{user['user_id']}", "source": "eq.dpr_missing",
                         "select": "id,source_key,done,text"}, headers=supabase_headers(user["token"]))
@@ -3029,7 +3039,7 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                 await client.delete(f"{REST}/todos",
                     params={"id": f"in.({','.join(stale)})", "user_id": f"eq.{user['user_id']}"},
                     headers=supabase_headers(user["token"]))
-    return {"enabled": bool(user.get("dpr_reminders")), "from": start, "to": end,
+    return {"enabled": enabled, "from": start, "to": end,
             "count": len(missing), "items": missing}
 
 
