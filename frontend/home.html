@@ -365,7 +365,9 @@
       const hdate=document.getElementById("home-date");hdate.value=REPORT_DATE;hdate.max=localISODate();
       document.getElementById("subgreet").textContent=new Date(REPORT_DATE+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"}).toUpperCase()+" · YOUR SITE OVERVIEW";
       loadTasks();
-      if(ME.dpr_reminders) vmmsApi("/api/v1/dpr/missing?days=30").then(r=>{if(r.ok)loadTasks();}).catch(()=>{});
+      // The backend reads the latest profile setting. Do not rely on a possibly
+      // cached /me preference after an administrator changes reminder sites.
+      vmmsApi("/api/v1/dpr/missing?days=30").then(r=>{if(r.ok)loadTasks();}).catch(()=>{});
       desktopSkeleton();
 
       const dr=await vmmsApi("/api/v1/dashboard?date="+REPORT_DATE);
