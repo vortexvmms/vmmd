@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.6")  # sync DPR reminders whenever tasks load
+app = FastAPI(title="VCMS API", version="0.72.0")  # desktop Workers management layout
 
 app.add_middleware(
     CORSMiddleware,
@@ -304,7 +304,7 @@ VALID_STATUS = {"active", "on_leave", "inactive"}
 @app.get("/api/v1/workers")
 async def list_workers(search: str = "", status: str = "",
                        user: dict = Depends(get_current_user)):
-    params = {"select": "id,worker_code,name,status,fin,updated_at", "order": "name.asc"}
+    params = {"select": "id,worker_code,name,status,fin,trade,updated_at", "order": "name.asc"}
     if status:
         if status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="Invalid status filter")

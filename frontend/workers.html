@@ -11,6 +11,19 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <style>
+    .desktop-only{display:none}.worker-desktop{display:none}
+    @media(min-width:900px){
+      body{background:#E7EAF0!important}.mobile-only{display:none!important}.desktop-only{display:flex!important}
+      body>header{padding:13px 24px!important}.worker-head-actions{gap:9px}.worker-head-actions button{border:0;border-radius:9px;padding:9px 15px;font-weight:800;font-size:13px;cursor:pointer}.wa-bulk{background:#242B35;color:#fff}.wa-add{background:#fff;color:#A00000}
+      main{max-width:none!important;width:100%;padding:20px 24px 40px!important}.worker-desktop{display:block}
+      .worker-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.wkpi{background:#fff;border:1px solid #D7DCE4;border-top:4px solid #C00000;border-radius:13px;padding:14px 16px;text-align:left;box-shadow:0 4px 14px rgba(15,23,42,.055);cursor:pointer}.wkpi:hover{transform:translateY(-2px);box-shadow:0 9px 20px rgba(15,23,42,.1)}.wkpi b{display:block;font-size:27px;color:#171B22}.wkpi span{font-size:12px;font-weight:800;color:#667085}.wkpi.active{background:#FFF3F3;border-color:#D89A9A}.wkpi[data-status="active"]{border-top-color:#16A34A}.wkpi[data-status="on_leave"]{border-top-color:#D97706}.wkpi[data-status="inactive"]{border-top-color:#6B7280}
+      .worker-tools{position:sticky;top:126px;z-index:6;display:grid;grid-template-columns:minmax(260px,1fr) 170px 190px 190px 170px auto;gap:9px;padding:11px;background:#fff;border:1px solid #D7DCE4;border-radius:13px 13px 0 0;box-shadow:0 5px 14px rgba(15,23,42,.06)}.worker-tools input,.worker-tools select{height:40px;border:1px solid #CBD2DC;border-radius:8px;padding:0 11px;background:#fff;font-size:13px}.worker-tools button{border:0;border-radius:8px;background:#EEF0F3;color:#374151;font-weight:800;padding:0 13px}
+      .worker-table-wrap{background:#fff;border:1px solid #D7DCE4;border-top:0;border-radius:0 0 13px 13px;overflow:auto}.worker-table{width:100%;border-collapse:collapse;font-size:13px}.worker-table th{position:sticky;top:189px;z-index:5;background:#2D3646;color:#fff;text-transform:uppercase;letter-spacing:.04em;font-size:11px;text-align:left;padding:11px 14px}.worker-table td{padding:11px 14px;border-bottom:1px solid #E8EBEF;color:#344054}.worker-table tbody tr:nth-child(even){background:#F8F9FB}.worker-table tbody tr:hover{background:#FFF4F4}.worker-table .wname{font-weight:800;color:#1D2430}.status-badge{display:inline-flex;border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800}.st-active{background:#DCFCE7;color:#16733A}.st-on_leave{background:#FEF3C7;color:#925B08}.st-inactive{background:#E5E7EB;color:#596273}.edit-worker{border:1px solid #D6DAE1;background:#fff;color:#A40000;border-radius:7px;padding:6px 10px;font-size:11px;font-weight:800}.worker-empty{text-align:center!important;padding:30px!important;color:#98A2B3!important}
+      #fab,#fab-bulk{display:none!important}
+      body:not(.can-edit) .worker-head-actions{display:none!important}
+    }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
@@ -20,11 +33,14 @@
       <h1 class="text-lg font-bold">Workers</h1>
       <p class="text-red-100 text-xs" id="count">Loading…</p>
     </div>
+    <div id="head-actions" class="desktop-only worker-head-actions">
+      <button class="wa-bulk" onclick="openBulk()">Bulk Add</button><button class="wa-add" onclick="openForm()">+ Add Worker</button>
+    </div>
   </header>
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-24">
 
-    <input id="search" type="search" placeholder="Search name or worker ID…"
+    <div class="mobile-only"><input id="search" type="search" placeholder="Search name or worker ID…"
            class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
 
     <div class="flex gap-2 mb-4 text-sm font-medium" id="chips">
@@ -32,11 +48,24 @@
       <button data-f="active" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">Active</button>
       <button data-f="on_leave" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">On Leave</button>
       <button data-f="inactive" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">Inactive</button>
-    </div>
+    </div></div>
 
     <style>.grid3{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:640px){.grid3{grid-template-columns:repeat(2,1fr)}}@media(min-width:1024px){.grid3{grid-template-columns:repeat(3,1fr)}}</style>
     <div id="list" class="grid3"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers found.</p>
+
+    <section class="worker-desktop">
+      <div class="worker-kpis" id="worker-kpis"></div>
+      <div class="worker-tools">
+        <input id="d-search" type="search" placeholder="Search worker name or ID…">
+        <select id="d-status"><option value="">All statuses</option><option value="active">Active</option><option value="on_leave">On Leave</option><option value="inactive">Inactive</option></select>
+        <select id="d-site"><option value="">All current sites</option></select>
+        <select id="d-trade"><option value="">All trades</option></select>
+        <select id="d-sort"><option value="name">Sort: Name</option><option value="code">Sort: Worker ID</option><option value="site">Sort: Current site</option><option value="status">Sort: Status</option></select>
+        <button onclick="clearDesktopFilters()">Clear</button>
+      </div>
+      <div class="worker-table-wrap"><table class="worker-table"><thead><tr><th>Worker ID</th><th>Worker name</th><th>Trade</th><th>Current site</th><th>Status</th><th>Actions</th></tr></thead><tbody id="worker-tbody"></tbody></table></div>
+    </section>
   </main>
 
   <!-- Add buttons (admin only) -->
@@ -92,7 +121,7 @@
   <script>
     requireLogin();
 
-    let ME = null, ALL = [], FILTER = "", EDIT_ID = null;
+    let ME = null, ALL = [], ALLOCS = [], FILTER = "", EDIT_ID = null;
 
     const STATUS_CHIP = {
       active:   ["Active", "bg-green-100 text-green-700"],
@@ -111,6 +140,7 @@
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
       if (isFull(ME.role)) {
+        document.body.classList.add("can-edit");
         document.getElementById("fab").classList.remove("hidden");
         document.getElementById("fab-bulk").classList.remove("hidden");
       }
@@ -121,6 +151,9 @@
       const r = await vmmsApi("/api/v1/workers");
       if (!r.ok) { toast("Could not load workers"); return; }
       ALL = await r.json();
+      if (window.innerWidth >= 900) {
+        try { const d=new Date(),iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; const ra=await vmmsApi(`/api/v1/allocations?date=${iso}`); ALLOCS=ra.ok?await ra.json():[]; } catch(e){ ALLOCS=[]; }
+      }
       render();
     }
 
@@ -149,7 +182,28 @@
         }
         list.appendChild(div);
       });
+      renderDesktop();
     }
+
+    function currentSite(workerId){const a=ALLOCS.find(x=>x.worker_id===workerId);return a?a.site_name:"—"}
+    function renderDesktop(){
+      if(window.innerWidth<900)return;
+      const counts={all:ALL.length,active:ALL.filter(x=>x.status==="active").length,on_leave:ALL.filter(x=>x.status==="on_leave").length,inactive:ALL.filter(x=>x.status==="inactive").length};
+      document.getElementById("worker-kpis").innerHTML=[["","Total workers",counts.all],["active","Active",counts.active],["on_leave","On leave",counts.on_leave],["inactive","Inactive",counts.inactive]].map(([s,l,n])=>`<button class="wkpi${document.getElementById("d-status").value===s?' active':''}" data-status="${s}" onclick="setDesktopStatus('${s}')"><b>${n}</b><span>${l}</span></button>`).join("");
+      const sites=[...new Set(ALLOCS.map(x=>x.site_name).filter(Boolean))].sort(), trades=[...new Set(ALL.map(x=>(x.trade||"").trim()).filter(Boolean))].sort();
+      const ds=document.getElementById("d-site"),dt=document.getElementById("d-trade"),sv=ds.value,tv=dt.value;
+      ds.innerHTML='<option value="">All current sites</option>'+sites.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");ds.value=sv;
+      dt.innerHTML='<option value="">All trades</option>'+trades.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");dt.value=tv;
+      const q=document.getElementById("d-search").value.trim().toLowerCase(),st=document.getElementById("d-status").value,site=ds.value,trade=dt.value,sort=document.getElementById("d-sort").value;
+      let rows=ALL.filter(w=>(!st||w.status===st)&&(!site||currentSite(w.id)===site)&&(!trade||(w.trade||"")===trade)&&(!q||w.name.toLowerCase().includes(q)||w.worker_code.toLowerCase().includes(q)));
+      rows.sort((a,b)=>{if(sort==="code")return a.worker_code.localeCompare(b.worker_code);if(sort==="site")return currentSite(a.id).localeCompare(currentSite(b.id))||a.name.localeCompare(b.name);if(sort==="status")return a.status.localeCompare(b.status)||a.name.localeCompare(b.name);return a.name.localeCompare(b.name)});
+      const labels={active:"Active",on_leave:"On Leave",inactive:"Inactive"};
+      document.getElementById("worker-tbody").innerHTML=rows.length?rows.map(w=>`<tr><td><b>${esc(w.worker_code)}</b></td><td class="wname">${esc(w.name)}</td><td>${esc(w.trade||"—")}</td><td>${esc(currentSite(w.id))}</td><td><span class="status-badge st-${w.status}">${labels[w.status]||esc(w.status)}</span></td><td>${isFull(ME.role)?`<button class="edit-worker" onclick="openWorker('${w.id}')">Edit</button>`:'—'}</td></tr>`).join(""):'<tr><td colspan="6" class="worker-empty">No workers match these filters.</td></tr>';
+      document.getElementById("count").textContent=`${rows.length} shown · ${counts.active} active of ${counts.all}`;
+    }
+    function setDesktopStatus(s){document.getElementById("d-status").value=s;renderDesktop()}
+    function openWorker(id){const w=ALL.find(x=>x.id===id);if(w)openForm(w)}
+    function clearDesktopFilters(){document.getElementById("d-search").value="";document.getElementById("d-status").value="";document.getElementById("d-site").value="";document.getElementById("d-trade").value="";document.getElementById("d-sort").value="name";renderDesktop()}
 
     function openForm(w = null) {
       EDIT_ID = w ? w.id : null;
@@ -242,6 +296,7 @@
     }
 
     document.getElementById("search").addEventListener("input", render);
+    ["d-search","d-status","d-site","d-trade","d-sort"].forEach(id=>document.getElementById(id).addEventListener(id==="d-search"?"input":"change",renderDesktop));
     document.getElementById("chips").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
       FILTER = b.dataset.f;
