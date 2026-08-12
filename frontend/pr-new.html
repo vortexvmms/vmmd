@@ -26,80 +26,119 @@
     .recent { font-size:13px; }
     .recent tr { cursor:pointer; }
     .recent td { padding:8px 10px; border-top:1px solid #F1F1F1; }
+    .pr-panel-title { display:none; }
+    .pr-main-fields > div { margin-top:12px; }
+    .pr-options .option-block { margin-top:12px; }
+    @media (min-width:900px) {
+      body.dl { background:linear-gradient(135deg,#EEF1F5 0%,#E5E9F0 100%); }
+      .pr-head-inner,.pr-main { width:calc(100% - 48px); max-width:1540px; margin-left:auto; margin-right:auto; }
+      .pr-main { padding:22px 24px 56px; }
+      .pr-editor { padding:22px; border-radius:18px; border-color:#DCE1E8; box-shadow:0 12px 32px rgba(15,23,42,.08); }
+      .pr-editor::before { content:"REQUISITION DETAILS"; display:block; margin:-22px -22px 20px; padding:15px 22px; border-radius:18px 18px 0 0; background:linear-gradient(100deg,#202631,#303846); color:#fff; font-size:13px; font-weight:800; letter-spacing:.09em; }
+      .pr-top { display:grid; grid-template-columns:minmax(0,1fr) minmax(340px,.72fr); gap:18px; align-items:start; }
+      .pr-panel { min-width:0; padding:18px; border:1px solid #E1E5EB; border-radius:14px; background:#FAFBFC; }
+      .pr-panel-title { display:block; margin:0 0 15px; color:#1F2937; font-size:16px; font-weight:800; }
+      .pr-panel-title span { display:block; margin-top:3px; color:#8490A3; font-size:11px; font-weight:600; }
+      .pr-main-fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .pr-main-fields > div,.pr-options .option-block { margin-top:0; }
+      .pr-main-fields .wide { grid-column:1/-1; }
+      .pr-options { display:grid; gap:18px; }
+      .pr-options .option-block { padding-bottom:15px; border-bottom:1px solid #E5E7EB; }
+      .pr-options .option-block:last-child { padding-bottom:0; border-bottom:0; }
+      .pr-editor .inp { min-height:42px; border-color:#CBD2DC; transition:border-color .18s,box-shadow .18s; }
+      .pr-editor .inp:focus { outline:none; border-color:#C00000; box-shadow:0 0 0 3px rgba(192,0,0,.10); }
+      .seg button { min-height:40px; transition:transform .16s,box-shadow .16s,background .16s; }
+      .seg button:hover { transform:translateY(-1px); box-shadow:0 5px 12px rgba(15,23,42,.10); }
+      .items-section { margin-top:20px; padding:18px; border:1px solid #E1E5EB; border-radius:14px; background:#fff; }
+      .items-section .section-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+      table.it th { padding:10px 8px; background:#F1F3F6; color:#4B5563; }
+      table.it td { padding:5px; }
+      .pr-lower { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr); gap:18px; margin-top:18px; }
+      .pr-lower-card { padding:18px; border:1px solid #E1E5EB; border-radius:14px; background:#FAFBFC; }
+      .pr-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px; }
+      .pr-actions button { min-height:44px; transition:transform .16s,box-shadow .16s; }
+      .pr-actions button:hover { transform:translateY(-2px); box-shadow:0 8px 18px rgba(15,23,42,.15); }
+      .recent-card { margin-top:18px; border-radius:16px; }
+    }
+    @media (min-width:1900px) {
+      .pr-head-inner,.pr-main { max-width:none; width:calc(100% - 64px); }
+      .pr-top { grid-template-columns:minmax(0,1.45fr) minmax(420px,.55fr); }
+    }
   </style>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3 max-w-4xl mx-auto w-full">
+    <div class="pr-head-inner flex items-center gap-3 max-w-4xl mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
       <div class="flex-1"><h1 class="text-lg font-bold">Purchase Requisition</h1><p class="text-red-100 text-xs">New PR request</p></div>
       <button onclick="newBlank()" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">+ New</button>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-4xl mx-auto w-full pb-24">
-    <div class="card p-4">
+  <main class="pr-main flex-1 p-4 max-w-4xl mx-auto w-full pb-24">
+    <div class="card p-4 pr-editor">
+      <div class="pr-top">
+      <section class="pr-panel">
+        <h2 class="pr-panel-title">Project information<span>Select the site first to generate the PR number</span></h2>
+        <div class="pr-main-fields">
       <!-- Category -->
-      <div>
+      <div class="wide">
         <label class="fl">Category</label>
         <div class="seg" id="seg-cat">
           <button data-v="asset" onclick="pick('cat',this)">Asset</button>
           <button data-v="consumable" onclick="pick('cat',this)">Consumable</button>
-          <button data-v="rentals" onclick="pick('cat',this)">Rentals</button>
+          <button data-v="rentals" onclick="pick('cat',this)">Rental</button>
         </div>
       </div>
 
       <!-- Site first → generates the PR No -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-        <div>
-          <label class="fl">Site Name</label>
-          <select id="f-site" class="inp" onchange="onSiteUser()"><option value="">Select site…</option></select>
-        </div>
-        <div>
+      <div>
+        <label class="fl">Site Name</label>
+        <select id="f-site" class="inp" onchange="onSiteUser()"><option value="">Select site…</option></select>
+      </div>
+      <div>
           <label class="fl">Project Code</label>
           <select id="f-code" class="inp" onchange="onCode()"><option value="">—</option></select>
-        </div>
       </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-        <div>
-          <label class="fl">P.R No <span id="prevref" class="text-gray-400 normal-case font-normal"></span></label>
-          <input id="f-prno" class="inp" placeholder="Select a site to generate…">
-        </div>
-        <div>
-          <label class="fl">Date</label>
-          <input id="f-date" type="date" class="inp">
-        </div>
+      <div>
+        <label class="fl">P.R No <span id="prevref" class="text-gray-400 normal-case font-normal"></span></label>
+        <input id="f-prno" class="inp" placeholder="Select a site to generate…">
       </div>
-
-      <div class="mt-3">
+      <div>
+        <label class="fl">Date</label>
+        <input id="f-date" type="date" class="inp">
+      </div>
+      <div class="wide">
         <label class="fl">Project</label>
         <input id="f-project" class="inp" placeholder="Project title (auto from directory)">
       </div>
+      </div></section>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
-        <div>
+      <section class="pr-panel pr-options">
+        <h2 class="pr-panel-title">Request settings<span>Set category, priority and delivery method</span></h2>
+        <div class="option-block">
           <label class="fl">Priority</label>
           <div class="seg" id="seg-urg">
             <button data-v="urgent" onclick="pick('urg',this)">Urgent</button>
             <button data-v="normal" onclick="pick('urg',this)">Normal</button>
           </div>
         </div>
-        <div>
+        <div class="option-block">
           <label class="fl">Collection</label>
           <div class="seg" id="seg-del">
             <button data-v="self" onclick="pick('del',this)">Self Collection</button>
             <button data-v="delivery" onclick="pick('del',this)">Delivery</button>
           </div>
         </div>
-        <div>
+        <div class="option-block">
           <label class="fl">Delivery To</label>
           <input id="f-deliverto" class="inp" placeholder="Deliver to…">
         </div>
-      </div>
+      </section></div>
 
       <!-- Line items -->
-      <label class="fl mt-4">Items</label>
+      <section class="items-section">
+      <div class="section-title"><label class="fl">Items</label><button onclick="addItem()" class="text-red-700 font-bold text-sm">+ Add item</button></div>
       <div style="overflow:auto">
         <table class="it">
           <thead><tr>
@@ -115,15 +154,14 @@
           </tr></tfoot>
         </table>
       </div>
-      <button onclick="addItem()" class="mt-2 text-red-700 font-bold text-sm">+ Add item</button>
+      </section>
 
-      <div class="mt-4">
+      <div class="pr-lower"><section class="pr-lower-card">
         <label class="fl">Remarks</label>
         <textarea id="f-remarks" rows="2" class="inp" placeholder="Remarks…"></textarea>
-      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
         <div><label class="fl">Requested By</label><input id="f-reqby" class="inp"></div>
-      </div>
+      </div></section><section class="pr-lower-card">
 
       <!-- Reference photos / invoice attachments -->
       <label class="fl mt-4">Reference photos / Invoice (optional)</label>
@@ -135,7 +173,7 @@
       <div id="ph-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2"></div>
       <button id="importbtn" onclick="openImport()" class="hidden mt-2 w-full border border-red-300 text-red-700 font-bold text-sm py-2 rounded-lg">📄 Import items from invoice PDF</button>
 
-      <div class="flex gap-2 mt-5">
+      <div class="pr-actions flex gap-2 mt-5">
         <button onclick="savePR()" class="flex-1 bg-red-700 text-white font-bold py-2.5 rounded-lg">Save</button>
         <button onclick="printPR()" class="flex-1 bg-gray-800 text-white font-bold py-2.5 rounded-lg">Print / PDF</button>
       </div>
@@ -143,11 +181,11 @@
       <div id="editbar" class="hidden flex gap-2 mt-2">
         <button onclick="saveRevision()" class="flex-1 border border-red-300 text-red-700 font-bold py-2 rounded-lg text-sm">Save as Revision (R1)</button>
         <button onclick="deleteCurrent()" class="flex-1 border border-gray-300 text-gray-700 font-bold py-2 rounded-lg text-sm">🗑 Delete this PR</button>
-      </div>
+      </div></section></div>
     </div>
 
     <!-- Recent PRs -->
-    <div class="card mt-4" style="overflow:hidden">
+    <div class="card mt-4 recent-card" style="overflow:hidden">
       <p class="font-bold text-gray-800 text-sm px-4 pt-4">Recent PRs <span class="text-gray-400 font-normal">— tap to reopen / reprint</span></p>
       <table class="recent w-full"><tbody id="recent"></tbody></table>
     </div>
