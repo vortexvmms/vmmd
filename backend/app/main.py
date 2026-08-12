@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.70.1")  # DPR reminder naming and task sync
+app = FastAPI(title="VCMS API", version="0.70.2")  # missing-DPR reminder runtime fix
 
 app.add_middleware(
     CORSMiddleware,
@@ -2957,7 +2957,7 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     days = max(1, min(days, 90))
-    end_d = date_cls.fromisoformat(_sg_today()) - timedelta(days=1)
+    end_d = date_cls.fromisoformat(_sgt_today()) - timedelta(days=1)
     start_d = end_d - timedelta(days=days - 1)
     start, end = start_d.isoformat(), end_d.isoformat()
     async with shared_client() as client:
