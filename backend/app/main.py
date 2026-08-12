@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.66.0")  # dashboard month query pagination fix
+app = FastAPI(title="VCMS API", version="0.67.0")  # task deadlines + Home completion
 
 app.add_middleware(
     CORSMiddleware,
@@ -3313,12 +3313,14 @@ async def home_overview(user: dict = Depends(get_current_user)):
 # ================= Personal to-do (Eisenhower matrix) =================
 class TodoIn(BaseModel):
     text: str
+    due_date: date_cls | None = None
 
 
 class TodoPatch(BaseModel):
     text: str | None = None
     quadrant: str | None = None
     done: bool | None = None
+    due_date: date_cls | None = None
 
 
 @app.get("/api/v1/todos")
@@ -3326,7 +3328,7 @@ async def todos_list(user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.get(f"{REST}/todos",
             params={"user_id": f"eq.{user['user_id']}", "order": "created_at.asc",
-                    "select": "id,text,quadrant,done,created_at"},
+                    "select": "id,text,quadrant,done,due_date,created_at"},
             headers=supabase_headers(user["token"]))
         return r.json() if r.status_code == 200 else []
 
@@ -3339,7 +3341,8 @@ async def todos_add(body: TodoIn, user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.post(f"{REST}/todos",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json={"user_id": user["user_id"], "text": txt[:400], "quadrant": "inbox"})
+            json={"user_id": user["user_id"], "text": txt[:400], "quadrant": "inbox",
+                  "due_date": body.due_date.isoformat() if body.due_date else None})
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Could not add task ({r.status_code})")
         rows = r.json()
@@ -3355,6 +3358,8 @@ async def todos_update(todo_id: str, body: TodoPatch, user: dict = Depends(get_c
         patch["quadrant"] = body.quadrant
     if body.done is not None:
         patch["done"] = body.done
+    if "due_date" in body.model_fields_set:
+        patch["due_date"] = body.due_date.isoformat() if body.due_date else None
     async with shared_client() as client:
         r = await client.patch(f"{REST}/todos",
             params={"id": f"eq.{todo_id}", "user_id": f"eq.{user['user_id']}"},

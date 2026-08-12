@@ -25,8 +25,10 @@
     .task .del{ background:none; border:none; color:#C00000; font-weight:700; cursor:pointer; font-size:15px; }
     .addbar{ display:flex; gap:8px; }
     .addbar input{ flex:1; border:1px solid #D1D5DB; border-radius:10px; padding:11px 12px; font-size:15px; }
+    .addbar input[type=date]{flex:0 0 155px;color:#475569}
     .addbar button{ background:#C00000; color:#fff; border:none; border-radius:10px; padding:0 18px; font-weight:700; font-size:15px; cursor:pointer; }
     .inbox{ background:#fff; border:1px dashed #CBD5E1; border-radius:14px; padding:12px; margin-top:14px; }
+    .due{font-size:11px;color:#667085;margin-top:3px}.due.over{color:#B91C1C;font-weight:800}.due.today{color:#B45309;font-weight:800}
     @media (max-width:820px){ .qgrid{ grid-template-columns:1fr; } }
   </style>
 </head>
@@ -41,6 +43,7 @@
   <main class="flex-1 p-4 max-w-5xl mx-auto w-full pb-16">
     <div class="addbar">
       <input id="new" placeholder="What do you need to do today?" onkeydown="if(event.key==='Enter')addTask()">
+      <input id="due" type="date" title="Task deadline">
       <button onclick="addTask()">Add</button>
     </div>
 
@@ -89,18 +92,20 @@
       const opts=QCOLS.map(q=>`<option value="${q}" ${((t.quadrant||"inbox")===q)?"selected":""}>${QNAMES[q]}</option>`).join("");
       return `<div class="task ${t.done?"done":""}" draggable="true" ondragstart="dstart(event,'${t.id}')" id="t-${t.id}">
         <input type="checkbox" ${t.done?"checked":""} onchange="toggleDone('${t.id}',this.checked)">
-        <div class="tx">${esc(t.text)}</div>
+        <div class="tx">${esc(t.text)}${dueHTML(t)}</div>
         <select class="mv" onchange="move('${t.id}',this.value)">${opts}</select>
         <button class="del" onclick="del('${t.id}')" title="Delete">×</button>
       </div>`;
     }
     async function addTask(){
       const el=document.getElementById("new"); const txt=el.value.trim(); if(!txt) return;
+      const due=document.getElementById("due");
       el.value="";
-      const r=await vmmsApi("/api/v1/todos",{method:"POST",body:JSON.stringify({text:txt})});
+      const r=await vmmsApi("/api/v1/todos",{method:"POST",body:JSON.stringify({text:txt,due_date:due.value||null})});
       if(!r.ok){ toast("Could not add"); return; }
       await load();
     }
+    function dueHTML(t){if(!t.due_date)return "";const today=new Date().toLocaleDateString("en-CA"),cl=t.due_date<today?" over":(t.due_date===today?" today":"");return `<div class="due${cl}">Deadline: ${t.due_date.split("-").reverse().join("/")}${cl===" over"?" · OVERDUE":cl===" today"?" · TODAY":""}</div>`;}
     async function move(id,q){
       const t=TODOS.find(x=>x.id===id); if(t) t.quadrant=q; render();
       await vmmsApi("/api/v1/todos/"+id,{method:"PATCH",body:JSON.stringify({quadrant:q})});

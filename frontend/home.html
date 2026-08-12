@@ -71,6 +71,7 @@
     .tasks .tb{ padding:12px 14px; }
     .tsec{ font-size:11px; font-weight:700; color:#9AA1AB; text-transform:uppercase; letter-spacing:.04em; margin:10px 0 5px; }
     .titem{ display:flex; gap:8px; align-items:flex-start; font-size:13px; padding:4px 0; } .titem .dot{ width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
+    .tcheck{appearance:none;width:17px;height:17px;border:2px solid #98A2B3;border-radius:5px;background:#fff;flex:none;margin:0;cursor:pointer;display:grid;place-items:center}.tcheck:checked{background:#15803D;border-color:#15803D}.tcheck:checked:after{content:"✓";color:#fff;font-size:12px;font-weight:900;line-height:1}.tcopy{flex:1;min-width:0;line-height:1.35}.tdue{display:block;font-size:11px;color:#667085;margin-top:2px}.tdue.over{color:#B91C1C;font-weight:800}.tdue.today{color:#B45309;font-weight:800}.titem.saving{opacity:.45;pointer-events:none}
     .tbtn{ display:block; text-align:center; background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:13px; padding:10px; border-radius:10px; margin-top:12px; }
     .backdrop{ display:none; } .mgreet{ display:none; }
     .desktop-only{ display:block; }.supervisor-only{display:none}
@@ -100,6 +101,10 @@
       .tasks .th{background:#B91C1C;font-size:15px}.tsec{font-size:12px;color:#667085}.titem{font-size:13.5px}.tbtn{background:#242931;font-size:13.5px}
       table.dt{font-size:13.5px}table.dt th{background:#303846;color:#fff;font-size:12px}table.dt tbody tr:nth-child(even){background:#F7F8FA}table.dt tbody tr:hover{background:#FBECEC}table.dt tfoot tr{background:#242931!important}
       #exceptions{background:#FFF9EB}.pill{font-size:12px}.site-status.ok{background:#E3F3E8;color:#15803D}.site-status.wait{background:#FFF0DB;color:#B45309}
+      /* Fluid desktop scale: laptops, monitors and large presentation displays. */
+      @media(max-width:1280px){.side{width:210px}.layout.side-mini .side{width:68px}.home-wrap{grid-template-columns:minmax(0,1fr) 300px;gap:12px}.content{padding:12px}.brand{gap:9px}.gcard{max-width:285px}.quick-actions a{font-size:12px}.kpi .n{font-size:24px}}
+      @media(min-width:1600px){.home-wrap{max-width:1680px;grid-template-columns:minmax(0,1fr) 360px;gap:18px}.content{padding:18px 24px}.kpi{padding:15px}.kpi .n{font-size:29px}.tasks .tb{padding:14px 16px}}
+      @media(min-width:2200px){.home-wrap{max-width:2080px;grid-template-columns:minmax(0,1fr) 420px;gap:22px}.side{width:270px}.nav a{font-size:15px;min-height:43px}.content{padding:22px 30px}.kpi .n{font-size:32px}.kpi .l,.titem,table.dt{font-size:14.5px}.tasks .th{font-size:17px}}
       @keyframes vcmsRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes vcmsPulse{0%,100%{box-shadow:0 0 0 0 rgba(214,158,46,0)}50%{box-shadow:0 0 0 6px rgba(214,158,46,.18)}}@keyframes vcmsShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
       .command-status{animation:vcmsRise .32s ease both}.quick-actions{animation:vcmsRise .36s .06s ease both}.kpi{animation:vcmsRise .36s ease both}.kpi:nth-child(1){animation-delay:.10s}.kpi:nth-child(2){animation-delay:.13s}.kpi:nth-child(3){animation-delay:.16s}.kpi:nth-child(4){animation-delay:.19s}.kpi:nth-child(5){animation-delay:.22s}.kpi:nth-child(n+6){animation-delay:.25s}.tasks{animation:vcmsRise .36s .12s ease both}.desk-stack{animation:vcmsRise .4s .2s ease both}.attention-pulse{animation:vcmsPulse 1.1s ease 3}.skeleton{height:105px;border-radius:12px;background:linear-gradient(90deg,#ECEFF2 25%,#F8F9FA 45%,#ECEFF2 65%);background-size:200% 100%;animation:vcmsShimmer 1.25s linear infinite}
     }
@@ -417,12 +422,14 @@
       const open=todos.filter(t=>!t.done);
       const groups=[["q1","Do first","#C00000"],["q2","Schedule","#2563EB"],["q3","Delegate","#D97706"]];
       let html="";
-      groups.forEach(([q,name,c])=>{ const items=open.filter(t=>(t.quadrant||"inbox")===q); if(!items.length) return; html+=`<div class="tsec">${name}</div>`+items.map(t=>`<div class="titem"><span class="dot" style="background:${c}"></span><span>${esc(t.text)}</span></div>`).join(""); });
+      const taskRow=(t)=>{const today=localISODate(),cl=t.due_date?(t.due_date<today?" over":t.due_date===today?" today":""):"",due=t.due_date?`<small class="tdue${cl}">Deadline: ${fmtDMY(t.due_date)}${cl===" over"?" · OVERDUE":cl===" today"?" · TODAY":""}</small>`:"";return `<label class="titem" id="home-task-${t.id}"><input class="tcheck" type="checkbox" onchange="completeHomeTask('${t.id}',this)"><span class="tcopy">${esc(t.text)}${due}</span></label>`;};
+      groups.forEach(([q,name,c])=>{ const items=open.filter(t=>(t.quadrant||"inbox")===q); if(!items.length) return; html+=`<div class="tsec" style="color:${c}">${name}</div>`+items.map(taskRow).join(""); });
       const inbox=open.filter(t=>(t.quadrant||"inbox")==="inbox");
-      if(inbox.length) html+=`<div class="tsec">To sort</div>`+inbox.map(t=>`<div class="titem"><span class="dot" style="background:#9CA3AF"></span><span>${esc(t.text)}</span></div>`).join("");
+      if(inbox.length) html+=`<div class="tsec">To sort</div>`+inbox.map(taskRow).join("");
       if(!open.length) html=`<p style="color:#9CA3AF;font-size:13px">No tasks yet. Plan your day in the to-do board.</p>`;
       document.getElementById("tasks-body").innerHTML=html+`<a class="tbtn" href="todo.html">Open to-do board</a>`;
     }
+    async function completeHomeTask(id,box){const row=document.getElementById("home-task-"+id);if(row)row.classList.add("saving");const r=await vmmsApi("/api/v1/todos/"+id,{method:"PATCH",body:JSON.stringify({done:true})});if(!r.ok){box.checked=false;if(row)row.classList.remove("saving");return;}if(row){row.style.transition="opacity .2s,transform .2s";row.style.opacity="0";row.style.transform="translateX(12px)";}setTimeout(loadTasks,220);}
     boot();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
