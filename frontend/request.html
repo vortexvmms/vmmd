@@ -349,7 +349,8 @@
       SELECTED = new Set(REQ.filter(a => a.site_id === siteId).map(a => a.worker_id));
       render();
     });
-    document.getElementById("search").addEventListener("input", render);
+    let searchTimer=null;
+    document.getElementById("search").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180);});
     document.getElementById("only-sel").addEventListener("change", render);
 
     boot();

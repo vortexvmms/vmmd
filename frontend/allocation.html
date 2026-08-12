@@ -648,22 +648,25 @@
         ALLOC.forEach(a => { if (curBySite[a.site_id]) curBySite[a.site_id].add(a.worker_id); });
 
         let added = 0, removed = 0;
-        // pass 1 — shrink every site that lost anyone (keep only those staying)
+        // pass 1 — shrink sites in parallel. Every call touches a different
+        // site, so there is no conflict and large allocations save much faster.
+        const shrink=[];
         for (const id of ids) {
           const cur = curBySite[id], nw = newBySite[id];
           if ([...cur].some(w => !nw.has(w))) {
-            const d = await callBulk(id, [...cur].filter(w => nw.has(w)));
-            added += d.added; removed += d.removed;
+            shrink.push(callBulk(id, [...cur].filter(w => nw.has(w))));
           }
         }
-        // pass 2 — grow every site that gained anyone (send full new roster)
+        (await Promise.all(shrink)).forEach(d=>{added+=d.added;removed+=d.removed;});
+        // pass 2 — grow sites in parallel after movers have been removed.
+        const grow=[];
         for (const id of ids) {
           const cur = curBySite[id], nw = newBySite[id];
           if ([...nw].some(w => !cur.has(w))) {
-            const d = await callBulk(id, [...nw]);
-            added += d.added; removed += d.removed;
+            grow.push(callBulk(id, [...nw]));
           }
         }
+        (await Promise.all(grow)).forEach(d=>{added+=d.added;removed+=d.removed;});
         toast(`✓ Saved — ${added} added, ${removed} removed across all sites`, true, true);
         await loadDay();
       } catch (ex) {
@@ -727,7 +730,8 @@
 
     document.getElementById("date").addEventListener("change", loadDay);
     document.getElementById("site").addEventListener("change", render);   // re-filter for the new context site
-    document.getElementById("search").addEventListener("input", render);
+    let searchTimer=null;
+    document.getElementById("search").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180);});
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');

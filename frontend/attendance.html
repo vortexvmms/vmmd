@@ -137,7 +137,7 @@
   <script>
     requireLogin();
 
-    let ME = null, ROWS = [], SITES = [];
+    let ME = null, ROWS = [], ALL_ROWS = [], SITES = [];
     const SEL = new Set();   // allocation_ids selected for a group end-time apply
     let ATT_FILTER = "all";
 
@@ -194,6 +194,7 @@
       let all = r.ok ? await r.json() : [];
       // HOME LEAVE workers are on leave — no end time to set, so hide that site here
       all = all.filter(x => (x.site_name || "").trim().toUpperCase() !== "HOME LEAVE");
+      ALL_ROWS = all;
       const siteMap = {};
       all.forEach(x => siteMap[x.site_id] = x.site_name);
       SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
@@ -204,6 +205,10 @@
       ROWS = all.filter(x => x.site_id === sel.value);
       render();
     }
+
+    // Switching sites uses the attendance already downloaded for this date.
+    // Previously it fetched the whole date again on every site change.
+    function switchSite(){ SEL.clear(); ROWS=ALL_ROWS.filter(x=>x.site_id===document.getElementById("site").value); render(); }
 
     function render() {
       const list = document.getElementById("list");
@@ -526,7 +531,7 @@
 
     document.getElementById("tr-search").addEventListener("input", renderTransfer);
     document.getElementById("date").addEventListener("change", loadDay);
-    document.getElementById("site").addEventListener("change", loadDay);
+    document.getElementById("site").addEventListener("change", switchSite);
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');

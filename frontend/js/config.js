@@ -179,6 +179,10 @@ if (window.tailwind) {
       body{padding-bottom:env(safe-area-inset-bottom,0px)}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
+      /* Let Safari skip painting worker cards far outside the viewport. */
+      body.vmms-page-attendance #list>*,body.vmms-page-request #list>*,body.vmms-page-allocation #list>*{
+        content-visibility:auto;contain-intrinsic-size:auto 92px
+      }
     }
 
     header.bg-red-700{
