@@ -8,8 +8,6 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
   POST   /api/v1/attendance/bulk_end         set one end time for the whole site
   POST   /api/v1/attendance/submit           submit & lock the site's day
 """
-from __future__ import annotations
-
 import os
 import time
 import json as _json
@@ -21,18 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.core.roles import (
-    ALL_ROLES,
-    ATTENDANCE_ROLES,
-    COORDINATOR_ROLES,
-    FULL_ROLES,
-    MANAGER_ROLES,
-    SUPERVISOR_ROLES,
-)
-from app.modules.projects.router import ProjectModuleContext, build_projects_router
-from app.modules.schedule.router import ScheduleModuleContext, build_schedule_router
-
-app = FastAPI(title="VCMS API", version="0.65.0")  # Phase 0 project foundation
+app = FastAPI(title="VCMS API", version="0.66.0")  # dashboard month query pagination fix
 
 app.add_middleware(
     CORSMiddleware,
@@ -140,8 +127,16 @@ def require_service():
                    "in the backend (Render) environment, then try again.")
 
 
-# ---------------- Canonical role tiers ----------------
-# Defined once in app.core.roles and mirrored by the migration/RLS policy.
+# ---------------- Role tiers (Rev 6) ----------------
+# FULL       — admin, general_manager, operation_manager, hr_assistant  (everything)
+# MANAGER    — main_sup (Site Manager), wshc_lead  (all but workers/sites/allocation/users)
+# SUPERVISOR — site_sup, safety_sup, wshc, logistics_sup  (own site attendance/requests)
+FULL_ROLES = ("admin", "general_manager", "operation_manager", "hr_assistant")
+MANAGER_ROLES = ("main_sup", "wshc_lead")
+SUPERVISOR_ROLES = ("site_sup", "safety_sup", "wshc", "logistics_sup")
+ATTENDANCE_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # who can do attendance / requests
+COORDINATOR_ROLES = FULL_ROLES + MANAGER_ROLES                     # who can generate broadcast messages
+ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
 
 
 # --- identity cache -------------------------------------------------------
@@ -238,21 +233,6 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
             "new_value": new_value,
         },
     )
-
-
-app.include_router(build_projects_router(ProjectModuleContext(
-    get_current_user=get_current_user,
-    shared_client=shared_client,
-    rest_url=REST,
-    supabase_headers=supabase_headers,
-    audit=audit,
-)))
-app.include_router(build_schedule_router(ScheduleModuleContext(
-    get_current_user=get_current_user,
-    shared_client=shared_client,
-    rest_url=REST,
-    supabase_headers=supabase_headers,
-)))
 
 
 # ---------------- basics ----------------
@@ -434,13 +414,11 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
 class SiteCreate(BaseModel):
     site_code: str
     site_name: str
-    project_id: str | None = None
 
 
 class SiteUpdate(BaseModel):
     site_name: str | None = None
     status: str | None = None  # active | archived
-    project_id: str | None = None
 
 
 class SupervisorAssign(BaseModel):
@@ -452,7 +430,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.get(
             f"{REST}/sites",
-            params={"select": "id,site_code,site_name,project_id,status,site_supervisors(user_id,users(name))",
+            params={"select": "id,site_code,site_name,status,site_supervisors(user_id,users(name))",
                     "order": "site_name.asc"},
             headers=supabase_headers(user["token"]),
         )
@@ -465,8 +443,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
                 u = link.get("users") or {}
                 sups.append({"user_id": link["user_id"], "name": u.get("name", "?")})
             out.append({"id": s["id"], "site_code": s["site_code"],
-                        "site_name": s["site_name"], "project_id": s.get("project_id"),
-                        "status": s["status"],
+                        "site_name": s["site_name"], "status": s["status"],
                         "supervisors": sups})
         return out
 
@@ -484,8 +461,7 @@ async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
         r = await client.post(
             f"{REST}/sites",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json={"site_code": code, "site_name": name, "project_id": body.project_id,
-                  "status": "active"},
+            json={"site_code": code, "site_name": name, "status": "active"},
         )
         if r.status_code == 409:
             raise HTTPException(status_code=409, detail=f"Site code {code} already exists")
@@ -508,8 +484,6 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
         if body.status not in ("active", "archived"):
             raise HTTPException(status_code=400, detail="Invalid status")
         changes["status"] = body.status
-    if body.project_id is not None:
-        changes["project_id"] = body.project_id
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
@@ -1912,16 +1886,28 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             mine = {x["site_id"] for x in (rl.json() if rl.status_code == 200 else [])}
             sites = [s for s in sites if s["id"] in mine]
 
-        # everything in the selected date's month, up to and including that date
-        rm = await client.get(
-            f"{REST}/allocations",
-            params={"and": f"(work_date.gte.{month_start},work_date.lte.{today})",
-                    "status": "eq.allocated",
-                    "select": "work_date,site_id,worker_id,sites(site_name),"
-                              "workers(name,worker_code),"
-                              "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)"},
-            headers=supabase_headers(user["token"]))
-        month_rows = rm.json() if rm.status_code == 200 else []
+        # everything in the selected date's month, up to and including that date.
+        # PostgREST caps a single response at ~1000 rows, so a busy month would be
+        # truncated (dropping the latest day's allocations). Page through them all.
+        month_rows = []
+        _off, _page = 0, 1000
+        while True:
+            rm = await client.get(
+                f"{REST}/allocations",
+                params={"and": f"(work_date.gte.{month_start},work_date.lte.{today})",
+                        "status": "eq.allocated",
+                        "select": "work_date,site_id,worker_id,sites(site_name),"
+                                  "workers(name,worker_code),"
+                                  "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)",
+                        "order": "work_date.asc,id.asc", "limit": _page, "offset": _off},
+                headers=supabase_headers(user["token"]))
+            if rm.status_code != 200:
+                break
+            batch = rm.json()
+            month_rows.extend(batch)
+            if len(batch) < _page:
+                break
+            _off += _page
 
         month_nh = month_ot = 0.0
         today_mc = today_al = today_ul = 0
@@ -2022,17 +2008,27 @@ async def month_locked(client: httpx.AsyncClient, token: str, work_date: str) ->
 
 
 async def _range_rows(client, token, dfrom: str, dto: str, site_id: str | None):
-    params = {"work_date": f"gte.{dfrom}", "status": "eq.allocated",
-              "select": "work_date,site_id,sites(site_name),"
-                        "workers(name,worker_code),"
-                        "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at,absence_type)",
-              "order": "work_date.asc"}
-    r = await client.get(f"{REST}/allocations",
-                         params={**params, "and": f"(work_date.lte.{dto}" + (f",site_id.eq.{site_id}" if site_id else "") + ")"},
-                         headers=supabase_headers(token))
-    if r.status_code != 200:
-        raise HTTPException(status_code=500, detail="Could not load report data")
-    return r.json()
+    # Page through all rows — PostgREST caps a single response at ~1000, which
+    # would silently truncate a busy range and undercount reports/man-hours.
+    base = {"work_date": f"gte.{dfrom}", "status": "eq.allocated",
+            "select": "work_date,site_id,sites(site_name),"
+                      "workers(name,worker_code),"
+                      "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at,absence_type)",
+            "and": f"(work_date.lte.{dto}" + (f",site_id.eq.{site_id}" if site_id else "") + ")",
+            "order": "work_date.asc,id.asc"}
+    rows, off, page = [], 0, 1000
+    while True:
+        r = await client.get(f"{REST}/allocations",
+                             params={**base, "limit": page, "offset": off},
+                             headers=supabase_headers(token))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load report data")
+        batch = r.json()
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        off += page
+    return rows
 
 
 @app.get("/api/v1/reports/attendance")
@@ -2580,7 +2576,6 @@ class DailyReport(BaseModel):
     manpower: list[dict] = []
     equipment: list[dict] = []
     materials: list[dict] = []
-    activity_progress: list[dict] = []
     photos: list[dict] = []
     signature_url: str | None = None
     prepared_by_name: str | None = None
@@ -2603,15 +2598,7 @@ async def get_dpr(date: str, site_id: str, user: dict = Depends(get_current_user
             params={"site_id": f"eq.{site_id}", "report_date": f"eq.{date}", "select": "*"},
             headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
-        if not rows:
-            return {}
-        report = rows[0]
-        progress = await client.get(
-            f"{REST}/activity_progress_updates",
-            params={"dpr_report_id": f"eq.{report['id']}", "select": "activity_id,percent_complete,actual_start,actual_finish,quantity_completed,remarks"},
-            headers=supabase_headers(user["token"]))
-        report["activity_progress"] = progress.json() if progress.status_code == 200 else []
-        return report
+        return rows[0] if rows else {}
 
 
 @app.get("/api/v1/dpr/prefill")
@@ -2694,31 +2681,7 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500,
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
-        report = rows[0] if rows else None
-        if report:
-            site_project_id = None
-            if body.activity_progress:
-                site_response = await client.get(
-                    f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "project_id", "limit": "1"},
-                    headers=supabase_headers(user["token"]))
-                site_rows = site_response.json() if site_response.status_code == 200 else []
-                site_project_id = site_rows[0].get("project_id") if site_rows else None
-            for item in body.activity_progress or []:
-                if not item.get("activity_id") or item.get("percent_complete") in (None, ""):
-                    continue
-                if not site_project_id or item.get("project_id") != site_project_id:
-                    raise HTTPException(status_code=400, detail="Activity progress must belong to the selected site's project")
-                values = {
-                    "p_project_id": item.get("project_id"), "p_activity_id": item["activity_id"],
-                    "p_progress_date": body.report_date, "p_percent_complete": item["percent_complete"],
-                    "p_actual_start": _nz_date(item.get("actual_start")), "p_actual_finish": _nz_date(item.get("actual_finish")),
-                    "p_quantity_completed": item.get("quantity_completed"), "p_remarks": item.get("remarks"),
-                    "p_source": "dpr", "p_dpr_report_id": report["id"],
-                }
-                rp = await client.post(f"{REST}/rpc/record_activity_progress", headers=supabase_headers(user["token"]), json=values)
-                if rp.status_code != 200:
-                    raise HTTPException(status_code=400, detail="DPR saved, but linked activity progress was rejected")
-        return report or {"ok": True}
+        return rows[0] if rows else {"ok": True}
 
 
 def _rs_clean(v):
@@ -2938,7 +2901,6 @@ class ProjectIn(BaseModel):
     location: str | None = None
     item_of_work: str | None = None
     site_id: str | None = None
-    project_id: str | None = None
 
 
 @app.get("/api/v1/dpr/projects")
@@ -2962,8 +2924,7 @@ async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
             json={"title": body.title, "to_party": body.to_party, "attention": body.attention,
                   "location": body.location, "item_of_work": body.item_of_work,
-                  "site_id": body.site_id, "project_id": body.project_id,
-                  "created_by": user["user_id"]})
+                  "site_id": body.site_id, "created_by": user["user_id"]})
         if r.status_code not in (200, 201):
             raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()
@@ -3602,6 +3563,272 @@ async def delete_worker_cert(cert_id: str, user: dict = Depends(get_current_user
             headers=supabase_headers(user["token"]))
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete certificate")
+        return {"ok": True}
+
+
+# ---------------- Schedule module (Stage 1: planning core + CPM) ----------------
+# Everyone signed-in can VIEW; planners (full + manager tier) edit.
+SCHED_EDIT_ROLES = FULL_ROLES + MANAGER_ROLES
+
+
+class SchedSettingsIn(BaseModel):
+    name: str | None = None
+    data_date: str | None = None
+    workdays: list[int] | None = None
+    currency: str | None = None
+
+
+class TaskIn(BaseModel):
+    site_id: str
+    parent_id: str | None = None
+    is_wbs: bool = False
+    is_milestone: bool = False
+    code: str | None = None
+    name: str
+    duration_days: int | None = 1
+    planned_start: str | None = None
+    planned_finish: str | None = None
+    constraint_start: str | None = None
+    sort_order: int | None = None
+
+
+class TaskPatch(BaseModel):
+    parent_id: str | None = None
+    code: str | None = None
+    name: str | None = None
+    duration_days: int | None = None
+    planned_start: str | None = None
+    planned_finish: str | None = None
+    actual_start: str | None = None
+    actual_finish: str | None = None
+    percent_complete: float | None = None
+    status: str | None = None
+    total_float: int | None = None
+    is_critical: bool | None = None
+    is_milestone: bool | None = None
+    constraint_start: str | None = None
+    sort_order: int | None = None
+
+
+class LinkIn(BaseModel):
+    site_id: str
+    predecessor_id: str
+    successor_id: str
+    link_type: str = "FS"
+    lag_days: int = 0
+
+
+class HolidayIn(BaseModel):
+    site_id: str
+    hol_date: str
+    label: str | None = None
+
+
+class BulkDate(BaseModel):
+    id: str
+    planned_start: str | None = None
+    planned_finish: str | None = None
+    total_float: int | None = None
+    is_critical: bool | None = None
+
+
+class BulkDatesIn(BaseModel):
+    site_id: str
+    tasks: list[BulkDate]
+
+
+@app.get("/api/v1/schedule")
+async def get_schedule(site_id: str, user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        h = supabase_headers(user["token"])
+        rs = await client.get(f"{REST}/schedule_settings", params={"site_id": f"eq.{site_id}"}, headers=h)
+        settings = (rs.json() or [None])[0] if rs.status_code == 200 else None
+        if settings is None and user["role"] in SCHED_EDIT_ROLES:
+            ins = await client.post(f"{REST}/schedule_settings",
+                headers={**h, "Prefer": "return=representation"},
+                json={"site_id": site_id, "created_by": user["user_id"], "updated_by": user["user_id"]})
+            settings = (ins.json() or [None])[0] if ins.status_code in (200, 201) else {"site_id": site_id, "workdays": [1,2,3,4,5,6]}
+        rt = await client.get(f"{REST}/schedule_tasks",
+            params={"site_id": f"eq.{site_id}", "select": "*", "order": "sort_order.asc,created_at.asc"}, headers=h)
+        rl = await client.get(f"{REST}/schedule_links",
+            params={"site_id": f"eq.{site_id}", "select": "*"}, headers=h)
+        rh = await client.get(f"{REST}/schedule_holidays",
+            params={"site_id": f"eq.{site_id}", "select": "*", "order": "hol_date.asc"}, headers=h)
+        return {"settings": settings or {"site_id": site_id, "workdays": [1,2,3,4,5,6]},
+                "tasks": rt.json() if rt.status_code == 200 else [],
+                "links": rl.json() if rl.status_code == 200 else [],
+                "holidays": rh.json() if rh.status_code == 200 else []}
+
+
+@app.patch("/api/v1/schedule/settings")
+async def patch_schedule_settings(site_id: str, body: SchedSettingsIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    ch = {}
+    for f in ("name", "data_date", "workdays", "currency"):
+        v = getattr(body, f)
+        if v is not None:
+            ch[f] = v or None if f in ("name", "data_date") else v
+    if not ch:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    ch["updated_by"] = user["user_id"]
+    async with shared_client() as client:
+        h = supabase_headers(user["token"])
+        r = await client.patch(f"{REST}/schedule_settings", params={"site_id": f"eq.{site_id}"},
+            headers={**h, "Prefer": "return=representation"}, json=ch)
+        if r.status_code == 200 and r.json():
+            return r.json()[0]
+        # settings row may not exist yet → create
+        ch["site_id"] = site_id; ch["created_by"] = user["user_id"]
+        r2 = await client.post(f"{REST}/schedule_settings", headers={**h, "Prefer": "return=representation"}, json=ch)
+        if r2.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not save settings")
+        return r2.json()[0]
+
+
+@app.post("/api/v1/schedule/tasks", status_code=201)
+async def add_task(body: TaskIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    rec = {"site_id": body.site_id, "parent_id": body.parent_id or None,
+           "is_wbs": body.is_wbs, "is_milestone": body.is_milestone,
+           "code": body.code or None, "name": body.name.strip(),
+           "duration_days": 0 if body.is_milestone else max(0, body.duration_days or 1),
+           "planned_start": body.planned_start or None, "planned_finish": body.planned_finish or None,
+           "constraint_start": body.constraint_start or None,
+           "sort_order": body.sort_order or 0,
+           "created_by": user["user_id"], "updated_by": user["user_id"]}
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/schedule_tasks",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"}, json=rec)
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=500, detail="Could not add task")
+        return r.json()[0]
+
+
+@app.patch("/api/v1/schedule/tasks/{task_id}")
+async def patch_task(task_id: str, body: TaskPatch, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    ch = {}
+    nullable = ("code", "planned_start", "planned_finish", "actual_start", "actual_finish", "constraint_start", "parent_id")
+    for f in ("parent_id", "code", "name", "duration_days", "planned_start", "planned_finish",
+              "actual_start", "actual_finish", "percent_complete", "status", "total_float",
+              "is_critical", "is_milestone", "constraint_start", "sort_order"):
+        v = getattr(body, f)
+        if v is not None:
+            ch[f] = (v or None) if f in nullable else v
+    if not ch:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    ch["updated_by"] = user["user_id"]
+    async with shared_client() as client:
+        r = await client.patch(f"{REST}/schedule_tasks", params={"id": f"eq.{task_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"}, json=ch)
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not update task")
+        return (r.json() or [{}])[0]
+
+
+@app.delete("/api/v1/schedule/tasks/{task_id}")
+async def delete_task(task_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/schedule_tasks", params={"id": f"eq.{task_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete task")
+        return {"ok": True}
+
+
+@app.post("/api/v1/schedule/links", status_code=201)
+async def add_link(body: LinkIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if body.predecessor_id == body.successor_id:
+        raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+    lt = body.link_type if body.link_type in ("FS", "SS", "FF", "SF") else "FS"
+    rec = {"site_id": body.site_id, "predecessor_id": body.predecessor_id,
+           "successor_id": body.successor_id, "link_type": lt, "lag_days": body.lag_days or 0}
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/schedule_links",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"}, json=rec)
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=500, detail="Could not add link")
+        return r.json()[0]
+
+
+@app.delete("/api/v1/schedule/links/{link_id}")
+async def delete_link(link_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/schedule_links", params={"id": f"eq.{link_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete link")
+        return {"ok": True}
+
+
+@app.post("/api/v1/schedule/holidays", status_code=201)
+async def add_holiday(body: HolidayIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/schedule_holidays",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"site_id": body.site_id, "hol_date": body.hol_date, "label": body.label or None})
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=500, detail="Could not add holiday")
+        return r.json()[0]
+
+
+@app.delete("/api/v1/schedule/holidays/{hol_id}")
+async def delete_holiday(hol_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/schedule_holidays", params={"id": f"eq.{hol_id}"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not delete holiday")
+        return {"ok": True}
+
+
+@app.post("/api/v1/schedule/baseline")
+async def set_baseline(site_id: str, user: dict = Depends(get_current_user)):
+    """Copy each task's planned dates into its baseline columns."""
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        h = supabase_headers(user["token"])
+        rt = await client.get(f"{REST}/schedule_tasks",
+            params={"site_id": f"eq.{site_id}", "select": "id,planned_start,planned_finish"}, headers=h)
+        if rt.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not read tasks")
+        for t in rt.json():
+            await client.patch(f"{REST}/schedule_tasks", params={"id": f"eq.{t['id']}"}, headers=h,
+                json={"baseline_start": t.get("planned_start"), "baseline_finish": t.get("planned_finish")})
+        await client.patch(f"{REST}/schedule_settings", params={"site_id": f"eq.{site_id}"}, headers=h,
+            json={"baseline_at": "now()"})
+        return {"ok": True}
+
+
+@app.post("/api/v1/schedule/bulk-dates")
+async def bulk_dates(body: BulkDatesIn, user: dict = Depends(get_current_user)):
+    """Persist computed planned dates + float/critical after a client recalculation."""
+    if user["role"] not in SCHED_EDIT_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        h = supabase_headers(user["token"])
+        for t in body.tasks:
+            upd = {}
+            if t.planned_start is not None: upd["planned_start"] = t.planned_start or None
+            if t.planned_finish is not None: upd["planned_finish"] = t.planned_finish or None
+            if t.total_float is not None: upd["total_float"] = t.total_float
+            if t.is_critical is not None: upd["is_critical"] = t.is_critical
+            if upd:
+                await client.patch(f"{REST}/schedule_tasks", params={"id": f"eq.{t.id}"}, headers=h, json=upd)
         return {"ok": True}
 
 
