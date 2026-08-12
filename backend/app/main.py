@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.69.0")  # mobile performance: lightweight notifications
+app = FastAPI(title="VCMS API", version="0.70.0")  # personal missing-DPR reminders
 
 app.add_middleware(
     CORSMiddleware,
@@ -190,7 +190,7 @@ async def get_current_user(request: Request) -> dict:
 
         r2 = await client.get(
             f"{REST}/users",
-            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu"},
+            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu,dpr_reminders"},
             headers=supabase_headers(token),
         )
         if r2.status_code != 200:   # tolerate the 'menu' column not existing yet
@@ -214,6 +214,7 @@ async def get_current_user(request: Request) -> dict:
         "name": profile["name"],
         "role": profile["role"],
         "menu": profile.get("menu"),
+        "dpr_reminders": bool(profile.get("dpr_reminders", False)),
     }
     _cache_put(token, user)
     return user
@@ -260,7 +261,27 @@ async def health():
 @app.get("/api/v1/me")
 async def me(user: dict = Depends(get_current_user)):
     return {"name": user["name"], "role": user["role"], "email": user["email"],
-            "user_id": user["user_id"], "menu": user.get("menu")}
+            "user_id": user["user_id"], "menu": user.get("menu"),
+            "dpr_reminders": user.get("dpr_reminders", False)}
+
+
+class MyPreferences(BaseModel):
+    dpr_reminders: bool
+
+
+@app.patch("/api/v1/me/preferences")
+async def update_my_preferences(body: MyPreferences, user: dict = Depends(get_current_user)):
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/rpc/set_my_dpr_reminders",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"enabled": body.dpr_reminders},
+        )
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not save reminder preference")
+    user["dpr_reminders"] = body.dpr_reminders
+    _cache_put(user["token"], user)
+    return {"ok": True, "dpr_reminders": body.dpr_reminders}
 
 
 # ---------------- Worker Master (Phase 4) ----------------
@@ -2927,6 +2948,63 @@ async def dpr_list(site_id: str = "", month: str = "", user: dict = Depends(get_
                  "manpower": len(x.get("manpower") or []),
                  "photos": len(x.get("photos") or []),
                  "updated_at": x.get("updated_at")} for x in rows]
+
+
+@app.get("/api/v1/dpr/missing")
+async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
+    """Allocated site-days without a saved DPR. When enabled, keep matching
+    personal Do-first tasks in sync for the signed-in user."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    days = max(1, min(days, 90))
+    end_d = date_cls.fromisoformat(_sg_today()) - timedelta(days=1)
+    start_d = end_d - timedelta(days=days - 1)
+    start, end = start_d.isoformat(), end_d.isoformat()
+    async with shared_client() as client:
+        ra, rr = await asyncio.gather(
+            client.get(f"{REST}/allocations",
+                params={"status": "eq.allocated", "and": f"(work_date.gte.{start},work_date.lte.{end})",
+                        "select": "work_date,site_id,sites(site_name)"},
+                headers=supabase_headers(user["token"])),
+            client.get(f"{REST}/daily_reports",
+                params={"and": f"(report_date.gte.{start},report_date.lte.{end})",
+                        "select": "report_date,site_id"},
+                headers=supabase_headers(user["token"])),
+        )
+        alloc = ra.json() if ra.status_code == 200 else []
+        reports = rr.json() if rr.status_code == 200 else []
+        prepared = {(x.get("site_id"), x.get("report_date")) for x in reports}
+        missing_map = {}
+        for x in alloc:
+            key = (x.get("site_id"), x.get("work_date"))
+            if key[0] and key[1] and key not in prepared:
+                missing_map[key] = (x.get("sites") or {}).get("site_name") or "Site"
+        missing = [{"site_id": sid, "site_name": name, "date": day,
+                    "label": date_cls.fromisoformat(day).strftime("%d/%m/%Y")}
+                   for (sid, day), name in sorted(missing_map.items(), key=lambda z: z[0][1], reverse=True)]
+
+        if user.get("dpr_reminders"):
+            re = await client.get(f"{REST}/todos",
+                params={"user_id": f"eq.{user['user_id']}", "source": "eq.dpr_missing",
+                        "select": "id,source_key,done"}, headers=supabase_headers(user["token"]))
+            existing = {x.get("source_key"): x for x in (re.json() if re.status_code == 200 else [])}
+            wanted = {f"{x['site_id']}:{x['date']}": x for x in missing}
+            creates = [client.post(f"{REST}/todos",
+                        headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                        json={"user_id": user["user_id"],
+                              "text": f"Prepare DPR — {x['site_name']} — {x['label']}",
+                              "quadrant": "q1", "done": False, "due_date": x["date"],
+                              "source": "dpr_missing", "source_key": key})
+                       for key, x in wanted.items() if key not in existing]
+            if creates:
+                await asyncio.gather(*creates)
+            stale = [x["id"] for k, x in existing.items() if k not in wanted and not x.get("done")]
+            if stale:
+                await client.delete(f"{REST}/todos",
+                    params={"id": f"in.({','.join(stale)})", "user_id": f"eq.{user['user_id']}"},
+                    headers=supabase_headers(user["token"]))
+    return {"enabled": bool(user.get("dpr_reminders")), "from": start, "to": end,
+            "count": len(missing), "items": missing}
 
 
 class ProjectIn(BaseModel):

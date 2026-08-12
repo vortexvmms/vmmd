@@ -54,6 +54,22 @@
       <p class="text-[11px] text-gray-400 mt-3">You'll be alerted for manpower allocation, manpower requests, and the 8:30am / 9pm submission reminders. Each phone is controlled separately.</p>
     </div>
 
+    <!-- ============ PERSONAL WORKFLOW REMINDERS ============ -->
+    <h2 class="text-sm font-bold text-gray-500 mb-2">WORKFLOW REMINDERS</h2>
+    <div class="bg-white rounded-xl shadow p-4 mb-8">
+      <div class="flex items-center gap-3">
+        <div class="flex-1">
+          <p class="font-bold text-gray-900 text-sm">Missing DPR reminders</p>
+          <p class="text-xs text-gray-500 mt-1">Show unprepared DPR dates and add them automatically to <b>Do first</b> in your personal to-do list.</p>
+        </div>
+        <button id="dpr-reminder-toggle" type="button" onclick="toggleDprReminders()" aria-pressed="false"
+          style="width:52px;height:30px;border-radius:999px;background:#9ca3af;padding:3px;transition:.2s;flex:none;border:0">
+          <span style="display:block;width:24px;height:24px;border-radius:50%;background:white;box-shadow:0 1px 4px #0003;transition:.2s"></span>
+        </button>
+      </div>
+      <p id="dpr-reminder-state" class="text-xs font-bold text-gray-500 mt-3">Checking…</p>
+    </div>
+
     <!-- ============ SEND NOTIFICATION (admins only) ============ -->
     <div id="bcast-wrap" class="hidden">
       <h2 class="text-sm font-bold text-gray-500 mb-2">SEND A NOTIFICATION</h2>
@@ -138,6 +154,8 @@
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
 
+      renderDprReminderToggle();
+
       // Notifications — for everyone
       refreshPush();
 
@@ -153,6 +171,22 @@
         document.getElementById("mgmt-wrap").classList.remove("hidden");
         await Promise.all([loadHol(), loadSet()]);
       }
+    }
+
+    function renderDprReminderToggle() {
+      const on = !!(ME && ME.dpr_reminders), b = document.getElementById("dpr-reminder-toggle"), dot = b.querySelector("span");
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.style.background = on ? "#C00000" : "#9ca3af";
+      dot.style.transform = on ? "translateX(22px)" : "translateX(0)";
+      document.getElementById("dpr-reminder-state").textContent = on ? "On for your profile" : "Off for your profile";
+    }
+    async function toggleDprReminders() {
+      const b=document.getElementById("dpr-reminder-toggle"), next=!ME.dpr_reminders; b.disabled=true;
+      try {
+        const r=await vmmsApi("/api/v1/me/preferences",{method:"PATCH",body:JSON.stringify({dpr_reminders:next})});
+        const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.detail||"Could not save");
+        ME.dpr_reminders=next; renderDprReminderToggle(); toast(next?"Missing DPR reminders enabled":"Missing DPR reminders disabled");
+      } catch(e) { toast(e.message||"Could not save"); } finally { b.disabled=false; }
     }
 
     /* ---------- Notifications ---------- */
