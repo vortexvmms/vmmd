@@ -110,8 +110,8 @@ window.vmmsSetTheme = function (t) {
     body.vmms-page-dprlist main,body.vmms-page-pr-directory main,body.vmms-page-settings main{
       max-width:none!important;width:100%!important;padding:20px 24px 70px!important
     }
-    body.vmms-page-workers #list,body.vmms-page-sites #list{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px!important}
-    body.vmms-page-workers #list>*,body.vmms-page-sites #list>*{margin:0!important;min-width:0}
+    body.vmms-page-sites #list{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px!important}
+    body.vmms-page-sites #list>*{margin:0!important;min-width:0}
     body.vmms-page-users main>div,body.vmms-page-pr-directory main>div,body.vmms-page-dprlist main>div,
     body.vmms-page-reports main>div,body.vmms-page-manhours main>div,body.vmms-page-settings main>div{
       border-color:#dce1e8!important;box-shadow:0 7px 20px rgba(15,23,42,.07)!important
