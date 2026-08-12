@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.5")  # DPR reminders start from feature launch date
+app = FastAPI(title="VCMS API", version="0.71.6")  # sync DPR reminders whenever tasks load
 
 app.add_middleware(
     CORSMiddleware,
@@ -2986,6 +2986,8 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
         selected_sites = prefs.get("dpr_reminder_sites", user.get("dpr_reminder_sites"))
         user["dpr_reminders"], user["dpr_reminder_sites"] = enabled, selected_sites
         _cache_put(user["token"], user)
+        if not enabled:
+            return {"enabled": False, "from": start, "to": end, "count": 0, "items": []}
         ra, rr = await asyncio.gather(
             client.get(f"{REST}/allocations",
                 params={"status": "eq.allocated", "and": f"(work_date.gte.{start},work_date.lte.{end})",
@@ -3486,6 +3488,9 @@ class TodoPatch(BaseModel):
 
 @app.get("/api/v1/todos")
 async def todos_list(user: dict = Depends(get_current_user)):
+    # Reconcile automatic DPR tasks before returning the list. This guarantees
+    # stale tasks disappear even when the user opens To-do directly.
+    await dpr_missing(days=30, user=user)
     async with shared_client() as client:
         r = await client.get(f"{REST}/todos",
             params={"user_id": f"eq.{user['user_id']}", "order": "created_at.asc",
