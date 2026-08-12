@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.70.0")  # personal missing-DPR reminders
+app = FastAPI(title="VCMS API", version="0.70.1")  # DPR reminder naming and task sync
 
 app.add_middleware(
     CORSMiddleware,
@@ -2986,18 +2986,29 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
         if user.get("dpr_reminders"):
             re = await client.get(f"{REST}/todos",
                 params={"user_id": f"eq.{user['user_id']}", "source": "eq.dpr_missing",
-                        "select": "id,source_key,done"}, headers=supabase_headers(user["token"]))
+                        "select": "id,source_key,done,text"}, headers=supabase_headers(user["token"]))
             existing = {x.get("source_key"): x for x in (re.json() if re.status_code == 200 else [])}
             wanted = {f"{x['site_id']}:{x['date']}": x for x in missing}
+            def reminder_text(x):
+                return f"{x['site_name']}_{x['label']}_DPR_Pending"
+
             creates = [client.post(f"{REST}/todos",
                         headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
                         json={"user_id": user["user_id"],
-                              "text": f"Prepare DPR — {x['site_name']} — {x['label']}",
+                              "text": reminder_text(x),
                               "quadrant": "q1", "done": False, "due_date": x["date"],
                               "source": "dpr_missing", "source_key": key})
                        for key, x in wanted.items() if key not in existing]
             if creates:
                 await asyncio.gather(*creates)
+            renames = [client.patch(f"{REST}/todos",
+                         params={"id": f"eq.{existing[key]['id']}", "user_id": f"eq.{user['user_id']}"},
+                         headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                         json={"text": reminder_text(x), "quadrant": "q1", "due_date": x["date"]})
+                       for key, x in wanted.items()
+                       if key in existing and existing[key].get("text") != reminder_text(x)]
+            if renames:
+                await asyncio.gather(*renames)
             stale = [x["id"] for k, x in existing.items() if k not in wanted and not x.get("done")]
             if stale:
                 await client.delete(f"{REST}/todos",
