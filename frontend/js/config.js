@@ -68,21 +68,10 @@ window.vmmsSetTheme = function (t) {
   (document.head || document.documentElement).appendChild(s);
 })();
 
-// ---- Load canonical Project context, then the shared app shell. ----
+// ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var host = document.head || document.documentElement;
-  if (/\/schedule\.html$/i.test(location.pathname)) {
-    var workspace = document.createElement("script");
-    workspace.src = "js/schedule-workspace.js";
-    host.appendChild(workspace);
-  }
-  var pc = document.createElement("script");
-  pc.src = "js/project-context.js";
-  pc.onload = function () {
-    var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
-    host.appendChild(sh);
-  };
-  host.appendChild(pc);
+  var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
+  (document.head || document.documentElement).appendChild(sh);
 })();
 
 // ---- Role tiers (Rev 6) — shared by all pages ----
@@ -91,12 +80,6 @@ window.VMMS_TIER = {
   manager: ["main_sup", "wshc_lead"],
   supervisor: ["site_sup", "safety_sup", "wshc", "logistics_sup"],
 };
-window.VCMS_ROLES = Object.freeze([].concat(
-  window.VMMS_TIER.full,
-  window.VMMS_TIER.manager,
-  window.VMMS_TIER.supervisor,
-  ["payroll"]
-));
 window.isFull = function (r) { return VMMS_TIER.full.indexOf(r) !== -1; };
 window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };
 window.isSupervisor = function (r) { return VMMS_TIER.supervisor.indexOf(r) !== -1; };
@@ -482,3 +465,11 @@ window.vmmsDisablePush = async function () {
   } catch (e) { return { ok: false }; }
 };
 window.vmmsTestPush = async function () { try { await vmmsApi('/api/v1/push/test', { method: 'POST' }); return true; } catch (e) { return false; } };
+
+// Consistent premium KPI interaction on desktop dashboards. Mobile is unchanged.
+(function(){
+  var s=document.createElement('style');
+  s.id='vmms-kpi-motion';
+  s.textContent='@media(min-width:900px){.kpi,.stat{transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s ease,border-color .18s ease!important;will-change:transform}.kpi:hover,.stat:hover{transform:translateY(-5px) scale(1.012)!important;box-shadow:0 14px 30px rgba(16,24,40,.15)!important;border-color:rgba(185,28,28,.38)!important}.kpi:active,.stat:active{transform:translateY(-2px) scale(1.005)!important}}@media(prefers-reduced-motion:reduce){.kpi,.stat{transition:none!important}.kpi:hover,.stat:hover{transform:none!important}}';
+  document.head.appendChild(s);
+})();
