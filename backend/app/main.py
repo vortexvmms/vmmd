@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.3")  # reliable stale DPR task cleanup
+app = FastAPI(title="VCMS API", version="0.71.4")  # clean legacy DPR tasks without source metadata
 
 app.add_middleware(
     CORSMiddleware,
@@ -3010,9 +3010,12 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
 
         if enabled:
             re = await client.get(f"{REST}/todos",
-                params={"user_id": f"eq.{user['user_id']}", "source": "eq.dpr_missing",
-                        "select": "id,source_key,done,text"}, headers=supabase_headers(user["token"]))
-            existing = {x.get("source_key"): x for x in (re.json() if re.status_code == 200 else [])}
+                params={"user_id": f"eq.{user['user_id']}",
+                        "select": "id,source,source_key,done,text"}, headers=supabase_headers(user["token"]))
+            all_todos = re.json() if re.status_code == 200 else []
+            auto_todos = [x for x in all_todos if x.get("source") == "dpr_missing"
+                          or str(x.get("text") or "").endswith("_DPR_Pending")]
+            existing = {x.get("source_key"): x for x in auto_todos if x.get("source_key")}
             wanted = {f"{x['site_id']}:{x['date']}": x for x in missing}
             def reminder_text(x):
                 return f"{x['site_name']}_{x['label']}_DPR_Pending"
@@ -3034,7 +3037,8 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                        if key in existing and existing[key].get("text") != reminder_text(x)]
             if renames:
                 await asyncio.gather(*renames)
-            stale = [x["id"] for k, x in existing.items() if k not in wanted and not x.get("done")]
+            stale = [x["id"] for x in auto_todos
+                     if x.get("source_key") not in wanted and not x.get("done")]
             if stale:
                 # Delete by exact id. PostgREST `in.(uuid,...)` filters can fail
                 # for a large historic list and leave unrelated site tasks behind.
