@@ -18,8 +18,11 @@
     label.fl { font-size:11px; font-weight:700; color:#6B7280; display:block; margin-bottom:3px; text-transform:uppercase; letter-spacing:.02em; }
     table.it { width:100%; border-collapse:collapse; }
     table.it th { background:#F9FAFB; font-size:11px; color:#6B7280; text-transform:uppercase; padding:6px; border:1px solid #E5E7EB; }
-    table.it td { border:1px solid #E5E7EB; padding:3px; }
-    table.it input, table.it textarea { border:none; width:100%; font-size:13px; padding:5px; background:transparent; resize:vertical; }
+    table.it td { border:1px solid #E5E7EB; padding:5px; vertical-align:top; }
+    table.it input, table.it textarea { border:1px solid #E5E7EB; width:100%; font-size:14px; padding:8px; background:#F3F4F6; border-radius:6px; resize:vertical; }
+    table.it input:focus, table.it textarea:focus { outline:none; background:#fff; border-color:#C00000; box-shadow:0 0 0 2px rgba(192,0,0,.12); }
+    table.it textarea[data-k="description"] { min-height:70px; line-height:1.45; }
+    @media(min-width:1024px){ .pr-wide{ max-width:1150px !important; } }
     .seg { display:flex; gap:6px; flex-wrap:wrap; }
     .seg button { border:1.5px solid #D1D5DB; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; color:#374151; background:#fff; cursor:pointer; }
     .seg button.on { border-color:#C00000; background:#C00000; color:#fff; }
@@ -30,14 +33,14 @@
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3 max-w-4xl mx-auto w-full">
+    <div class="flex items-center gap-3 max-w-4xl pr-wide mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
       <div class="flex-1"><h1 class="text-lg font-bold">Purchase Requisition</h1><p class="text-red-100 text-xs">New PR request</p></div>
       <button onclick="newBlank()" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">+ New</button>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-4xl mx-auto w-full pb-24">
+  <main class="flex-1 p-4 max-w-4xl pr-wide mx-auto w-full pb-24">
     <div class="card p-4">
       <!-- Category -->
       <div>
@@ -580,8 +583,9 @@
         .row{ margin-top:7px; } .lbl{ font-weight:700; }
         table.pr{ width:100%; border-collapse:collapse; margin-top:10px; }
         table.pr th{ border:0.8px solid #000; background:#eee; padding:5px 6px; }
-        table.pr td{ border-left:0.8px solid #000; border-right:0.8px solid #000; padding:4px 6px; vertical-align:top; }
+        table.pr td{ border:0.8px solid #000; padding:4px 6px; vertical-align:top; }
         table.pr tbody tr:last-child td{ border-bottom:0.8px solid #000; }
+        table.pr tr, table.pr td, table.pr th{ page-break-inside:avoid; }
         table.pr tr.tot td{ border-top:0.8px solid #000; font-weight:700; }
         td.c{ text-align:center; } td.r{ text-align:right; }
         .foot{ display:flex; justify-content:space-between; margin-top:24px; }
