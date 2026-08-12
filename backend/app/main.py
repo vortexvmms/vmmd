@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.4")  # clean legacy DPR tasks without source metadata
+app = FastAPI(title="VCMS API", version="0.71.5")  # DPR reminders start from feature launch date
 
 app.add_middleware(
     CORSMiddleware,
@@ -2969,7 +2969,10 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not allowed")
     days = max(1, min(days, 90))
     end_d = date_cls.fromisoformat(_sgt_today()) - timedelta(days=1)
-    start_d = end_d - timedelta(days=days - 1)
+    # This workflow was introduced on 10/08/2026. Do not create historical
+    # reminders before launch; only allocated site-days from launch onward count.
+    feature_start = date_cls(2026, 8, 10)
+    start_d = max(end_d - timedelta(days=days - 1), feature_start)
     start, end = start_d.isoformat(), end_d.isoformat()
     async with shared_client() as client:
         # Read this preference fresh instead of relying on the long-lived identity
