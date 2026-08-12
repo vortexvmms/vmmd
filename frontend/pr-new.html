@@ -207,6 +207,7 @@
         let w=bmp.width, h=bmp.height; const s=Math.min(1, maxDim/Math.max(w,h));
         w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s));
         const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        if(bmp.close) bmp.close();
         const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",quality));
         return (blob && blob.size<file.size)?blob:file;
       }catch(e){ return file; }
@@ -366,7 +367,7 @@
       g.innerHTML=PR_PHOTOS.map((p,i)=>`
         <div style="position:relative;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;background:#fff">
           <div style="height:88px;background:#F3F4F6;display:flex;align-items:center;justify-content:center">
-            ${p.url?`<img src="${p.url}" style="width:100%;height:88px;object-fit:cover">`:`<span style="font-size:11px;color:#9CA3AF">Uploading…</span>`}
+            ${p.url?`<img loading="lazy" decoding="async" src="${p.url}" style="width:100%;height:88px;object-fit:cover">`:`<span style="font-size:11px;color:#9CA3AF">Uploading…</span>`}
           </div>
           <input value="${esc(p.caption||"")}" oninput="PR_PHOTOS[${i}].caption=this.value" placeholder="Caption / Invoice no." style="width:100%;border:none;border-top:1px solid #eee;font-size:11px;padding:4px">
           <button onclick="PR_PHOTOS.splice(${i},1);renderPhotos()" style="position:absolute;top:3px;right:3px;background:#C00000;color:#fff;border:none;border-radius:9999px;width:20px;height:20px;font-weight:700;cursor:pointer">×</button>

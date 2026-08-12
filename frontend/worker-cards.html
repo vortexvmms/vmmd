@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};</script>
@@ -424,7 +424,7 @@
     }
 
     // ---- Certificates (PDF / image documents) ----
-    let CERTS=[], CERT_FILE=null, PDFJS=null;
+    let CERTS=[], CERT_FILE=null, CERT_PREVIEW_URL=null, PDFJS=null;
     function loadPdfJs(){ if(window.pdfjsLib) return Promise.resolve(); if(PDFJS) return PDFJS;
       PDFJS=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
         s.onload=()=>{ try{ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }catch(e){} res(); }; s.onerror=rej; document.head.appendChild(s); });
@@ -434,7 +434,7 @@
       const g=document.getElementById("certs"); document.getElementById("certs-empty").style.display=CERTS.length?"none":"block";
       g.innerHTML=CERTS.map(c=>{ const isPdf=c.file_type==="pdf";
         const thumb=isPdf?`<div class="imgrow" style="height:210px;display:flex;align-items:center;justify-content:center;background:#F8FAFC;color:#B91C1C;font-weight:800;font-size:15px;cursor:pointer" onclick="viewCert('${esc(c.file_path)}','pdf')">📄 PDF</div>`
-          :`<div class="imgrow"><img src="${esc(c.file_path)}" style="width:100%;height:210px;object-fit:contain;background:#F8FAFC;cursor:zoom-in" onclick="openLightbox(this.src)"></div>`;
+          :`<div class="imgrow"><img loading="lazy" decoding="async" src="${esc(c.file_path)}" style="width:100%;height:210px;object-fit:contain;background:#F8FAFC;cursor:zoom-in" onclick="openLightbox(this.src)"></div>`;
         return `<div class="card">${thumb}<div class="meta"><div class="lbl">${esc(c.title||"Certificate")}</div><div class="dates">${isPdf?"PDF":"Image"} · ${fmt((c.created_at||"").slice(0,10))}</div></div>
           <div class="acts">
             <button onclick="viewCert('${esc(c.file_path)}','${c.file_type}')">View</button>
@@ -446,10 +446,12 @@
     function viewCert(u,t){ if(t==="pdf") window.open(u,"_blank"); else openLightbox(u); }
     function downloadCert(u,name,t){ const a=document.createElement("a"); a.href=u; a.download=(name||"certificate")+"."+(t==="pdf"?"pdf":"jpg"); a.target="_blank"; document.body.appendChild(a); a.click(); a.remove(); }
     async function delCert(id){ if(!confirm("Delete this certificate?"))return; const r=await vmmsApi("/api/v1/worker-certificates/"+id,{method:"DELETE"}); if(r.ok){ CERTS=CERTS.filter(x=>x.id!==id); renderCerts(); toast("Deleted"); } }
-    function openCertModal(){ CERT_FILE=null; document.getElementById("cert-title").value=""; const p=document.getElementById("cert-prev"); p.style.display="none"; p.innerHTML=""; document.getElementById("certmodal").classList.add("show"); }
-    function closeCertModal(){ document.getElementById("certmodal").classList.remove("show"); CERT_FILE=null; }
+    function clearCertPreview(){if(CERT_PREVIEW_URL){URL.revokeObjectURL(CERT_PREVIEW_URL);CERT_PREVIEW_URL=null;}}
+    function openCertModal(){ clearCertPreview(); CERT_FILE=null; document.getElementById("cert-title").value=""; const p=document.getElementById("cert-prev"); p.style.display="none"; p.innerHTML=""; document.getElementById("certmodal").classList.add("show"); }
+    function closeCertModal(){ clearCertPreview(); document.getElementById("certmodal").classList.remove("show"); CERT_FILE=null; }
     document.getElementById("certFile").addEventListener("change",e=>{ const f=e.target.files[0]; e.target.value=""; if(f) onCertFile(f); });
     async function onCertFile(file){
+      clearCertPreview();
       CERT_FILE=file;
       document.getElementById("cert-title").value=file.name.replace(/\.[^.]+$/,"");
       const prev=document.getElementById("cert-prev"); prev.style.display="block"; prev.innerHTML="Loading preview…";
@@ -461,7 +463,7 @@
           c.style.maxWidth="100%"; c.style.height="auto"; prev.innerHTML=""; prev.appendChild(c);
         }catch(e){ prev.innerHTML='<div style="padding:24px;color:#6B7280">📄 '+esc(file.name)+'</div>'; }
       } else {
-        const url=URL.createObjectURL(file); prev.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:100%;object-fit:contain">';
+        CERT_PREVIEW_URL=URL.createObjectURL(file); prev.innerHTML='<img src="'+CERT_PREVIEW_URL+'" style="max-width:100%;max-height:100%;object-fit:contain">';
       }
     }
     async function saveCert(){
@@ -499,7 +501,7 @@
       document.getElementById("cards-empty").style.display=CARDS.length?"none":"block";
       g.innerHTML=CARDS.map((c,i)=>`<div class="card">
         <div class="imgrow">
-          <img src="${esc(c.image_path)}" onclick="openLightbox(this.src)" alt="">
+          <img loading="lazy" decoding="async" src="${esc(c.image_path)}" onclick="openLightbox(this.src)" alt="">
           ${c.back_image_path?`<span class="backbtn" onclick="openLightbox('${esc(c.back_image_path)}')">Back ↗</span>`:""}
         </div>
         <div class="meta">
@@ -534,6 +536,7 @@
         const bmp=await createImageBitmap(file); let w=bmp.width,h=bmp.height;
         const s=Math.min(1,maxDim/Math.max(w,h)); w=Math.round(w*s); h=Math.round(h*s);
         const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        if(bmp.close) bmp.close();
         const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",q)); return (blob&&blob.size<file.size)?blob:file;
       }catch(e){return file;}
     }
@@ -566,12 +569,14 @@
         const target=1500; if(w<target){ const s=target/w; w=Math.round(w*s); h=Math.round(h*s); }
         const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
         x.filter="grayscale(1) contrast(1.4) brightness(1.05)"; x.drawImage(bmp,0,0,w,h);
+        if(bmp.close) bmp.close();
         return await new Promise(r=>c.toBlob(r,"image/jpeg",0.95)); }
       catch(e){ return blob; }
     }
     async function blurScore(blob){
       try{ const bmp=await createImageBitmap(blob); const W=340,H=Math.max(1,Math.round(bmp.height*(340/bmp.width)));
         const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d"); x.drawImage(bmp,0,0,W,H);
+        if(bmp.close) bmp.close();
         const d=x.getImageData(0,0,W,H).data; const g=new Float64Array(W*H);
         for(let i=0,p=0;i<d.length;i+=4,p++) g[p]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
         let s=0,s2=0,n=0;
@@ -718,7 +723,7 @@
       const g=document.getElementById("expiring");
       document.getElementById("exp-empty").style.display=list.length?"none":"block";
       g.innerHTML=list.map(c=>{const w=c.workers||{};const d=Math.round((new Date(c.expiry_date)-new Date())/86400000);
-        return `<div class="card"><img src="${esc(c.image_path)}" alt=""><div class="meta"><div class="cat">${esc(w.name||"")} · ${esc(w.worker_code||"")}</div><div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div><div class="dates">Expiry ${fmt(c.expiry_date)}</div>${d<0?'<span class="badge b-exp">Expired</span>':`<span class="badge b-soon">Expires in ${d}d</span>`}</div></div>`;
+        return `<div class="card"><img loading="lazy" decoding="async" src="${esc(c.image_path)}" alt=""><div class="meta"><div class="cat">${esc(w.name||"")} · ${esc(w.worker_code||"")}</div><div class="lbl">${esc(c.label||CATLBL[c.category]||"Card")}</div><div class="dates">Expiry ${fmt(c.expiry_date)}</div>${d<0?'<span class="badge b-exp">Expired</span>':`<span class="badge b-soon">Expires in ${d}d</span>`}</div></div>`;
       }).join("");
     }
 

@@ -399,7 +399,7 @@
     function renderPhotos(){
       document.getElementById("photos").innerHTML=PHOTOS.map((p,i)=>`
         <div class="photo"><button class="rm" onclick="rmPhoto(${i})">×</button>
-        <img src="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
+        <img loading="lazy" decoding="async" src="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
       if(typeof updateDprReadiness==="function") updateDprReadiness();
     }
     function rmPhoto(i){ PHOTOS.splice(i,1); renderPhotos(); }
@@ -422,6 +422,7 @@
         w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
         const c=document.createElement("canvas"); c.width=w; c.height=h;
         c.getContext("2d").drawImage(bmp,0,0,w,h);
+        if(bmp.close) bmp.close();
         const blob=await new Promise(res=>c.toBlob(res,"image/jpeg",quality));
         return (blob && blob.size < file.size) ? blob : file;   // keep whichever is smaller
       }catch(e){ return file; }
@@ -768,6 +769,7 @@
         const bmp=await createImageBitmap(blob);
         let w=bmp.width,h=bmp.height; const sc=Math.min(1,1000/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
         const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
+        if(bmp.close) bmp.close();
         return { b64:c.toDataURL("image/jpeg",0.72).split(",")[1], ext:"jpeg", w, h };
       }catch(e){ return null; }
     }
