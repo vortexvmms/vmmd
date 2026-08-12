@@ -23,6 +23,7 @@
     table.rs td.z { color:#C7CBD1; }
     .rs-title { font-size:13px; font-weight:800; color:#111827; margin:18px 2px 3px; }
     .rs-sub { font-size:11px; color:#6B7280; margin:0 2px 8px; }
+    @media(min-width:900px){.mobile-home-only{display:none!important}}
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
@@ -62,7 +63,7 @@
     <div id="out"></div>
   </main>
 
-  <a href="home.html" class="no-print fixed bottom-5 right-5 w-12 h-12 rounded-full bg-red-700 text-white flex items-center justify-center shadow-lg" aria-label="Home">
+  <a href="home.html" class="mobile-home-only no-print fixed bottom-5 right-5 w-12 h-12 rounded-full bg-red-700 text-white flex items-center justify-center shadow-lg" aria-label="Home">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
   </a>
 

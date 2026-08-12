@@ -262,6 +262,7 @@ if (window.tailwind) {
     #vmms-home-fab{ transition:transform .2s var(--vmms-ease), box-shadow .24s ease;
                     animation:vmms-pop .42s var(--vmms-ease) both .12s; }
     #vmms-home-fab:active{ transform:scale(.9); }
+    @media (min-width:900px){ #vmms-home-fab{ display:none !important; } }
   }
   @keyframes vmms-fade-up{ from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:none} }
   @keyframes vmms-pop{ from{opacity:0; transform:scale(.8)} to{opacity:1; transform:scale(1)} }
