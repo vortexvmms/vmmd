@@ -16,7 +16,7 @@
     @media(min-width:900px){
       body{background:#E7EAF0!important}.mobile-only{display:none!important}.desktop-only{display:flex!important}
       body>header{padding:13px 24px!important;display:flex!important;align-items:center!important;width:100%!important}body>header>div.flex-1{flex:1 1 auto!important;min-width:240px!important}body>header #count{white-space:nowrap}.worker-head-actions{gap:9px;margin-left:auto}.worker-head-actions button{border:0;border-radius:9px;padding:9px 15px;font-weight:800;font-size:13px;cursor:pointer}.wa-bulk{background:#242B35;color:#fff}.wa-add{background:#fff;color:#A00000}
-      main{max-width:none!important;width:100%;padding:20px 24px 40px!important}.worker-desktop{display:block}
+      body main.max-w-md{max-width:none!important;width:100%!important;margin:0!important;padding:20px 24px 40px!important}.worker-desktop{display:block!important}
       #list,#empty{display:none!important}
       .worker-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.wkpi{background:#fff;border:1px solid #D7DCE4;border-top:4px solid #C00000;border-radius:13px;padding:14px 16px;text-align:left;box-shadow:0 4px 14px rgba(15,23,42,.055);cursor:pointer}.wkpi:hover{transform:translateY(-2px);box-shadow:0 9px 20px rgba(15,23,42,.1)}.wkpi b{display:block;font-size:27px;color:#171B22}.wkpi span{font-size:12px;font-weight:800;color:#667085}.wkpi.active{background:#FFF3F3;border-color:#D89A9A}.wkpi[data-status="active"]{border-top-color:#16A34A}.wkpi[data-status="on_leave"]{border-top-color:#D97706}.wkpi[data-status="inactive"]{border-top-color:#6B7280}
       .worker-tools{position:sticky;top:126px;z-index:6;display:grid;grid-template-columns:minmax(260px,1fr) 170px 190px 190px 170px auto;gap:9px;padding:11px;background:#fff;border:1px solid #D7DCE4;border-radius:13px 13px 0 0;box-shadow:0 5px 14px rgba(15,23,42,.06)}.worker-tools input,.worker-tools select{height:40px;border:1px solid #CBD2DC;border-radius:8px;padding:0 11px;background:#fff;font-size:13px}.worker-tools button{border:0;border-radius:8px;background:#EEF0F3;color:#374151;font-weight:800;padding:0 13px}
@@ -51,7 +51,7 @@
       <button data-f="inactive" class="chip bg-white text-gray-700 px-3 py-1.5 rounded-full border">Inactive</button>
     </div></div>
 
-    <style>.grid3{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:640px){.grid3{grid-template-columns:repeat(2,1fr)}}@media(min-width:1024px){.grid3{grid-template-columns:repeat(3,1fr)}}</style>
+    <style>.grid3{display:grid;grid-template-columns:1fr;gap:10px}@media(min-width:640px){.grid3{grid-template-columns:repeat(2,1fr)}}@media(min-width:1024px){.grid3{grid-template-columns:repeat(3,1fr)}}@media(min-width:900px){#list.grid3,#empty{display:none!important}.worker-desktop{display:block!important}}</style>
     <div id="list" class="grid3"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers found.</p>
 
