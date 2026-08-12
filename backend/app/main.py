@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.68.0")  # reliable attendance end-time saves
+app = FastAPI(title="VCMS API", version="0.69.0")  # mobile performance: lightweight notifications
 
 app.add_middleware(
     CORSMiddleware,
@@ -2370,6 +2370,26 @@ async def list_notifications(user: dict = Depends(get_current_user)):
         rows = r.json() if r.status_code == 200 else []
         unread = sum(1 for x in rows if not x.get("read_at"))
         return {"items": rows, "unread": unread}
+
+
+@app.get("/api/v1/notifications-count")
+async def notification_count(user: dict = Depends(get_current_user)):
+    """Tiny startup request for the global bell. Notification bodies are loaded
+    only when the user opens the panel, keeping every mobile page responsive."""
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/notifications",
+            params={"user_id": f"eq.{user['user_id']}", "read_at": "is.null",
+                    "select": "id", "limit": "1"},
+            headers={**supabase_headers(user["token"]), "Prefer": "count=exact"})
+        if r.status_code not in (200, 206):
+            return {"unread": 0}
+        cr = r.headers.get("content-range", "0-0/0")
+        try:
+            unread = int(cr.rsplit("/", 1)[1])
+        except Exception:
+            unread = len(r.json() or [])
+        return {"unread": unread}
 
 
 @app.post("/api/v1/notifications/read_all")

@@ -174,6 +174,13 @@ if (window.tailwind) {
     body{ background:var(--vmms-page) !important; }
     main{ animation:vmms-fade-up .55s var(--vmms-ease) both; }
 
+    /* iPhone home-indicator / browser toolbar clearance for fixed action bars. */
+    @media(max-width:899px){
+      body{padding-bottom:env(safe-area-inset-bottom,0px)}
+      body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
+      #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
+    }
+
     header.bg-red-700{
       background:linear-gradient(135deg,#C00000 0%,#9c0000 55%,#8a0000 100%) !important;
       box-shadow:0 8px 22px -12px rgba(138,0,0,.65); border-bottom:none;
@@ -227,6 +234,11 @@ if (window.tailwind) {
 // ticking attendance) don't machine-gun the animation.
 (function () {
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // Mobile operational pages update large card lists after almost every tap.
+  // Re-animating those lists costs layout/paint time and makes fast saves feel
+  // slow, so staggered list animation is desktop-only. The single page-opening
+  // fade remains available on mobile.
+  if (window.matchMedia && window.matchMedia("(max-width: 899px)").matches) return;
   var THROTTLE = 600;                 // ms — min gap between animating the same container
   var last = new WeakMap();
 
@@ -444,13 +456,25 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
       list.querySelectorAll('[data-link]').forEach(function(el){ var lnk=el.getAttribute('data-link'); if(lnk) el.addEventListener('click', function(){ window.location.href=lnk; }); });
     }
     async function load(){ try{ var r=await vmmsApi('/api/v1/notifications'); if(!r.ok) return; render(await r.json()); }catch(e){} }
+    async function loadCount(){
+      try{
+        var r=await vmmsApi('/api/v1/notifications-count'); if(!r.ok)return;
+        var d=await r.json(), unread=Number(d.unread)||0, badge=document.getElementById('vmms-bell-badge');
+        if(unread>0){badge.textContent=unread>99?'99+':unread;badge.style.display='block';}else badge.style.display='none';
+      }catch(e){}
+    }
 
     btn.addEventListener('click', function(){ var open=panel.style.display==='block'; panel.style.display=open?'none':'block'; if(!open) load(); });
     document.addEventListener('click', function(e){ if(panel.style.display==='block' && !panel.contains(e.target) && !btn.contains(e.target)) panel.style.display='none'; });
-    document.getElementById('vmms-bell-read').addEventListener('click', async function(e){ e.stopPropagation(); try{ await vmmsApi('/api/v1/notifications/read_all',{method:'POST'}); }catch(_){} load(); });
-    document.getElementById('vmms-bell-clear').addEventListener('click', async function(e){ e.stopPropagation(); if(!confirm('Clear all notifications?'))return; try{ await vmmsApi('/api/v1/notifications',{method:'DELETE'}); }catch(_){} load(); });
+    document.getElementById('vmms-bell-read').addEventListener('click', async function(e){ e.stopPropagation(); try{ await vmmsApi('/api/v1/notifications/read_all',{method:'POST'}); }catch(_){} load(); loadCount(); });
+    document.getElementById('vmms-bell-clear').addEventListener('click', async function(e){ e.stopPropagation(); if(!confirm('Clear all notifications?'))return; try{ await vmmsApi('/api/v1/notifications',{method:'DELETE'}); }catch(_){} load(); loadCount(); });
 
-    load(); setInterval(load, 60000);
+    // Startup downloads only the unread number. Full notification text is
+    // requested only when the bell is opened. Poll slowly and never while the
+    // PWA is in the background, avoiding account-specific mobile slowdown.
+    loadCount();
+    var countTimer=setInterval(function(){if(!document.hidden)loadCount();},300000);
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)loadCount();});
   });
 })();
 
