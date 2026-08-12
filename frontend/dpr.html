@@ -82,6 +82,21 @@
     .sigbox { border:1px dashed #cbd5e1; border-radius:10px; height:150px; display:flex; align-items:center; justify-content:center; background:#fff; overflow:hidden; }
     .sigpad { width:100%; height:150px; touch-action:none; cursor:crosshair; }
     .sigimg { max-height:146px; max-width:100%; }
+    #dpr-progress{display:none}
+    @media(min-width:900px){
+      body.dpr{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
+      body.dpr>header>div{max-width:none!important;width:100%!important}
+      #dpr-main{max-width:none!important;width:100%;padding:20px 330px 105px 24px}
+      #dpr-main>.panel{border-color:#dce1e8;box-shadow:0 6px 18px rgba(15,23,42,.06)}
+      #dpr-main>.sect{font-size:12px;color:#303847;margin-top:22px}
+      #dpr-progress{display:block;position:fixed;right:24px;top:82px;width:282px;background:#fff;border:1px solid #dce1e8;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(15,23,42,.10);z-index:7}
+      #dpr-progress h2{margin:0;padding:14px 16px;background:#252b35;color:#fff;font-size:14px;font-weight:800}
+      .dpr-prog-body{padding:15px}.dpr-meter{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}.dpr-meter i{display:block;height:100%;background:#c00000;transition:width .3s}
+      #dpr-checks{margin-top:12px}.dpr-check{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #edf0f4;font-size:12px;color:#4b5563}.dpr-check:last-child{border:0}.dpr-ok{color:#15803d;font-weight:800}.dpr-miss{color:#b45309;font-weight:800}
+      table.edt{min-width:0}.pgrid2{grid-template-columns:repeat(4,minmax(0,1fr))}
+      #dprbar>div{max-width:none!important;padding-left:24px;padding-right:24px}
+    }
+    @media(min-width:1600px){#dpr-main{padding-right:360px}#dpr-progress{width:310px}.pgrid2{grid-template-columns:repeat(5,minmax(0,1fr))}}
   </style>
 </head>
 <body class="dpr min-h-screen flex flex-col">
@@ -98,7 +113,8 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
+  <main id="dpr-main" class="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
+    <aside id="dpr-progress"><h2>DPR readiness</h2><div class="dpr-prog-body"><div style="display:flex;justify-content:space-between;margin-bottom:7px"><b id="dpr-percent">0% complete</b><span id="dpr-draftstate" style="font-size:11px;color:#64748b">Draft</span></div><div class="dpr-meter"><i id="dpr-meter-fill" style="width:0"></i></div><div id="dpr-checks"></div></div></aside>
     <div id="banner" class="hidden panel p-3 mb-3 text-sm text-center"></div>
 
     <div class="panel p-4">
@@ -384,6 +400,7 @@
       document.getElementById("photos").innerHTML=PHOTOS.map((p,i)=>`
         <div class="photo"><button class="rm" onclick="rmPhoto(${i})">×</button>
         <img src="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
+      if(typeof updateDprReadiness==="function") updateDprReadiness();
     }
     function rmPhoto(i){ PHOTOS.splice(i,1); renderPhotos(); }
     async function handleUpload(files){
@@ -520,6 +537,7 @@
         setv("f-jobdate",dateVal());
         await prefill(true);
       }
+      updateDprReadiness();
     }
     async function loadScheduleActivities(saved){
       const site=SITES.find(s=>s.id===siteVal()), projectId=site&&site.project_id;
@@ -811,8 +829,26 @@
       }catch(ex){ toast("Excel export failed", true); }
     }
 
+    function updateDprReadiness(){
+      const checks=[
+        [!!val("f-project"),"Project particulars"],
+        [!!val("f-item"),"Item of work"],
+        [!!val("f-desc").trim(),"Work description"],
+        [document.querySelectorAll("#mp tr").length>0,"Manpower"],
+        [PHOTOS.length>0,"Activity photos"],
+        [!!val("f-prep"),"Prepared by"],
+        [!!SIGNATURE_URL,"Signature"]
+      ];
+      const done=checks.filter(x=>x[0]).length,pct=Math.round(done/checks.length*100);
+      const pc=document.getElementById("dpr-percent"),fill=document.getElementById("dpr-meter-fill"),box=document.getElementById("dpr-checks");
+      if(pc)pc.textContent=pct+"% complete"; if(fill)fill.style.width=pct+"%";
+      if(box)box.innerHTML=checks.map(x=>`<div class="dpr-check"><span>${x[1]}</span><b class="${x[0]?"dpr-ok":"dpr-miss"}">${x[0]?"Ready":"Missing"}</b></div>`).join("");
+    }
+
     document.getElementById("site").addEventListener("change", load);
     document.getElementById("date").addEventListener("change", load);
+    document.getElementById("dpr-main").addEventListener("input",()=>{updateDprReadiness();const s=document.getElementById("dpr-draftstate");if(s){s.textContent="Editing…";clearTimeout(window._dprDraftT);window._dprDraftT=setTimeout(()=>s.textContent="Draft retained",700);}});
+    document.getElementById("dpr-main").addEventListener("change",updateDprReadiness);
     initDrop();
     initSigPad();
     boot();

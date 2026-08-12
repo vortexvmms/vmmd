@@ -11,6 +11,26 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
+  <style>
+    .alloc-kpis,.alloc-side{display:none}
+    @media(min-width:900px){
+      body{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
+      body>header>div{max-width:none!important;width:100%!important}
+      #alloc-main{max-width:none!important;width:100%;padding:20px 24px 92px}
+      .alloc-kpis{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+      .alloc-kpi{background:#fff;border:1px solid #dce1e8;border-top:3px solid #c00000;border-radius:12px;padding:12px 14px;box-shadow:0 4px 12px rgba(15,23,42,.06);transition:.18s}
+      .alloc-kpi:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(15,23,42,.11)}
+      .alloc-kpi b{display:block;font-size:23px;color:#171b23}.alloc-kpi span{font-size:11px;font-weight:800;color:#687386;text-transform:uppercase;letter-spacing:.04em}
+      .alloc-workspace{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start}
+      .alloc-centre{min-width:0}
+      .alloc-side{display:block;position:sticky;top:76px;background:#fff;border:1px solid #dce1e8;border-radius:14px;overflow:hidden;box-shadow:0 8px 20px rgba(15,23,42,.08)}
+      .alloc-side h2{background:#252b35;color:#fff;padding:13px 15px;font-size:14px;font-weight:800}
+      #alloc-exceptions{padding:8px 14px 14px}.alloc-ex{padding:10px 0;border-bottom:1px solid #edf0f4;font-size:12px;color:#4b5563}.alloc-ex:last-child{border:0}.alloc-ex b{display:block;color:#202631;margin-bottom:2px}
+      #list{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+      body>div.fixed.bottom-0>div{max-width:none!important;padding-left:24px;padding-right:24px}
+    }
+    @media(min-width:1500px){.alloc-workspace{grid-template-columns:minmax(0,1fr) 330px}#list{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -40,7 +60,9 @@
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
+  <main id="alloc-main" class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
+    <div id="alloc-kpis" class="alloc-kpis"></div>
+    <div class="alloc-workspace"><div class="alloc-centre">
     <div id="copybar" class="hidden bg-amber-50 border border-amber-300 rounded-xl shadow-sm p-4 mb-3 text-center">
       <p class="text-sm font-bold text-amber-800 mb-1">⏳ PENDING — no allocation done for this day yet.</p>
       <p class="text-xs text-amber-700 mb-2">Assign workers below and Save, or copy a previous day's plan (last 7 days).</p>
@@ -72,6 +94,7 @@
 
     <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
+    </div><aside class="alloc-side"><h2>Allocation exceptions</h2><div id="alloc-exceptions"></div></aside></div>
   </main>
 
   <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
@@ -199,6 +222,26 @@
       else if (MODE === "site") renderSite();
       else renderWorker();
       updateStatus();
+      updateDesktopSummary();
+    }
+
+    function updateDesktopSummary(){
+      const active=WORKERS.filter(w=>w.status==="active");
+      const requested=new Set(Object.keys(REQANY));
+      const allocated=active.filter(w=>ASSIGN[w.id]).length;
+      const conflicts=active.filter(w=>(REQANY[w.id]||[]).length>1);
+      const shortage=active.filter(w=>requested.has(String(w.id)) && !ASSIGN[w.id]);
+      const unallocated=active.length-allocated;
+      const sitePending=SITES.filter(s=>!SITE_OFF.has(s.id)&&(!REQBYSITE[s.id]||!REQBYSITE[s.id].size));
+      const vals=[[active.length,"Active workers"],[requested.size,"Requested"],[allocated,"Allocated"],[unallocated,"Unallocated"],[conflicts.length,"Conflicts"],[shortage.length,"Shortage"]];
+      const k=document.getElementById("alloc-kpis"); if(k) k.innerHTML=vals.map(x=>`<div class="alloc-kpi"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
+      const e=document.getElementById("alloc-exceptions"); if(!e)return;
+      const rows=[];
+      if(shortage.length) rows.push(`<div class="alloc-ex"><b>${shortage.length} requested worker(s) unallocated</b>${shortage.slice(0,6).map(w=>esc(w.name)).join(", ")}</div>`);
+      if(conflicts.length) rows.push(`<div class="alloc-ex"><b>${conflicts.length} multi-site request(s)</b>${conflicts.slice(0,6).map(w=>esc(w.name)).join(", ")}</div>`);
+      if(sitePending.length) rows.push(`<div class="alloc-ex"><b>${sitePending.length} site request(s) pending</b>${sitePending.slice(0,6).map(s=>esc(s.site_name)).join(", ")}</div>`);
+      if(!rows.length) rows.push('<div class="alloc-ex"><b style="color:#15803d">✓ No allocation exceptions</b>All requests are covered for this date.</div>');
+      e.innerHTML=rows.join("");
     }
 
     /* Is the current view different from what's saved in the database?
