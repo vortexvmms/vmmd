@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.71.2")  # batch cleanup for old DPR tasks
+app = FastAPI(title="VCMS API", version="0.71.3")  # reliable stale DPR task cleanup
 
 app.add_middleware(
     CORSMiddleware,
@@ -3036,14 +3036,14 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                 await asyncio.gather(*renames)
             stale = [x["id"] for k, x in existing.items() if k not in wanted and not x.get("done")]
             if stale:
-                # Keep each PostgREST URL short. A manager can have many old
-                # site tasks and one giant `in.(...)` query exceeds URL limits.
-                deletes = [client.delete(f"{REST}/todos",
-                    params={"id": f"in.({','.join(stale[i:i + 15])})",
-                            "user_id": f"eq.{user['user_id']}"},
-                    headers=supabase_headers(user["token"]))
-                    for i in range(0, len(stale), 15)]
-                await asyncio.gather(*deletes)
+                # Delete by exact id. PostgREST `in.(uuid,...)` filters can fail
+                # for a large historic list and leave unrelated site tasks behind.
+                for i in range(0, len(stale), 10):
+                    await asyncio.gather(*[client.delete(f"{REST}/todos",
+                        params={"id": f"eq.{todo_id}",
+                                "user_id": f"eq.{user['user_id']}"},
+                        headers=supabase_headers(user["token"]))
+                        for todo_id in stale[i:i + 10]])
     return {"enabled": enabled, "from": start, "to": end,
             "count": len(missing), "items": missing}
 
