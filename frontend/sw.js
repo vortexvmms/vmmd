@@ -5,9 +5,19 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v4-phase1-wbs';
+const CACHE = 'vcms-v5-mobile-fast';
+const APP_SHELL = [
+  './','home.html','attendance.html','request.html','whatsapp.html','dpr.html',
+  'css/app.css','js/config.js','js/auth.js','js/shell.js','icons/icon-192.png'
+];
 
-self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('install', (e) => {
+  e.waitUntil((async()=>{
+    const c=await caches.open(CACHE);
+    await Promise.all(APP_SHELL.map(u=>c.add(u).catch(()=>null)));
+    await self.skipWaiting();
+  })());
+});
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {

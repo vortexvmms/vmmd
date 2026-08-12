@@ -505,6 +505,7 @@
       if(saved && saved.id) CURRENT_ID=saved.id;
       document.getElementById("editbar").classList.remove("hidden");
       document.getElementById("prevref").textContent="· saved "+d.pr_no+" — Print now, or Save to update";
+      if(window.vmmsClearPageDraft) vmmsClearPageDraft();
       toast("PR saved — you can Print now");
       await loadRecent();
     }
@@ -518,6 +519,7 @@
       const saved=await r.json().catch(()=>({}));
       if(saved && saved.id) CURRENT_ID=saved.id;   // keep revision loaded so Print uses it
       document.getElementById("prevref").textContent="· saved "+d.pr_no+" — Print now";
+      if(window.vmmsClearPageDraft) vmmsClearPageDraft();
       toast("Saved as revision "+d.pr_no+" — you can Print now");
       await loadRecent();
     }
