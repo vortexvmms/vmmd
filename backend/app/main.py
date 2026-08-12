@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.70.2")  # missing-DPR reminder runtime fix
+app = FastAPI(title="VCMS API", version="0.71.0")  # per-user DPR reminder site selection
 
 app.add_middleware(
     CORSMiddleware,
@@ -190,7 +190,7 @@ async def get_current_user(request: Request) -> dict:
 
         r2 = await client.get(
             f"{REST}/users",
-            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu,dpr_reminders"},
+            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu,dpr_reminders,dpr_reminder_sites"},
             headers=supabase_headers(token),
         )
         if r2.status_code != 200:   # tolerate the 'menu' column not existing yet
@@ -215,6 +215,7 @@ async def get_current_user(request: Request) -> dict:
         "role": profile["role"],
         "menu": profile.get("menu"),
         "dpr_reminders": bool(profile.get("dpr_reminders", False)),
+        "dpr_reminder_sites": profile.get("dpr_reminder_sites"),
     }
     _cache_put(token, user)
     return user
@@ -262,7 +263,8 @@ async def health():
 async def me(user: dict = Depends(get_current_user)):
     return {"name": user["name"], "role": user["role"], "email": user["email"],
             "user_id": user["user_id"], "menu": user.get("menu"),
-            "dpr_reminders": user.get("dpr_reminders", False)}
+            "dpr_reminders": user.get("dpr_reminders", False),
+            "dpr_reminder_sites": user.get("dpr_reminder_sites")}
 
 
 class MyPreferences(BaseModel):
@@ -535,7 +537,7 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
 async def list_users(role: str = "", user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,name,role,status,menu,notify_all,notify_requests", "order": "name.asc"}
+    params = {"select": "id,name,role,status,menu,notify_all,notify_requests,dpr_reminders,dpr_reminder_sites", "order": "name.asc"}
     if role:
         params["role"] = f"eq.{role}"
     async with shared_client() as client:
@@ -567,6 +569,8 @@ class UserStatus(BaseModel):
     menu: list[str] | None = None   # per-user menu allow-list; null = role default
     notify_all: bool | None = None       # receives EVERY notification (developer)
     notify_requests: bool | None = None  # receives manpower-request notifications (allocator)
+    dpr_reminders: bool | None = None
+    dpr_reminder_sites: list[str] | None = None  # null = all accessible sites
 
 
 class PwReset(BaseModel):
@@ -647,6 +651,10 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
         updates["notify_all"] = bool(body.notify_all)
     if "notify_requests" in fields:
         updates["notify_requests"] = bool(body.notify_requests)
+    if "dpr_reminders" in fields:
+        updates["dpr_reminders"] = bool(body.dpr_reminders)
+    if "dpr_reminder_sites" in fields:
+        updates["dpr_reminder_sites"] = body.dpr_reminder_sites
 
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
@@ -659,6 +667,9 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not update the user")
         await audit(client, user, "update_user", "user", user_id, None, updates)
+        if user_id == user["user_id"]:
+            user.update(updates)
+            _cache_put(user["token"], user)
         return {"ok": True, **updates}
 
 
@@ -2979,6 +2990,10 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
             key = (x.get("site_id"), x.get("work_date"))
             if key[0] and key[1] and key not in prepared:
                 missing_map[key] = (x.get("sites") or {}).get("site_name") or "Site"
+        selected_sites = user.get("dpr_reminder_sites")
+        if isinstance(selected_sites, list):
+            selected = set(selected_sites)
+            missing_map = {k: v for k, v in missing_map.items() if k[0] in selected}
         missing = [{"site_id": sid, "site_name": name, "date": day,
                     "label": date_cls.fromisoformat(day).strftime("%d/%m/%Y")}
                    for (sid, day), name in sorted(missing_map.items(), key=lambda z: z[0][1], reverse=True)]

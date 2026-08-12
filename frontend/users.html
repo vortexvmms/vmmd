@@ -84,7 +84,7 @@
 
   <script>
     requireLogin();
-    let ME = null, USERS = [];
+    let ME = null, USERS = [], SITES = [];
     const ROLE_LABEL = {
       admin:"Administrator", general_manager:"General Manager", operation_manager:"Operation Manager",
       hr_assistant:"HR Assistant", main_sup:"Site Manager", wshc_lead:"WSHC Lead",
@@ -166,6 +166,21 @@
     }
     function toggleSections(id){ document.getElementById("sec-"+id).classList.toggle("hidden"); }
 
+    function renderDprSites(u){
+      const selected=Array.isArray(u.dpr_reminder_sites)?u.dpr_reminder_sites:null;
+      const boxes=SITES.map(s=>`<label class="flex items-center gap-2 text-sm py-1"><input type="checkbox" value="${s.id}" ${(selected===null||selected.includes(s.id))?'checked':''} class="dpr-site-cb accent-red-700"><span>${esc(s.site_name)}</span></label>`).join("");
+      return `<p class="text-[11px] text-gray-500 mb-1">Tick only the sites that should create pending-DPR tasks for this user.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-3 max-h-48 overflow-auto">${boxes||'<span class="text-xs text-gray-400">No active sites</span>'}</div>
+        <button onclick="saveDprSites('${u.id}',this)" class="mt-2 bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Save DPR sites</button>`;
+    }
+    function toggleDprSites(id){document.getElementById("dpr-sites-"+id).classList.toggle("hidden")}
+    async function saveDprSites(id,btn){
+      const div=document.getElementById("dpr-sites-"+id), chosen=[...div.querySelectorAll(".dpr-site-cb:checked")].map(x=>x.value);
+      const value=chosen.length===SITES.length?null:chosen; btn.disabled=true; const old=btn.textContent;btn.textContent="Saving…";
+      try{const r=await vmmsApi(`/api/v1/users/${id}`,{method:"PATCH",body:JSON.stringify({dpr_reminder_sites:value})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||"Could not save sites");toast(chosen.length?`${chosen.length} DPR reminder site(s) saved`:"DPR reminders disabled for all sites");await loadUsers();}
+      catch(e){toast(e.message,true);btn.disabled=false;btn.textContent=old;}
+    }
+
     async function setFlag(id, flag, checked){
       try{
         const body = {}; body[flag] = checked;
@@ -205,6 +220,7 @@
         return;
       }
       document.getElementById("content").classList.remove("hidden");
+      const rs=await vmmsApi("/api/v1/sites"); SITES=(rs.ok?await rs.json():[]).filter(s=>s.status==="active"&&(s.site_name||"").toUpperCase()!=="HOME LEAVE");
       await loadUsers();
     }
 
@@ -250,7 +266,10 @@
           <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
             <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_all?'checked':''} onchange="setFlag('${u.id}','notify_all',this.checked)" class="accent-red-700 w-4 h-4"> 🔔 Gets ALL notifications</label>
             <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_requests?'checked':''} onchange="setFlag('${u.id}','notify_requests',this.checked)" class="accent-red-700 w-4 h-4"> 📋 Gets manpower requests</label>
+            <label class="flex items-center gap-1.5"><input type="checkbox" ${u.dpr_reminders?'checked':''} onchange="setFlag('${u.id}','dpr_reminders',this.checked)" class="accent-red-700 w-4 h-4"> 📅 Gets pending DPR tasks</label>
           </div>
+          <button onclick="toggleDprSites('${u.id}')" class="mt-2 text-xs font-bold text-red-700">▸ DPR reminder sites${Array.isArray(u.dpr_reminder_sites)?' (custom)':' (all)'}</button>
+          <div id="dpr-sites-${u.id}" class="hidden mt-1 border-t border-gray-200 pt-2">${renderDprSites(u)}</div>
           ${isSelf ? '' : `
           <button onclick="toggleSections('${u.id}')" class="mt-2 text-xs font-bold text-red-700">▸ Sections${Array.isArray(u.menu)?' (custom)':''}</button>
           <div id="sec-${u.id}" class="hidden mt-1 border-t border-gray-200 pt-2">${renderSections(u)}</div>`}
