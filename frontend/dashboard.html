@@ -36,6 +36,7 @@
     table.dt tbody tr:hover { background:#FAFAFA; }
     table.dt tfoot td { padding:11px 12px; border-top:2px solid #D1D5DB; font-weight:800; color:#111827; }
     table.dt tfoot td.r { text-align:right; }
+    .leave-tools{display:flex;gap:8px;align-items:center;margin-bottom:10px}.leave-tools input,.leave-tools select{border:1px solid #D1D5DB;border-radius:9px;background:#fff;padding:8px 10px;font-size:13px;color:#374151}.leave-tools input{flex:1;min-width:180px}.leave-pager{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-top:1px solid #E5E7EB;font-size:12px;color:#6B7280}.leave-pager button{border:1px solid #D1D5DB;background:#fff;border-radius:8px;padding:6px 10px;font-weight:700;color:#374151;cursor:pointer}.leave-pager button:disabled{opacity:.4;cursor:default}
     @media print {
       .stat, .dpanel { box-shadow:none !important; }
       .stat, .dpanel, tr { page-break-inside:avoid; }
@@ -151,15 +152,17 @@
       </table>
     </div>
 
-    <h2 class="sect">Leave — most days this month (MC / AL / UL)</h2>
+    <h2 class="sect" id="leave-table">Leave — most days this month (MC / AL / UL)</h2>
+    <div class="leave-tools no-print"><input id="leave-search" type="search" placeholder="Search worker name or ID…"><select id="leave-type"><option value="all">All leave types</option><option value="mc">MC only</option><option value="al">AL only</option><option value="ul">UL only</option></select></div>
     <div class="dpanel" style="overflow:hidden">
       <table class="dt">
         <thead>
           <tr><th>Worker</th><th class="r">MC</th><th class="r">AL</th><th class="r">UL</th><th class="r">Total</th></tr>
         </thead>
-        <tbody id="leaders"></tbody>
+      <tbody id="leaders"></tbody>
       </table>
       <p id="leaders-empty" class="hidden text-center text-gray-400 p-4 text-sm">No MC / AL / UL recorded this month.</p>
+      <div class="leave-pager no-print"><span id="leave-page-info">Showing 0 workers</span><div><button id="leave-prev" type="button">Previous</button> <button id="leave-next" type="button">Next</button></div></div>
     </div>
 
     <p class="print-only" style="font-size:9px; color:#8a8a8a; margin-top:12px;">
@@ -186,7 +189,8 @@
     requireLogin();
 
     let ME = null, SUPMAP = {}, MPEND = [], EPEND = [], RDATE = "";
-    let DASH = null, WCACHE = null, SCACHE = null;
+    let DASH = null, WCACHE = null, SCACHE = null, LEAVE_ROWS = [], LEAVE_PAGE = 1;
+    const LEAVE_PAGE_SIZE = 25;
     const RDAYS = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
     const RMON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
@@ -214,6 +218,16 @@
     }
     function shareReminder(stage) {
       window.open("https://wa.me/?text=" + encodeURIComponent(reminderText(stage)), "_blank");
+    }
+    function renderLeaveTable(showAll=false){
+      const q=(document.getElementById("leave-search").value||"").trim().toLowerCase(),type=document.getElementById("leave-type").value;
+      const rows=LEAVE_ROWS.filter(w=>(!q||String(w.name||"").toLowerCase().includes(q)||String(w.code||"").toLowerCase().includes(q))&&(type==="all"||Number(w[type]||0)>0));
+      const pages=Math.max(1,Math.ceil(rows.length/LEAVE_PAGE_SIZE));LEAVE_PAGE=Math.min(LEAVE_PAGE,pages);
+      const start=(LEAVE_PAGE-1)*LEAVE_PAGE_SIZE,shown=showAll?rows:rows.slice(start,start+LEAVE_PAGE_SIZE);
+      document.getElementById("leaders").innerHTML=shown.map((w,i)=>`<tr><td style="font-weight:500;color:#111827">${(showAll?0:start)+i+1}. ${esc(w.name)} <span style="font-size:12px;color:#9CA3AF">${esc(w.code)}</span></td><td class="r" style="${w.mc?'color:#B45309;font-weight:700':'color:#9CA3AF'}">${w.mc}</td><td class="r" style="${w.al?'color:#0369A1;font-weight:700':'color:#9CA3AF'}">${w.al}</td><td class="r" style="${w.ul?'color:#C2410C;font-weight:700':'color:#9CA3AF'}">${w.ul}</td><td class="r" style="font-weight:800;color:#111827">${w.total}</td></tr>`).join("");
+      document.getElementById("leaders-empty").classList.toggle("hidden",rows.length>0);
+      document.getElementById("leave-page-info").textContent=rows.length?`Showing ${start+1}–${Math.min(start+LEAVE_PAGE_SIZE,rows.length)} of ${rows.length} workers`:`Showing 0 workers`;
+      document.getElementById("leave-prev").disabled=LEAVE_PAGE<=1;document.getElementById("leave-next").disabled=LEAVE_PAGE>=pages;
     }
 
     function fmtDMY(iso) { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; }
@@ -294,9 +308,11 @@
     }
 
     function setToday() { document.getElementById("date").value = todayIso(); load(); }
-    function downloadPdf() {
+    async function downloadPdf() {
       const d = document.getElementById("date").value || "";
-      vmmsDownloadPdf("body", `VMMS_Dashboard_${d}`, { landscape: false, onePage: true });
+      renderLeaveTable(true);
+      try { await vmmsDownloadPdf("body", `VMMS_Dashboard_${d}`, { landscape: false, onePage: true }); }
+      finally { renderLeaveTable(); }
     }
 
     async function boot() {
@@ -401,20 +417,15 @@
              <td class="r">${Math.round(tOt * 10) / 10}</td></tr>`;
 
       // Leave leaderboard — who took the most MC / AL / UL this month
-      const LL = d.leave_leaders || [];
-      document.getElementById("leaders").innerHTML = LL.map((w, i) =>
-        `<tr>
-           <td style="font-weight:500;color:#111827">${i + 1}. ${esc(w.name)}
-             <span style="font-size:12px;color:#9CA3AF">${esc(w.code)}</span></td>
-           <td class="r" style="${w.mc ? 'color:#B45309;font-weight:700' : 'color:#9CA3AF'}">${w.mc}</td>
-           <td class="r" style="${w.al ? 'color:#0369A1;font-weight:700' : 'color:#9CA3AF'}">${w.al}</td>
-           <td class="r" style="${w.ul ? 'color:#C2410C;font-weight:700' : 'color:#9CA3AF'}">${w.ul}</td>
-           <td class="r" style="font-weight:800;color:#111827">${w.total}</td>
-         </tr>`).join("");
-      document.getElementById("leaders-empty").classList.toggle("hidden", LL.length > 0);
+      LEAVE_ROWS=d.leave_leaders||[];LEAVE_PAGE=1;renderLeaveTable();
     }
 
     document.getElementById("date").addEventListener("change", () => { WCACHE = SCACHE = null; load(); });
+    document.getElementById("leave-search").addEventListener("input",()=>{LEAVE_PAGE=1;renderLeaveTable()});
+    document.getElementById("leave-type").addEventListener("change",()=>{LEAVE_PAGE=1;renderLeaveTable()});
+    document.getElementById("leave-prev").addEventListener("click",()=>{if(LEAVE_PAGE>1){LEAVE_PAGE--;renderLeaveTable()}});
+    document.getElementById("leave-next").addEventListener("click",()=>{LEAVE_PAGE++;renderLeaveTable()});
+    window.addEventListener("beforeprint",()=>renderLeaveTable(true));window.addEventListener("afterprint",()=>renderLeaveTable());
     document.getElementById("cards").addEventListener("click", e => {
       const c = e.target.closest("[data-kind]");
       if (c) openDetail(c.dataset.kind);
