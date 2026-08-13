@@ -96,10 +96,18 @@
       SITE_NAME = document.getElementById("f-site").selectedOptions[0].textContent;
       document.getElementById("msg").textContent = "Loading…";
       document.getElementById("out").innerHTML = "";
-      const r = await vmmsApi(`/api/v1/resource-summary?site_id=${encodeURIComponent(site)}&month=${encodeURIComponent(month)}`);
-      if (!r.ok) { document.getElementById("msg").textContent = "Could not load (" + r.status + ")."; return; }
-      DATA = await r.json();
-      render();
+      try {
+        const r = await vmmsApi(`/api/v1/resource-summary?site_id=${encodeURIComponent(site)}&month=${encodeURIComponent(month)}`);
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({}));
+          document.getElementById("msg").textContent = e.detail || ("Could not load (" + r.status + ").");
+          return;
+        }
+        DATA = await r.json();
+        render();
+      } catch (e) {
+        document.getElementById("msg").textContent = "Connection interrupted. Tap Load to retry.";
+      }
     }
 
     function render() {

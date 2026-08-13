@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.0")  # resource summary uses attendance plus DPR details
+app = FastAPI(title="VCMS API", version="0.75.1")  # faster resource-summary attendance fetch
 
 app.add_middleware(
     CORSMiddleware,
@@ -2878,12 +2878,28 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                 f"{REST}/allocations",
                 params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
                         "and": f"(work_date.gte.{start},work_date.lte.{end})",
-                        "select": "work_date,worker_id,workers(name,trade),attendance(present,normal_hours,ot_hours)",
+                        "select": "id,work_date,worker_id,workers(name,trade)",
                         "order": "work_date.asc"},
                 headers=supabase_headers(user["token"]))
         )
-        reports = r.json() if r.status_code == 200 else []
-        allocation_rows = ra.json() if ra.status_code == 200 else []
+        if r.status_code != 200 or ra.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load Resource Summary source data")
+        reports = r.json()
+        allocation_rows = ra.json()
+        # Avoid a slow nested attendance join on the free database tier. Fetch
+        # the small set by allocation ID and merge it locally instead.
+        attendance_by_allocation = {}
+        ids = [x.get("id") for x in allocation_rows if x.get("id")]
+        for i in range(0, len(ids), 100):
+            batch = ids[i:i + 100]
+            ratt = await client.get(
+                f"{REST}/attendance",
+                params={"allocation_id": f"in.({','.join(batch)})",
+                        "select": "allocation_id,present,normal_hours,ot_hours"},
+                headers=supabase_headers(user["token"]))
+            if ratt.status_code != 200:
+                raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
+            attendance_by_allocation.update({x["allocation_id"]: x for x in ratt.json()})
 
     att, mp_pos, mats, plant = {}, {}, {}, {}
     manhours = {d: 0.0 for d in days}
@@ -2896,7 +2912,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     attendance_workers_by_day = set()
     attendance_days = set()
     for row in allocation_rows:
-        attendance_row = row.get("attendance") or None
+        attendance_row = attendance_by_allocation.get(row.get("id"))
         if not attendance_row or not attendance_row.get("present"):
             continue
         try:
