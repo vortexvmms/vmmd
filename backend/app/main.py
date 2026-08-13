@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.7")  # indexed resource roll-up
+app = FastAPI(title="VCMS API", version="0.75.8")  # reliable resource roll-up connection
 
 app.add_middleware(
     CORSMiddleware,
@@ -2865,7 +2865,10 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     days = list(range(1, ndays + 1))
     weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
 
-    async with shared_client() as client:
+    # Monthly reports can return wider JSON than normal app requests. Give this
+    # export its own clean connection so a stale shared keep-alive socket cannot
+    # leave the page permanently at Loading / Failed to fetch.
+    async with httpx.AsyncClient(timeout=60.0) as client:
         # Confirm this signed-in user can see the requested site, then use the
         # server-only key for the heavy monthly roll-up. This avoids expensive
         # per-row RLS evaluation that was timing out on the free database tier.
