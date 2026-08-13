@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.5")  # authorized server-side resource roll-up
+app = FastAPI(title="VCMS API", version="0.75.6")  # fast manager resource roll-up
 
 app.add_middleware(
     CORSMiddleware,
@@ -2869,11 +2869,16 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         # Confirm this signed-in user can see the requested site, then use the
         # server-only key for the heavy monthly roll-up. This avoids expensive
         # per-row RLS evaluation that was timing out on the free database tier.
-        access = await client.get(
-            f"{REST}/sites", params={"id": f"eq.{site_id}", "select": "id"},
-            headers=supabase_headers(user["token"]))
-        if access.status_code != 200 or not access.json():
-            raise HTTPException(status_code=403, detail="Site not available to this user")
+        # Managers/admins already have organisation-wide DPR permission. Avoid an
+        # additional user-RLS site lookup for them: on the free database tier that
+        # lookup could stall long enough for Safari/Chrome to drop the request.
+        # Supervisors still pass the normal RLS access check.
+        if user["role"] not in {"admin", "manager", "project manager", "site manager"}:
+            access = await client.get(
+                f"{REST}/sites", params={"id": f"eq.{site_id}", "select": "id"},
+                headers=supabase_headers(user["token"]))
+            if access.status_code != 200 or not access.json():
+                raise HTTPException(status_code=403, detail="Site not available to this user")
         rollup_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         r = await client.get(
                 f"{REST}/daily_reports",
