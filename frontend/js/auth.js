@@ -19,7 +19,18 @@ function getSession() {
 
 function clearSession() {
   localStorage.removeItem(VMMS_SESSION_KEY);
-  try { localStorage.removeItem("vmms_ref_cache"); } catch {}
+  try {
+    // Remove account-specific data while preserving harmless device preferences.
+    const remove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i) || "";
+      if (k === "vmms_ref_cache" || k === "vmms_view_role" ||
+          k.startsWith("vcms_draft_") || k.startsWith("vmms_draft_") ||
+          k.startsWith("vmms_signature") || k.startsWith("vcms_signature")) remove.push(k);
+    }
+    remove.forEach(k => localStorage.removeItem(k));
+    sessionStorage.clear();
+  } catch {}
 }
 
 // ---- login with email + password (Supabase Auth) ----
@@ -216,9 +227,28 @@ async function vmmsApi(path, options = {}) {
 }
 
 // ---- logout ----
-function vmmsLogout() {
-  clearSession();
-  window.location.href = "login.html";
+async function vmmsLogout() {
+  const s = getSession();
+  try {
+    if (s && s.access_token) {
+      // Revoke remotely without making logout feel slow on a weak connection.
+      await Promise.race([
+        fetch(`${VMMS_CONFIG.SUPABASE_URL}/auth/v1/logout`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${s.access_token}`,
+            "apikey": VMMS_CONFIG.SUPABASE_PUBLISHABLE,
+          },
+        }),
+        new Promise(resolve => setTimeout(resolve, 1200)),
+      ]);
+    }
+  } catch (_) {
+    // Local logout must still succeed if the phone is offline.
+  } finally {
+    clearSession();
+    window.location.replace("login.html");
+  }
 }
 
 // ---- guard: send to login if no session (use on protected pages) ----

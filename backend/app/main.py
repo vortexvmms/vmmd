@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.72.2")  # reconcile dashboard site and KPI hour totals
+app = FastAPI(title="VCMS API", version="0.73.0")  # reconcile dashboard site and KPI hour totals
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +31,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Low-cost browser hardening for every API response."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = (
+        "camera=(self), microphone=(), geolocation=(), payment=(), usb=()"
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
@@ -151,7 +165,7 @@ ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
 # (the app auto-refreshes it), so caching for a token's full life effectively
 # means "for the whole session" — a new token after refresh is a fresh lookup.
 _USER_CACHE: dict[str, tuple[float, dict]] = {}
-_USER_CACHE_TTL = 3300  # seconds (~55 min ≈ one login token's lifetime)
+_USER_CACHE_TTL = 600  # 10 min: fast for attendance, bounded if invalidation misses
 
 
 def _cache_get(token: str):
@@ -169,6 +183,16 @@ def _cache_put(token: str, user: dict):
         now = time.time()
         for k in [k for k, (exp, _) in _USER_CACHE.items() if exp <= now]:
             _USER_CACHE.pop(k, None)
+
+
+def _cache_invalidate_users(user_ids) -> None:
+    """Immediately revoke cached role/status/site context for selected profiles."""
+    wanted = {str(x) for x in (user_ids or []) if x}
+    if not wanted:
+        return
+    for token, (_, profile) in list(_USER_CACHE.items()):
+        if str(profile.get("user_id")) in wanted:
+            _USER_CACHE.pop(token, None)
 
 
 async def get_current_user(request: Request) -> dict:
@@ -584,8 +608,8 @@ async def create_user(body: UserCreate, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Only management can add users")
     if body.role not in ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
-    if len(body.password or "") < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if len(body.password or "") < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
     require_service()
     async with shared_client() as client:
         # 1) create the auth login (email pre-confirmed so they can log in right away)
@@ -667,9 +691,7 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not update the user")
         await audit(client, user, "update_user", "user", user_id, None, updates)
-        if user_id == user["user_id"]:
-            user.update(updates)
-            _cache_put(user["token"], user)
+        _cache_invalidate_users([user_id])
         return {"ok": True, **updates}
 
 
@@ -678,8 +700,8 @@ async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_c
     """Set a new password for a user's login. Admin only."""
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Only management can reset passwords")
-    if len(body.password or "") < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if len(body.password or "") < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
     require_service()
     async with shared_client() as client:
         r = await client.get(f"{REST}/users",
@@ -695,6 +717,7 @@ async def reset_password(user_id: str, body: PwReset, user: dict = Depends(get_c
         if u.status_code not in (200, 201):
             raise HTTPException(status_code=400, detail="Could not reset the password")
         await audit(client, user, "reset_password", "user", user_id, None, None)
+        _cache_invalidate_users([user_id])
         return {"ok": True}
 
 
@@ -730,6 +753,7 @@ async def assign_supervisors(site_id: str, body: SupervisorAssign,
 
         await audit(client, user, "assign_supervisors", "site", site_id,
                     {"user_ids": old_ids}, {"user_ids": body.user_ids})
+        _cache_invalidate_users(set(old_ids) | set(body.user_ids))
         return {"ok": True, "site_id": site_id, "user_ids": body.user_ids}
 
 

@@ -283,7 +283,7 @@
       const pass=document.getElementById("n-pass").value;
       const role=document.getElementById("n-role").value;
       if(!name || !email || !pass){ toast("Fill name, email and password"); return; }
-      if(pass.length<8){ toast("Password must be at least 8 characters"); return; }
+      if(pass.length<12){ toast("Password must be at least 12 characters"); return; }
       const btn=document.getElementById("add-btn"); btn.disabled=true; btn.textContent="Adding…";
       try{
         const r=await vmmsApi("/api/v1/users",{method:"POST",body:JSON.stringify({name,email,password:pass,role})});
@@ -312,7 +312,7 @@
     async function resetPw(id, btn){
       const pw = window.prompt("Enter a new password for this user (min 8 characters):");
       if(pw===null) return;
-      if((pw||"").length<8){ toast("Password must be at least 8 characters"); return; }
+      if((pw||"").length<12){ toast("Password must be at least 12 characters"); return; }
       btn.disabled=true; const t=btn.textContent; btn.textContent="…";
       try{
         const r=await vmmsApi(`/api/v1/users/${id}/reset_password`,{method:"POST",body:JSON.stringify({password:pw})});
