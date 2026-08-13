@@ -83,7 +83,7 @@ window.vmmsSetTheme = function (t) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260813-5', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260813-6', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -163,7 +163,7 @@ window.vmmsSetTheme = function (t) {
 
 // ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-5"; sh.defer = true;
+  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-6"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
 
@@ -290,6 +290,18 @@ if (window.tailwind) {
         height:44px!important;
         margin:0!important;
       }
+      body:not(.shell)>header button,
+      body:not(.shell)>header a.mobile-title-action{
+        height:44px!important;
+        min-height:44px!important;
+        padding-top:0!important;
+        padding-bottom:0!important;
+        display:inline-flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        line-height:1!important;
+        border-radius:8px!important;
+      }
       body.vmms-page-request>header>div:nth-child(2),
       body.vmms-page-attendance>header>div:nth-child(2),
       body.vmms-page-dpr>header>div:nth-child(2){
@@ -300,7 +312,7 @@ if (window.tailwind) {
       body.vmms-page-request>header>div:nth-child(2)>*,
       body.vmms-page-attendance>header>div:nth-child(2)>*,
       body.vmms-page-dpr>header>div:nth-child(2)>*{width:100%!important;min-width:0!important}
-      body.vmms-page-dpr .mobile-title-action{margin:0!important;min-height:36px!important;padding:0 12px!important;font-size:13px!important}
+      body.vmms-page-dpr .mobile-title-action{margin:0!important;padding-left:12px!important;padding-right:12px!important;font-size:13px!important}
 
       /* Dashboard: date selection and export actions must never compete for one
          narrow row. The action pair receives its own balanced row. */
@@ -317,7 +329,7 @@ if (window.tailwind) {
         gap:8px!important;
         width:100%!important;
       }
-      body.vmms-page-dashboard .mobile-header-actions button{width:100%!important;min-height:40px!important;margin:0!important}
+      body.vmms-page-dashboard .mobile-header-actions button{width:100%!important;margin:0!important}
       /* Classic single-row headers have the back link/title directly inside. */
       body:not(.shell)>header>a:first-child{flex:0 0 12px!important;width:12px!important;margin:0!important}
       body:not(.shell)>header>a:first-child~div,body:not(.shell)>header>a:first-child~h1{min-width:0!important}

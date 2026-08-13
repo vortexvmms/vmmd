@@ -5,10 +5,10 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v9-ios-update-loop-fix';
+const CACHE = 'vcms-v10-mobile-control-height';
 const APP_SHELL = [
   './','home.html','attendance.html','request.html','whatsapp.html','dpr.html',
-  'css/app.css','js/config.js?v=20260813-5','js/auth.js?v=20260813-5','js/shell.js?v=20260813-5','icons/icon-192.png'
+  'css/app.css','js/config.js?v=20260813-6','js/auth.js?v=20260813-6','js/shell.js?v=20260813-6','icons/icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {
