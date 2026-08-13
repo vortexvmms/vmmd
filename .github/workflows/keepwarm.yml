@@ -1,11 +1,12 @@
 name: Keep backend warm
 
-# Pings the VMMS backend every ~10 minutes so Render's free tier
-# does not spin it down (it sleeps after ~15 min idle, and a cold
-# start otherwise makes the next page load take ~40 seconds).
+# Pings the VMMS backend every ~10 minutes from 06:00 to 23:30 SGT.
+# GitHub cron uses UTC: 22:00 UTC = 06:00 SGT the next day, and
+# 15:30 UTC = 23:30 SGT. Outside this window Render may sleep.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/10 22-23,0-14 * * *' # 06:00–22:50 SGT
+    - cron: '0,10,20,30 15 * * *'   # 23:00–23:30 SGT
   workflow_dispatch: {}   # allows a manual run from the Actions tab
 
 jobs:
