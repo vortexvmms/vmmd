@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.73.0")  # reconcile dashboard site and KPI hour totals
+app = FastAPI(title="VCMS API", version="0.74.0")  # DPR work-package lifecycle and pause/resume reminders
 
 app.add_middleware(
     CORSMiddleware,
@@ -3020,7 +3020,7 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
         _cache_put(user["token"], user)
         if not enabled:
             return {"enabled": False, "from": start, "to": end, "count": 0, "items": []}
-        ra, rr = await asyncio.gather(
+        ra, rr, rpj, rpa = await asyncio.gather(
             client.get(f"{REST}/allocations",
                 params={"status": "eq.allocated", "and": f"(work_date.gte.{start},work_date.lte.{end})",
                         "select": "work_date,site_id,sites(site_name)"},
@@ -3029,14 +3029,42 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                 params={"and": f"(report_date.gte.{start},report_date.lte.{end})",
                         "select": "report_date,site_id"},
                 headers=supabase_headers(user["token"])),
+            client.get(f"{REST}/dpr_projects",
+                params={"select": "id,site_id,start_date,actual_completion_date,cancelled_date,lifecycle_status,reminder_enabled,responsible_user_ids"},
+                headers=supabase_headers(user["token"])),
+            client.get(f"{REST}/dpr_project_pauses",
+                params={"select": "project_id,stop_date,resume_date"},
+                headers=supabase_headers(user["token"])),
         )
         alloc = ra.json() if ra.status_code == 200 else []
         reports = rr.json() if rr.status_code == 200 else []
+        lifecycle_projects = rpj.json() if rpj.status_code == 200 else []
+        pause_rows = rpa.json() if rpa.status_code == 200 else []
+        by_site, pauses_by_project = {}, {}
+        for p in lifecycle_projects:
+            if p.get("site_id"):
+                by_site.setdefault(p["site_id"], []).append(p)
+        for p in pause_rows:
+            pauses_by_project.setdefault(p.get("project_id"), []).append(p)
+
+        def site_requires_dpr(site_id, day):
+            projects = by_site.get(site_id, [])
+            # Preserve the established allocation-based rule until a Site has
+            # explicitly been placed under lifecycle control in the directory.
+            if not projects:
+                return True
+            for p in projects:
+                assigned = p.get("responsible_user_ids") or []
+                if assigned and user["user_id"] not in assigned:
+                    continue
+                if _project_working_on(p, day, pauses_by_project.get(p.get("id"), [])):
+                    return True
+            return False
         prepared = {(x.get("site_id"), x.get("report_date")) for x in reports}
         missing_map = {}
         for x in alloc:
             key = (x.get("site_id"), x.get("work_date"))
-            if key[0] and key[1] and key not in prepared:
+            if key[0] and key[1] and key not in prepared and site_requires_dpr(key[0], key[1]):
                 missing_map[key] = (x.get("sites") or {}).get("site_name") or "Site"
         if isinstance(selected_sites, list):
             selected = set(selected_sites)
@@ -3098,6 +3126,45 @@ class ProjectIn(BaseModel):
     site_id: str | None = None
 
 
+class ProjectLifecycleIn(ProjectIn):
+    project_code: str | None = None
+    client_contract: str | None = None
+    start_date: str | None = None
+    planned_completion_date: str | None = None
+    actual_completion_date: str | None = None
+    cancelled_date: str | None = None
+    lifecycle_status: str = "draft"
+    reminder_enabled: bool = True
+    responsible_user_ids: list[str] | None = None
+    remarks: str | None = None
+
+
+class ProjectPauseIn(BaseModel):
+    stop_date: str
+    expected_resume_date: str | None = None
+    reason: str | None = None
+
+
+class ProjectResumeIn(BaseModel):
+    resume_date: str
+
+
+def _project_working_on(project: dict, day: str, pauses: list[dict]) -> bool:
+    """Historical reminder eligibility; current status alone must not rewrite history."""
+    if project.get("lifecycle_status") in ("draft", "archived"):
+        return False
+    if project.get("start_date") and day < project["start_date"]:
+        return False
+    end = project.get("actual_completion_date") or project.get("cancelled_date")
+    if end and day > end:
+        return False
+    for pause in pauses:
+        if pause.get("stop_date") and day >= pause["stop_date"] and (
+                not pause.get("resume_date") or day < pause["resume_date"]):
+            return False
+    return bool(project.get("reminder_enabled", True))
+
+
 @app.get("/api/v1/dpr/projects")
 async def list_projects(user: dict = Depends(get_current_user)):
     if user["role"] not in DPR_ROLES:
@@ -3124,6 +3191,91 @@ async def add_project(body: ProjectIn, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500, detail=f"Could not save project ({r.status_code})")
         rows = r.json()
         return rows[0] if rows else {"ok": True}
+
+
+@app.post("/api/v1/dpr/project-directory", status_code=201)
+async def add_lifecycle_project(body: ProjectLifecycleIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can maintain the directory")
+    if not body.title.strip() or not body.site_id:
+        raise HTTPException(status_code=400, detail="Project name and site are required")
+    payload = body.dict()
+    payload["responsible_user_ids"] = payload.get("responsible_user_ids") or []
+    payload["title"] = body.title.strip()
+    payload["created_by"] = user["user_id"]
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/dpr_projects",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"}, json=payload)
+        if r.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail="Could not create work package. Run the lifecycle migration first.")
+        return (r.json() or [{"ok": True}])[0]
+
+
+@app.patch("/api/v1/dpr/project-directory/{project_id}")
+async def update_lifecycle_project(project_id: str, body: ProjectLifecycleIn,
+                                   user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can maintain the directory")
+    payload = body.dict()
+    payload["responsible_user_ids"] = payload.get("responsible_user_ids") or []
+    if body.lifecycle_status == "completed" and not body.actual_completion_date:
+        raise HTTPException(status_code=400, detail="Actual completion date is required")
+    if body.lifecycle_status == "cancelled" and not payload.get("cancelled_date"):
+        payload["cancelled_date"] = _sgt_today()
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    async with shared_client() as client:
+        r = await client.patch(f"{REST}/dpr_projects", params={"id": f"eq.{project_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"}, json=payload)
+        if r.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Could not update work package")
+        return (r.json() or [{"ok": True}])[0]
+
+
+@app.get("/api/v1/dpr/project-directory")
+async def lifecycle_project_directory(user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        rp, rh = await asyncio.gather(
+            client.get(f"{REST}/dpr_projects", params={"select": "*,sites(site_name)", "order": "title.asc"}, headers=supabase_headers(user["token"])),
+            client.get(f"{REST}/dpr_project_pauses", params={"select": "*", "order": "stop_date.desc"}, headers=supabase_headers(user["token"]))
+        )
+        projects = rp.json() if rp.status_code == 200 else []
+        histories = rh.json() if rh.status_code == 200 else []
+        for p in projects:
+            p["pause_history"] = [x for x in histories if x.get("project_id") == p.get("id")]
+        return projects
+
+
+@app.post("/api/v1/dpr/project-directory/{project_id}/stop")
+async def stop_lifecycle_project(project_id: str, body: ProjectPauseIn,
+                                 user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can stop a work package")
+    async with shared_client() as client:
+        open_pause = await client.get(f"{REST}/dpr_project_pauses", params={"project_id": f"eq.{project_id}", "resume_date": "is.null", "select": "id"}, headers=supabase_headers(user["token"]))
+        if open_pause.status_code == 200 and open_pause.json():
+            raise HTTPException(status_code=409, detail="This work package is already stopped")
+        r = await client.post(f"{REST}/dpr_project_pauses", headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            json={"project_id": project_id, "stop_date": body.stop_date, "expected_resume_date": body.expected_resume_date, "reason": body.reason, "stopped_by": user["user_id"]})
+        if r.status_code not in (200, 201, 204): raise HTTPException(status_code=500, detail="Could not stop work package")
+        await client.patch(f"{REST}/dpr_projects", params={"id": f"eq.{project_id}"}, headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"}, json={"lifecycle_status": "temporarily_stopped", "updated_at": datetime.now(timezone.utc).isoformat()})
+        return {"ok": True}
+
+
+@app.post("/api/v1/dpr/project-directory/{project_id}/resume")
+async def resume_lifecycle_project(project_id: str, body: ProjectResumeIn,
+                                   user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can resume a work package")
+    async with shared_client() as client:
+        ro = await client.get(f"{REST}/dpr_project_pauses", params={"project_id": f"eq.{project_id}", "resume_date": "is.null", "select": "id,stop_date", "order": "stop_date.desc", "limit": "1"}, headers=supabase_headers(user["token"]))
+        rows = ro.json() if ro.status_code == 200 else []
+        if not rows: raise HTTPException(status_code=409, detail="No open stoppage was found")
+        if body.resume_date < rows[0]["stop_date"]: raise HTTPException(status_code=400, detail="Resume date cannot be before stop date")
+        await client.patch(f"{REST}/dpr_project_pauses", params={"id": f"eq.{rows[0]['id']}"}, headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"}, json={"resume_date": body.resume_date, "resumed_by": user["user_id"], "updated_at": datetime.now(timezone.utc).isoformat()})
+        await client.patch(f"{REST}/dpr_projects", params={"id": f"eq.{project_id}"}, headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"}, json={"lifecycle_status": "active", "updated_at": datetime.now(timezone.utc).isoformat()})
+        return {"ok": True}
 
 
 @app.delete("/api/v1/dpr/projects/{project_id}")

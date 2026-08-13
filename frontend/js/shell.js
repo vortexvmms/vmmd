@@ -21,7 +21,7 @@
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
         full:null,
-        manager:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","reports.html","timesheet.html","settings.html","help.html"]),
+        manager:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","reports.html","timesheet.html","settings.html","help.html"]),
         supervisor:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","dpr.html","dprlist.html","pr-new.html","whatsapp.html","dashboard.html","reports.html","settings.html","help.html"]),
         payroll:new Set(["home.html","todo.html","schedule.html","verify.html","reports.html","timesheet.html","manhours.html","settings.html","help.html"]),
       };
@@ -41,7 +41,7 @@
           {items:[["Home","home.html","home"],["To-do","todo.html","chk"]]},
           {grp:"Manpower",items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]]},
           {grp:"Planning",items:[["Schedule","schedule.html","cal"],["Reports","reports.html","doc"]]},
-          {grp:"Site progress",items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
+          {grp:"Site progress",items:[["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
           {grp:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
           {grp:"More",items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]]} ];
         var allow = ALLOW[t];

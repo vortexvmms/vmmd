@@ -5,10 +5,10 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v11-ios-date-height';
+const CACHE = 'vcms-v12-dpr-lifecycle';
 const APP_SHELL = [
-  './','home.html','attendance.html','request.html','whatsapp.html','dpr.html',
-  'css/app.css','js/config.js?v=20260813-7','js/auth.js?v=20260813-7','js/shell.js?v=20260813-7','icons/icon-192.png'
+  './','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html',
+  'css/app.css','js/config.js?v=20260813-8','js/auth.js?v=20260813-8','js/shell.js?v=20260813-8','icons/icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {

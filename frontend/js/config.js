@@ -83,7 +83,7 @@ window.vmmsSetTheme = function (t) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260813-7', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260813-8', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -163,7 +163,7 @@ window.vmmsSetTheme = function (t) {
 
 // ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-7"; sh.defer = true;
+  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-8"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
 
