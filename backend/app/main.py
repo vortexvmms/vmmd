@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.74.0")  # DPR work-package lifecycle and pause/resume reminders
+app = FastAPI(title="VCMS API", version="0.75.0")  # resource summary uses attendance plus DPR details
 
 app.add_middleware(
     CORSMiddleware,
@@ -2866,32 +2866,82 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
 
     async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/daily_reports",
-            params={"site_id": f"eq.{site_id}",
-                    "and": f"(report_date.gte.{start},report_date.lte.{end})",
-                    "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
-                    "order": "report_date.asc"},
-            headers=supabase_headers(user["token"]))
+        r, ra = await asyncio.gather(
+            client.get(
+                f"{REST}/daily_reports",
+                params={"site_id": f"eq.{site_id}",
+                        "and": f"(report_date.gte.{start},report_date.lte.{end})",
+                        "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
+                        "order": "report_date.asc"},
+                headers=supabase_headers(user["token"])),
+            client.get(
+                f"{REST}/allocations",
+                params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
+                        "and": f"(work_date.gte.{start},work_date.lte.{end})",
+                        "select": "work_date,worker_id,workers(name,trade),attendance(present,normal_hours,ot_hours)",
+                        "order": "work_date.asc"},
+                headers=supabase_headers(user["token"]))
+        )
         reports = r.json() if r.status_code == 200 else []
+        allocation_rows = ra.json() if ra.status_code == 200 else []
 
     att, mp_pos, mats, plant = {}, {}, {}, {}
     manhours = {d: 0.0 for d in days}
     header = {"project_title": "", "location": "", "item_of_work": ""}
+    locations, items_of_work = [], []
+
+    # Attendance/manpower must come from the operational records, not only from
+    # prepared DPRs. This keeps the monthly resource sheet complete even if a
+    # DPR was missed or was prepared later.
+    attendance_workers_by_day = set()
+    attendance_days = set()
+    for row in allocation_rows:
+        attendance_row = row.get("attendance") or None
+        if not attendance_row or not attendance_row.get("present"):
+            continue
+        try:
+            d = int(row["work_date"].split("-")[2])
+        except Exception:
+            continue
+        worker = row.get("workers") or {}
+        name = (worker.get("name") or "").strip()
+        role = _rs_norm_role(worker.get("trade"))
+        hrs = float(attendance_row.get("normal_hours") or 0) + float(attendance_row.get("ot_hours") or 0)
+        if name:
+            a = att.setdefault(name, {"position": role, "days": {}, "total": 0.0})
+            a["days"][d] = a["days"].get(d, 0.0) + hrs
+            a["total"] += hrs
+            if role != "-":
+                a["position"] = role
+            attendance_workers_by_day.add((d, name.lower()))
+        p = mp_pos.setdefault(role, {"days": {}, "total": 0})
+        p["days"][d] = p["days"].get(d, 0) + 1
+        p["total"] += 1
+        manhours[d] += hrs
+        attendance_days.add(d)
 
     for rep in reports:
         try:
             d = int(rep["report_date"].split("-")[2])
         except Exception:
             continue
-        for k in header:
-            if not header[k] and rep.get(k):
-                header[k] = rep[k]
+        if not header["project_title"] and rep.get("project_title"):
+            header["project_title"] = rep["project_title"]
+        loc = " ".join((rep.get("location") or "").split())
+        item = " ".join((rep.get("item_of_work") or "").split())
+        if loc and loc.lower() not in [x.lower() for x in locations]:
+            locations.append(loc)
+        if item and item.lower() not in [x.lower() for x in items_of_work]:
+            items_of_work.append(item)
         for w in (rep.get("manpower") or []):
             name = (w.get("name") or "").strip()
             role = _rs_norm_role(w.get("role"))
             hrs = float(w.get("total") or 0)
             no = int(w.get("no") or 1)
+            # Operational attendance above is authoritative. Keep only DPR-only
+            # entries such as PM/CM/visitors who have no worker allocation.
+            if name and (d, name.lower()) in attendance_workers_by_day:
+                continue
             if name:
                 a = att.setdefault(name, {"position": role, "days": {}, "total": 0.0})
                 a["days"][d] = a["days"].get(d, 0.0) + hrs
@@ -2921,6 +2971,9 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             mm = mats.setdefault(key, {"name": name, "unit": unit, "days": {}, "total": 0.0})
             mm["days"][d] = mm["days"].get(d, 0.0) + qty
             mm["total"] += qty
+
+    header["location"] = " / ".join(locations)
+    header["item_of_work"] = " / ".join(items_of_work)
 
     def daymap(dd):
         return {str(k): _rs_clean(v) for k, v in dd.items() if v}
@@ -2957,6 +3010,8 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         "month": month, "days": days, "weekdays": weekdays,
         "month_label": f"{calendar.month_name[m].upper()} {y}",
         "header": header, "report_count": len(reports),
+        "attendance_day_count": len(attendance_days),
+        "has_data": bool(reports or attendance_days),
         "attendance": attendance,
         "manpower": {"rows": manpower, "daily_total": mp_daily, "total": mp_daily_total,
                      "manhours": manhours_row, "manhours_total": manhours_total},
