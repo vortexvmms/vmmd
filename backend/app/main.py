@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.76.0")  # resource roll-up diagnostics
+app = FastAPI(title="VCMS API", version="0.76.1")  # work-package summary headers
 
 app.add_middleware(
     CORSMiddleware,
@@ -2921,6 +2921,16 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                 for row in rf.json():
                     if row.get("id") in by_id:
                         by_id[row["id"]][field] = row.get(field) or []
+        # The Resource Summary header must use the controlled Work Package
+        # directory value, not the varying free-text location saved in each DPR.
+        rp = await client.get(
+            f"{REST}/dpr_projects",
+            params={"site_id": f"eq.{site_id}",
+                    "select": "location,item_of_work,title,updated_at",
+                    "order": "updated_at.desc"},
+            headers=rollup_headers)
+        project_rows = rp.json() if rp.status_code == 200 else []
+
         allocation_rows, attendance_by_allocation = [], {}
         # DPR manpower is already a complete prepared resource record. Only use
         # attendance as a fallback when the whole month has no DPRs (for example
@@ -3040,8 +3050,14 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             mm["days"][d] = mm["days"].get(d, 0.0) + qty
             mm["total"] += qty
 
-    header["location"] = " / ".join(locations)
-    header["item_of_work"] = " / ".join(items_of_work)
+    # Prefer the matching work package. A site may have more than one historical
+    # package, so match its Item of Work first and use the latest as fallback.
+    wanted_items = {x.lower() for x in items_of_work}
+    project = next((p for p in project_rows
+                    if " ".join((p.get("item_of_work") or "").split()).lower() in wanted_items),
+                   project_rows[0] if project_rows else None)
+    header["location"] = ((project or {}).get("location") or " / ".join(locations)).strip()
+    header["item_of_work"] = ((project or {}).get("item_of_work") or " / ".join(items_of_work)).strip()
 
     def daymap(dd):
         return {str(k): _rs_clean(v) for k, v in dd.items() if v}
