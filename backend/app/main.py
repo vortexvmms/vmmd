@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.72.1")  # complete monthly leave leaderboard
+app = FastAPI(title="VCMS API", version="0.72.2")  # reconcile dashboard site and KPI hour totals
 
 app.add_middleware(
     CORSMiddleware,
@@ -1921,7 +1921,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         scoped = user["role"] in SUPERVISOR_ROLES
 
         rs = await client.get(f"{REST}/sites",
-                              params={"status": "eq.active", "select": "id,site_name"},
+                              params={"select": "id,site_name,status"},
                               headers=supabase_headers(user["token"]))
         sites = rs.json() if rs.status_code == 200 else []
 
@@ -2010,11 +2010,19 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         # Backward-compatible fields = the evening (end-time) view
         pending, completed = evening_pending, evening_completed
 
-        summary = [{"site_name": s["site_name"],
-                    "today": today_by_site.get(s["site_name"], {}).get("allocated", 0),
-                    "month_nh": round(site_month.get(s["site_name"], {}).get("nh", 0), 1),
-                    "month_ot": round(site_month.get(s["site_name"], {}).get("ot", 0), 1)}
-                   for s in sites]
+        # Include inactive/historical sites that recorded hours earlier in the
+        # selected month. Otherwise KPI totals include those hours while the
+        # site table silently omits them, making the two totals disagree.
+        site_state = {s["site_name"]: s.get("status") == "active" for s in sites}
+        summary_names = list(dict.fromkeys(
+            [s["site_name"] for s in sites if s.get("status") == "active"]
+            + list(site_month.keys()) + list(today_by_site.keys())))
+        summary = [{"site_name": name,
+                    "site_active": site_state.get(name, False),
+                    "today": today_by_site.get(name, {}).get("allocated", 0),
+                    "month_nh": round(site_month.get(name, {}).get("nh", 0), 1),
+                    "month_ot": round(site_month.get(name, {}).get("ot", 0), 1)}
+                   for name in summary_names]
 
         # leave leaderboard — most total leave days this month (MC + AL + UL)
         leave_leaders = sorted(
@@ -2027,7 +2035,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             "total_workers": (sum(t["allocated"] for t in today_by_site.values())
                               if scoped else sum(1 for w in workers if w["status"] == "active")),
             "on_leave": 0 if scoped else sum(1 for w in workers if w["status"] == "on_leave"),
-            "total_sites": len(sites),
+            "total_sites": sum(1 for s in sites if s.get("status") == "active"),
             "today_allocated": sum(t["allocated"] for t in today_by_site.values()),
             "today_mc": today_mc,
             "today_al": today_al,
