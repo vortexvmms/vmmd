@@ -187,6 +187,13 @@
             <div class="panel" style="overflow:auto">
               <table class="dt"><thead><tr><th>Site</th><th class="r">Workers</th><th class="r">Normal h</th><th class="r">OT h</th><th class="dt-desktop-status" style="display:none">Status</th></tr></thead><tbody id="sites"></tbody><tfoot id="sites-foot"></tfoot></table>
             </div>
+            <div class="desktop-only">
+              <div class="SECT" style="margin-top:14px">LEAVE · MONTH TO DATE (MC / AL / UL)</div>
+              <div class="panel" style="overflow:auto">
+                <table class="dt"><thead><tr><th>Worker</th><th class="r">MC</th><th class="r">AL</th><th class="r">UL</th><th class="r">Total</th></tr></thead><tbody id="home-leave-leaders"></tbody></table>
+                <p id="home-leave-empty" style="display:none;text-align:center;color:#9CA3AF;padding:16px;font-size:13px">No MC / AL / UL recorded this month.</p>
+              </div>
+            </div>
           </div>
           <div>
             <div class="tasks">
@@ -417,6 +424,9 @@
         document.getElementById("sites").innerHTML=ss.map(s=>{const wait=pmp.includes(s.site_name)||pep.includes(s.site_name);return `<tr><td style="font-weight:600;color:#111827">${esc(s.site_name)}</td><td class="r">${s.today}</td><td class="r">${s.month_nh}</td><td class="r" style="${s.month_ot>0?'color:#A32D2D;font-weight:700':''}">${s.month_ot}</td><td class="dt-desktop-status" style="display:none"><span class="site-status ${wait?'wait':'ok'}">${wait?'Previous update pending':'On track'}</span></td></tr>`}).join("");
         const tDay=ss.reduce((a,s)=>a+s.today,0), tNh=ss.reduce((a,s)=>a+s.month_nh,0), tOt=ss.reduce((a,s)=>a+s.month_ot,0);
         document.getElementById("sites-foot").innerHTML=`<tr style="font-weight:800;background:#F8FAFC"><td>Total</td><td class="r">${tDay}</td><td class="r">${Math.round(tNh*10)/10}</td><td class="r">${Math.round(tOt*10)/10}</td><td class="dt-desktop-status" style="display:none"></td></tr>`;
+        const ll=d.leave_leaders||[], leaveBody=document.getElementById("home-leave-leaders"), leaveEmpty=document.getElementById("home-leave-empty");
+        if(leaveBody)leaveBody.innerHTML=ll.map((w,i)=>`<tr><td style="font-weight:600;color:#111827">${i+1}. ${esc(w.name)} <span style="font-size:11px;color:#9CA3AF">${esc(w.code)}</span></td><td class="r" style="${w.mc?'color:#B45309;font-weight:700':'color:#9CA3AF'}">${w.mc}</td><td class="r" style="${w.al?'color:#0369A1;font-weight:700':'color:#9CA3AF'}">${w.al}</td><td class="r" style="${w.ul?'color:#C2410C;font-weight:700':'color:#9CA3AF'}">${w.ul}</td><td class="r" style="font-weight:800">${w.total}</td></tr>`).join("");
+        if(leaveEmpty)leaveEmpty.style.display=ll.length?"none":"block";
       } else { document.getElementById("kpis").innerHTML='<p style="color:#9CA3AF">Manpower dashboard unavailable.</p>'; }
     }
     async function loadTasks(){

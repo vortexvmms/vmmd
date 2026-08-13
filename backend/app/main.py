@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.72.0")  # desktop Workers management layout
+app = FastAPI(title="VCMS API", version="0.72.1")  # complete monthly leave leaderboard
 
 app.add_middleware(
     CORSMiddleware,
@@ -2019,7 +2019,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         # leave leaderboard — most total leave days this month (MC + AL + UL)
         leave_leaders = sorted(
             ({**v, "total": v["mc"] + v["al"] + v["ul"]} for v in leave_by_worker.values()),
-            key=lambda x: (-x["total"], x["name"]))[:15]
+            key=lambda x: (-x["total"], x["name"]))
 
         return {
             "date": today,
