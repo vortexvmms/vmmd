@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.4")  # DPR-first resource summary with attendance fallback
+app = FastAPI(title="VCMS API", version="0.75.5")  # authorized server-side resource roll-up
 
 app.add_middleware(
     CORSMiddleware,
@@ -2866,13 +2866,22 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
 
     async with shared_client() as client:
+        # Confirm this signed-in user can see the requested site, then use the
+        # server-only key for the heavy monthly roll-up. This avoids expensive
+        # per-row RLS evaluation that was timing out on the free database tier.
+        access = await client.get(
+            f"{REST}/sites", params={"id": f"eq.{site_id}", "select": "id"},
+            headers=supabase_headers(user["token"]))
+        if access.status_code != 200 or not access.json():
+            raise HTTPException(status_code=403, detail="Site not available to this user")
+        rollup_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         r = await client.get(
                 f"{REST}/daily_reports",
                 params={"site_id": f"eq.{site_id}",
                         "and": f"(report_date.gte.{start},report_date.lte.{end})",
                         "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
                         "order": "report_date.asc"},
-                headers=supabase_headers(user["token"]))
+                headers=rollup_headers)
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load Resource Summary DPR data")
         reports = r.json()
@@ -2887,7 +2896,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                         "and": f"(work_date.gte.{start},work_date.lte.{end})",
                         "select": "id,work_date,worker_id,workers(name,trade)",
                         "order": "work_date.asc"},
-                headers=supabase_headers(user["token"]))
+                headers=rollup_headers)
             if ra.status_code != 200:
                 raise HTTPException(status_code=500, detail="Could not load Resource Summary allocation data")
             allocation_rows = ra.json()
@@ -2897,7 +2906,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                     f"{REST}/attendance",
                     params={"allocation_id": f"in.({','.join(ids)})",
                             "select": "allocation_id,present,normal_hours,ot_hours"},
-                    headers=supabase_headers(user["token"]))
+                    headers=rollup_headers)
                 if ratt.status_code != 200:
                     raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
                 attendance_by_allocation = {x["allocation_id"]: x for x in ratt.json()}
