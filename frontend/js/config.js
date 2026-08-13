@@ -82,7 +82,7 @@ window.vmmsSetTheme = function (t) {
 // ---- Friendly PWA update notice; never auto-reload a form being edited ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').then(function(reg){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=20260813-4', { updateViaCache: 'none' }).then(function(reg){
     reg.update().catch(function(){});
     reg.addEventListener('updatefound',function(){var nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',function(){
       if(nw.state==='installed'&&navigator.serviceWorker.controller&&!document.getElementById('vmms-update')){
@@ -148,7 +148,7 @@ window.vmmsSetTheme = function (t) {
 
 // ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js"; sh.defer = true;
+  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-4"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
 
