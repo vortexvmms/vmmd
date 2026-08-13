@@ -15,6 +15,7 @@
     #att-kpis{display:none}
     .att-filters{display:flex;gap:7px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}.att-filters::-webkit-scrollbar{display:none}.att-filter{flex:none;border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800}.att-filter.on{background:#252b35;color:#fff;border-color:#252b35}
     .save-state{min-width:62px;text-align:right}.worker-saving{pointer-events:none;opacity:.72}
+    #sync-state{position:fixed;right:12px;bottom:88px;z-index:35;border-radius:999px;padding:8px 12px;background:#1f2937;color:#fff;font-size:12px;font-weight:800;box-shadow:0 5px 18px rgba(0,0,0,.2)}#sync-state.ok{background:#15803d}#sync-state.warn{background:#b45309}#sync-state.err{background:#b91c1c}
     @media(min-width:900px){
       body{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
       body>header>div{max-width:none!important;width:100%!important}
@@ -133,6 +134,7 @@
   </div>
 
   <div id="toast" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="sync-state" class="hidden" aria-live="polite"></div>
 
   <script>
     requireLogin();
@@ -140,6 +142,14 @@
     let ME = null, ROWS = [], ALL_ROWS = [], SITES = [];
     const SEL = new Set();   // allocation_ids selected for a group end-time apply
     let ATT_FILTER = "all";
+    const SAVE_QUEUE = new Map();
+    let SAVE_TIMER = null, SAVE_RUNNING = false;
+
+    function syncState(text, kind=""){
+      const el=document.getElementById("sync-state");
+      if(!text){el.className="hidden";el.textContent="";return;}
+      el.className=kind||"";el.textContent=text;
+    }
 
     // [value, label, endsNextDay]  — 12AM is midnight of the NEXT day
     const PRESETS = [["12:00", "12PM", false], ["16:00", "4PM", false], ["17:00", "5PM", false], ["18:00", "6PM", false],
@@ -346,43 +356,34 @@
       x._saving = true;
       x._saved = false;
       render();                                // instant feedback
-      try {
-        const opts = {
-          method: "PATCH",
-          body: JSON.stringify({ allocation_id: x.allocation_id, ...changes, edit_reason: reason }),
-        };
-        const r = await vmmsApi("/api/v1/attendance/mark", opts);
-        const data = await r.json().catch(()=>({}));
-        if (!r.ok) throw new Error(data.detail || "Could not save");
-        x.normal_hours = data.normal_hours;   // authoritative hours from server
-        x.ot_hours = data.ot_hours;
-        x.day_type = data.day_type;
-        x._saving = false;
-        x._saved = true;
+      const old=SAVE_QUEUE.get(x.allocation_id);
+      SAVE_QUEUE.set(x.allocation_id,{x,changes:{...(old?.changes||{}),...changes,allocation_id:x.allocation_id,edit_reason:reason},prev:old?.prev||prev});
+      syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} pending`,"warn");
+      clearTimeout(SAVE_TIMER); SAVE_TIMER=setTimeout(flushSaves,450);
+    }
+
+    async function flushSaves(){
+      SAVE_TIMER=null;
+      if(SAVE_RUNNING||!SAVE_QUEUE.size)return;
+      SAVE_RUNNING=true;
+      const batch=[...SAVE_QUEUE.values()]; SAVE_QUEUE.clear();
+      syncState(`Syncing ${batch.length} change${batch.length===1?"":"s"}…`);
+      try{
+        const r=await vmmsApi("/api/v1/attendance/batch",{method:"POST",body:JSON.stringify({changes:batch.map(q=>q.changes)})});
+        const data=await r.json().catch(()=>({}));
+        if(!r.ok)throw new Error(data.detail||"Could not sync");
+        const resultMap=new Map((data.results||[]).map(v=>[v.allocation_id,v]));
+        let failed=0;
+        batch.forEach(q=>{const d=resultMap.get(q.x.allocation_id);if(d?.ok){q.x.normal_hours=d.normal_hours;q.x.ot_hours=d.ot_hours;q.x.day_type=d.day_type;q.x._saving=false;q.x._saved=true;}else{Object.assign(q.x,q.prev);q.x._saving=false;failed++;}});
         render();
-        toast("✓ Saved", false, true);        // green confirmation
-        setTimeout(()=>{x._saved=false;render();},1400);
-      } catch (ex) {
-        // The write may have reached the database even if the response was
-        // interrupted. Verify twice before claiming that the save failed;
-        // mobile networks can need a moment before the fresh row is visible.
-        let verified=null;
-        for(let attempt=0;attempt<2&&!verified;attempt++){
-          if(attempt) await new Promise(resolve=>setTimeout(resolve,1200));
-          try{
-            const date=document.getElementById("date").value;
-            const site=document.getElementById("site").value;
-            const vr=await vmmsApi(`/api/v1/attendance?date=${date}&site_id=${encodeURIComponent(site)}`);
-            if(vr.ok){const all=await vr.json();const got=all.find(a=>a.allocation_id===x.allocation_id);
-              const sameEnd=changes.end_time===undefined||((got&&got.end_time)||null)===changes.end_time;
-              const samePresent=changes.present===undefined||!!(got&&got.present)===!!changes.present;
-              if(got&&sameEnd&&samePresent) verified=got;
-            }
-          }catch(_){ }
-        }
-        if(verified){Object.assign(x,verified);x._saving=false;x._saved=true;render();toast("✓ Saved and verified",false,true);setTimeout(()=>{x._saved=false;render();},1400);}
-        else{Object.assign(x,prev);x._saving=false;render();toast("Could not confirm the save — check your connection and try again",true);}
-      }
+        if(failed)syncState(`${failed} change${failed===1?"":"s"} need retry`,"err");
+        else{syncState("All changes saved ✓","ok");setTimeout(()=>{if(!SAVE_QUEUE.size)syncState("");},1800);}
+        setTimeout(()=>{batch.forEach(q=>q.x._saved=false);render();},1600);
+      }catch(ex){
+        batch.forEach(q=>SAVE_QUEUE.set(q.x.allocation_id,q));
+        syncState(`Connection weak — ${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} waiting`,"err");
+        SAVE_TIMER=setTimeout(flushSaves,5000);
+      }finally{SAVE_RUNNING=false;if(SAVE_QUEUE.size&&!SAVE_TIMER)SAVE_TIMER=setTimeout(flushSaves,500);}
     }
 
     async function presentAll() {

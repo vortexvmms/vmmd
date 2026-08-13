@@ -102,8 +102,8 @@ function _wakeShow() {
     document.head.appendChild(st);
     _wakeEl = document.createElement("div");
     _wakeEl.id = "vmms-wake";
-    _wakeEl.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#C00000;color:#fff;font:600 14px/1.4 system-ui,-apple-system,sans-serif;padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 -2px 12px rgba(0,0,0,.18)";
-    _wakeEl.innerHTML = '<span style="flex:none;display:inline-block;width:16px;height:16px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vmmsspin .8s linear infinite"></span><span>Waking up the server… the first load can take up to a minute. Please wait.</span>';
+    _wakeEl.style.cssText = "position:fixed;right:12px;bottom:88px;z-index:99999;background:#1f2937;color:#fff;font:700 12px/1.2 system-ui,-apple-system,sans-serif;padding:9px 12px;border-radius:999px;display:flex;align-items:center;gap:8px;box-shadow:0 5px 18px rgba(0,0,0,.22);max-width:calc(100vw - 24px)";
+    _wakeEl.innerHTML = '<span style="flex:none;display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vmmsspin .8s linear infinite"></span><span>Connecting…</span>';
     (document.body || document.documentElement).appendChild(_wakeEl);
   }
   _wakeEl.style.display = "flex";

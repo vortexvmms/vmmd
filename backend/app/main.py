@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.76.2")  # fast supervisor end-time saves
+app = FastAPI(title="VCMS API", version="0.77.0")  # queued mobile attendance saves
 
 app.add_middleware(
     CORSMiddleware,
@@ -1214,6 +1214,10 @@ class AttendanceMark(BaseModel):
     edit_reason: str | None = None
 
 
+class AttendanceBatchIn(BaseModel):
+    changes: list[AttendanceMark]
+
+
 class BulkEnd(BaseModel):
     work_date: str
     site_id: str
@@ -1396,6 +1400,29 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             except Exception:
                 pass
         return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
+
+
+@app.post("/api/v1/attendance/batch")
+async def attendance_batch(body: AttendanceBatchIn, user: dict = Depends(get_current_user)):
+    """Save a small mobile tap burst through one browser request.
+
+    Each row still passes the existing authorization, locking, hours and audit
+    rules in mark_attendance; the speed gain is removal of repeated phone↔Render
+    network round trips. A failed row is returned without losing successful rows.
+    """
+    if user["role"] not in ATTENDANCE_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if not body.changes or len(body.changes) > 100:
+        raise HTTPException(status_code=400, detail="Send between 1 and 100 attendance changes")
+    results = []
+    for change in body.changes:
+        try:
+            saved = await mark_attendance(change, user)
+            results.append({"allocation_id": change.allocation_id, "ok": True, **saved})
+        except HTTPException as exc:
+            results.append({"allocation_id": change.allocation_id, "ok": False,
+                            "detail": str(exc.detail), "status": exc.status_code})
+    return {"ok": all(x["ok"] for x in results), "results": results}
 
 
 async def recompute_worker_day(client, token, work_date: str, worker_id: str,
