@@ -83,7 +83,7 @@ window.vmmsSetTheme = function (t) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260813-6', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260813-7', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -163,7 +163,7 @@ window.vmmsSetTheme = function (t) {
 
 // ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-6"; sh.defer = true;
+  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-7"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
 
@@ -288,7 +288,30 @@ if (window.tailwind) {
       body:not(.shell)>header input[type=date],body:not(.shell)>header select{
         min-width:0!important;
         height:44px!important;
+        min-height:44px!important;
+        max-height:44px!important;
+        box-sizing:border-box!important;
+        padding-top:0!important;
+        padding-bottom:0!important;
+        line-height:42px!important;
         margin:0!important;
+      }
+      /* iOS Safari gives date controls a larger native intrinsic height unless
+         the internal date-edit field is constrained as well. */
+      body:not(.shell)>header input[type=date]{
+        -webkit-appearance:none!important;
+        appearance:none!important;
+        padding-left:12px!important;
+        padding-right:12px!important;
+        border-radius:8px!important;
+      }
+      body:not(.shell)>header input[type=date]::-webkit-date-and-time-value{
+        min-height:0!important;
+        height:42px!important;
+        line-height:42px!important;
+        padding:0!important;
+        margin:0!important;
+        text-align:center!important;
       }
       body:not(.shell)>header button,
       body:not(.shell)>header a.mobile-title-action{
