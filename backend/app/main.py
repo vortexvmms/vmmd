@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.77.0")  # queued mobile attendance saves
+app = FastAPI(title="VCMS API", version="0.77.1")  # site update wording
 
 app.add_middleware(
     CORSMiddleware,
@@ -1763,7 +1763,7 @@ def format_update_message(work_date: str, site_name: str, supervisor: str,
     d = date_cls.fromisoformat(work_date)
     lines = [f"*SITE: {site_name.upper()}*",
              f"*DATE: {d.day:02d}/{d.month:02d}/{d.year}*",
-             f"*SUPERVISOR: {supervisor.upper()}*",
+             f"*REPORTED BY: {supervisor.upper()}*",
              ""]
     n = 0
     for r in rows:
