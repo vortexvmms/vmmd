@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.3")  # compatible resource-summary attendance fetch
+app = FastAPI(title="VCMS API", version="0.75.4")  # DPR-first resource summary with attendance fallback
 
 app.add_middleware(
     CORSMiddleware,
@@ -2866,37 +2866,41 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
 
     async with shared_client() as client:
-        r, ra = await asyncio.gather(
-            client.get(
+        r = await client.get(
                 f"{REST}/daily_reports",
                 params={"site_id": f"eq.{site_id}",
                         "and": f"(report_date.gte.{start},report_date.lte.{end})",
                         "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
                         "order": "report_date.asc"},
-                headers=supabase_headers(user["token"])),
-            client.get(
+                headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load Resource Summary DPR data")
+        reports = r.json()
+        allocation_rows, attendance_by_allocation = [], {}
+        # DPR manpower is already a complete prepared resource record. Only use
+        # attendance as a fallback when the whole month has no DPRs (for example
+        # the completed DLP job on 08/08). This keeps normal report generation fast.
+        if not reports:
+            ra = await client.get(
                 f"{REST}/allocations",
                 params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
                         "and": f"(work_date.gte.{start},work_date.lte.{end})",
                         "select": "id,work_date,worker_id,workers(name,trade)",
                         "order": "work_date.asc"},
                 headers=supabase_headers(user["token"]))
-        )
-        if r.status_code != 200 or ra.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not load Resource Summary source data")
-        reports = r.json()
-        allocation_rows = ra.json()
-        attendance_by_allocation = {}
-        ids = [x.get("id") for x in allocation_rows if x.get("id")]
-        if ids:
-            ratt = await client.get(
-                f"{REST}/attendance",
-                params={"allocation_id": f"in.({','.join(ids)})",
-                        "select": "allocation_id,present,normal_hours,ot_hours"},
-                headers=supabase_headers(user["token"]))
-            if ratt.status_code != 200:
-                raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
-            attendance_by_allocation = {x["allocation_id"]: x for x in ratt.json()}
+            if ra.status_code != 200:
+                raise HTTPException(status_code=500, detail="Could not load Resource Summary allocation data")
+            allocation_rows = ra.json()
+            ids = [x.get("id") for x in allocation_rows if x.get("id")]
+            if ids:
+                ratt = await client.get(
+                    f"{REST}/attendance",
+                    params={"allocation_id": f"in.({','.join(ids)})",
+                            "select": "allocation_id,present,normal_hours,ot_hours"},
+                    headers=supabase_headers(user["token"]))
+                if ratt.status_code != 200:
+                    raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
+                attendance_by_allocation = {x["allocation_id"]: x for x in ratt.json()}
 
     att, mp_pos, mats, plant = {}, {}, {}, {}
     manhours = {d: 0.0 for d in days}
