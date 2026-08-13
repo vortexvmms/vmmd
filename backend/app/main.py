@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.76.1")  # work-package summary headers
+app = FastAPI(title="VCMS API", version="0.76.2")  # fast supervisor end-time saves
 
 app.add_middleware(
     CORSMiddleware,
@@ -1349,8 +1349,13 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         # split-day: if this worker worked at more than one site today,
         # recalculate the whole day so the 8-hour normal quota is applied once
         try:
-            res = await recompute_worker_day(client, user["token"],
-                                             alloc["work_date"], alloc["worker_id"], day_type)
+            # This is only a secondary split-site adjustment. Never let a slow
+            # RLS query hold the phone's save response until the mobile network
+            # gives up; the attendance row above is already safely committed.
+            res = await asyncio.wait_for(
+                recompute_worker_day(client, user["token"],
+                                     alloc["work_date"], alloc["worker_id"], day_type),
+                timeout=1.5)
             if res:
                 normal, ot = res.get(body.allocation_id, (normal, ot))
         except Exception:
@@ -1360,9 +1365,11 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             pass
 
         try:
-            await audit(client, user, "mark_attendance", "attendance", body.allocation_id,
-                        {k: att.get(k) for k in ("present", "end_time")} if att else None,
-                        {"present": present, "end_time": end, "normal": normal, "ot": ot})
+            await asyncio.wait_for(
+                audit(client, user, "mark_attendance", "attendance", body.allocation_id,
+                      {k: att.get(k) for k in ("present", "end_time")} if att else None,
+                      {"present": present, "end_time": end, "normal": normal, "ot": ot}),
+                timeout=1.0)
         except Exception:
             pass
 

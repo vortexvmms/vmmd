@@ -364,16 +364,22 @@
         setTimeout(()=>{x._saved=false;render();},1400);
       } catch (ex) {
         // The write may have reached the database even if the response was
-        // interrupted. Verify once before claiming that the save failed.
+        // interrupted. Verify twice before claiming that the save failed;
+        // mobile networks can need a moment before the fresh row is visible.
         let verified=null;
-        try{
-          const vr=await vmmsApi(`/api/v1/attendance?date=${document.getElementById("date").value}`);
-          if(vr.ok){const all=await vr.json();const got=all.find(a=>a.allocation_id===x.allocation_id);
-            const sameEnd=changes.end_time===undefined||((got&&got.end_time)||null)===changes.end_time;
-            const samePresent=changes.present===undefined||!!(got&&got.present)===!!changes.present;
-            if(got&&sameEnd&&samePresent) verified=got;
-          }
-        }catch(_){ }
+        for(let attempt=0;attempt<2&&!verified;attempt++){
+          if(attempt) await new Promise(resolve=>setTimeout(resolve,1200));
+          try{
+            const date=document.getElementById("date").value;
+            const site=document.getElementById("site").value;
+            const vr=await vmmsApi(`/api/v1/attendance?date=${date}&site_id=${encodeURIComponent(site)}`);
+            if(vr.ok){const all=await vr.json();const got=all.find(a=>a.allocation_id===x.allocation_id);
+              const sameEnd=changes.end_time===undefined||((got&&got.end_time)||null)===changes.end_time;
+              const samePresent=changes.present===undefined||!!(got&&got.present)===!!changes.present;
+              if(got&&sameEnd&&samePresent) verified=got;
+            }
+          }catch(_){ }
+        }
         if(verified){Object.assign(x,verified);x._saving=false;x._saved=true;render();toast("✓ Saved and verified",false,true);setTimeout(()=>{x._saved=false;render();},1400);}
         else{Object.assign(x,prev);x._saving=false;render();toast("Could not confirm the save — check your connection and try again",true);}
       }
