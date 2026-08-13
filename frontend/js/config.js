@@ -163,7 +163,7 @@ window.vmmsSetTheme = function (t) {
 
 // ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
 (function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-4"; sh.defer = true;
+  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-5"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
 
