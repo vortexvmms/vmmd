@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v6-mobile-headers';
+const CACHE = 'vcms-v7-mobile-header-structure';
 const APP_SHELL = [
   './','home.html','attendance.html','request.html','whatsapp.html','dpr.html',
   'css/app.css','js/config.js','js/auth.js','js/shell.js','icons/icon-192.png'

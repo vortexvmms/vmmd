@@ -275,6 +275,34 @@ if (window.tailwind) {
         height:44px!important;
         margin:0!important;
       }
+      body.vmms-page-request>header>div:nth-child(2),
+      body.vmms-page-attendance>header>div:nth-child(2),
+      body.vmms-page-dpr>header>div:nth-child(2){
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+        gap:8px!important;
+      }
+      body.vmms-page-request>header>div:nth-child(2)>*,
+      body.vmms-page-attendance>header>div:nth-child(2)>*,
+      body.vmms-page-dpr>header>div:nth-child(2)>*{width:100%!important;min-width:0!important}
+      body.vmms-page-dpr .mobile-title-action{margin:0!important;min-height:36px!important;padding:0 12px!important;font-size:13px!important}
+
+      /* Dashboard: date selection and export actions must never compete for one
+         narrow row. The action pair receives its own balanced row. */
+      body.vmms-page-dashboard .mobile-header-controls{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) auto!important;
+        gap:8px!important;
+      }
+      body.vmms-page-dashboard .mobile-header-controls>#date{width:100%!important}
+      body.vmms-page-dashboard .mobile-header-actions{
+        grid-column:1/-1!important;
+        display:grid!important;
+        grid-template-columns:1fr 1fr!important;
+        gap:8px!important;
+        width:100%!important;
+      }
+      body.vmms-page-dashboard .mobile-header-actions button{width:100%!important;min-height:40px!important;margin:0!important}
       /* Classic single-row headers have the back link/title directly inside. */
       body:not(.shell)>header>a:first-child{flex:0 0 12px!important;width:12px!important;margin:0!important}
       body:not(.shell)>header>a:first-child~div,body:not(.shell)>header>a:first-child~h1{min-width:0!important}
