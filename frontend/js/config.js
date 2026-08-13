@@ -218,9 +218,16 @@ if (window.tailwind) {
 
     /* iPhone home-indicator / browser toolbar clearance for fixed action bars. */
     @media(max-width:899px){
+      html,body{max-width:100%;overflow-x:hidden}
+      *,*::before,*::after{box-sizing:border-box}
       body{padding-bottom:env(safe-area-inset-bottom,0px)}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
+      body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
+      body.vmms-page-workers #list>*,body.vmms-page-worker-cards #wlist>*{content-visibility:auto;contain-intrinsic-size:auto 96px}
+      body.vmms-page-users input[type=checkbox]{width:22px!important;height:22px!important}
+      body.vmms-page-users select,body.vmms-page-users button,body.vmms-page-settings button{min-height:40px}
+      body.vmms-page-pr-dashboard .pbtn{min-height:40px;display:inline-flex;align-items:center;justify-content:center}
       /* Let Safari skip painting worker cards far outside the viewport. */
       body.vmms-page-attendance #list>*,body.vmms-page-request #list>*,body.vmms-page-allocation #list>*{
         content-visibility:auto;contain-intrinsic-size:auto 92px

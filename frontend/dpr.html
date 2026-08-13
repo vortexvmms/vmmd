@@ -21,6 +21,7 @@
     .grid2 { display:grid; grid-template-columns:1fr; gap:12px; }
     @media (min-width:640px){ .grid3{grid-template-columns:1fr 1fr 1fr;} .grid2{grid-template-columns:1fr 1fr;} }
     .tblwrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    @media(max-width:899px){.tblwrap{max-width:100%;border-radius:8px}.tblwrap .edt{min-width:640px}.tblwrap .edt th:first-child,.tblwrap .edt td:first-child{position:sticky;left:0;background:#fff;z-index:2}.tblwrap .edt thead th:first-child{background:#F8FAFC;z-index:3}.addbtn{min-height:40px}}
     table.edt { border-collapse:collapse; width:100%; min-width:640px; font-size:13px; }
     table.edt th { background:#F9FAFB; color:#6B7280; font-size:11px; text-transform:uppercase; letter-spacing:.03em; padding:8px 6px; text-align:left; border-bottom:1px solid #E5E7EB; }
     table.edt td { padding:5px 6px; border-bottom:1px solid #F1F1F1; }
@@ -216,7 +217,7 @@
       <label class="lbl">Prepared-by signature</label>
       <div class="sigbox">
         <canvas id="sigpad" class="sigpad"></canvas>
-        <img id="sigimg" class="sigimg hidden" crossorigin="anonymous">
+        <img id="sigimg" class="sigimg hidden" crossorigin="anonymous" alt="Prepared by signature">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
         <button type="button" class="addbtn" onclick="sigUseDrawing()">Use drawing</button>
