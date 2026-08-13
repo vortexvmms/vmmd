@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.8")  # reliable resource roll-up connection
+app = FastAPI(title="VCMS API", version="0.75.9")  # lightweight resource roll-up
 
 app.add_middleware(
     CORSMiddleware,
@@ -2883,18 +2883,34 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             if access.status_code != 200 or not access.json():
                 raise HTTPException(status_code=403, detail="Site not available to this user")
         rollup_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
+        # Read the small report particulars separately from the three JSON arrays.
+        # This avoids a PostgREST response-shaping issue seen when all wide JSON
+        # columns are requested together on Render's free-tier connection.
         r = await client.get(
                 f"{REST}/daily_reports",
                 # Fetch through the indexed site_id column, then apply the month
                 # range in Python. Combining the date range with large JSON DPR
                 # columns caused PostgREST to intermittently stall on this site.
                 params={"site_id": f"eq.{site_id}",
-                        "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
+                        "select": "id,report_date,project_title,location,item_of_work",
                         "order": "report_date.asc"},
                 headers=rollup_headers)
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load Resource Summary DPR data")
         reports = [x for x in r.json() if start <= (x.get("report_date") or "") <= end]
+        if reports:
+            by_id = {x["id"]: x for x in reports}
+            ids = ",".join(by_id)
+            for field in ("manpower", "equipment", "materials"):
+                rf = await client.get(
+                    f"{REST}/daily_reports",
+                    params={"id": f"in.({ids})", "select": f"id,{field}"},
+                    headers=rollup_headers)
+                if rf.status_code != 200:
+                    raise HTTPException(status_code=500, detail=f"Could not load Resource Summary {field}")
+                for row in rf.json():
+                    if row.get("id") in by_id:
+                        by_id[row["id"]][field] = row.get(field) or []
         allocation_rows, attendance_by_allocation = [], {}
         # DPR manpower is already a complete prepared resource record. Only use
         # attendance as a fallback when the whole month has no DPRs (for example
