@@ -221,6 +221,7 @@ if (window.tailwind) {
       html,body{max-width:100%;overflow-x:hidden}
       *,*::before,*::after{box-sizing:border-box}
       body{padding-bottom:env(safe-area-inset-bottom,0px)}
+      body:not(.shell)>header{padding-right:78px!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
       body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
@@ -448,6 +449,9 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
 
   function add() {
     if (document.getElementById("vmms-home-fab")) return;
+    /* Do not cover a page's own mobile save/add controls. The header back
+       arrow remains the route back to Home on these workflow pages. */
+    if (document.querySelector("body > div.fixed.bottom-0, #actionbar, #dprbar, #fab, #fab-bulk")) return;
     var a = document.createElement("a");
     a.id = "vmms-home-fab";
     a.href = "home.html";

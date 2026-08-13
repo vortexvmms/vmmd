@@ -699,9 +699,17 @@
         const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:"#ffffff",windowWidth:Math.max(el.scrollWidth,760)});
         const pdf=new window.jspdf.jsPDF({unit:"mm",format:"a4",orientation:"portrait"});
         const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),margin=7;
-        const ratio=Math.min((pw-margin*2)/canvas.width,(ph-margin*2)/canvas.height);
-        const w=canvas.width*ratio,h=canvas.height*ratio;
-        pdf.addImage(canvas.toDataURL("image/jpeg",.94),"JPEG",(pw-w)/2,margin,w,h);
+        const availW=pw-margin*2,availH=ph-margin*2,ratio=availW/canvas.width;
+        const pagePx=Math.max(1,Math.floor(availH/ratio));
+        /* iPhone: retain readable text by slicing the captured report across
+           proper A4 pages instead of shrinking the full report onto one page. */
+        for(let y=0,page=0;y<canvas.height;y+=pagePx,page++){
+          const sliceH=Math.min(pagePx,canvas.height-y),part=document.createElement("canvas");
+          part.width=canvas.width;part.height=sliceH;
+          part.getContext("2d").drawImage(canvas,0,y,canvas.width,sliceH,0,0,canvas.width,sliceH);
+          if(page) pdf.addPage("a4","portrait");
+          pdf.addImage(part.toDataURL("image/jpeg",.94),"JPEG",margin,margin,availW,sliceH*ratio);
+        }
         const blob=pdf.output("blob");
         IOS_PDF_FILE=new File([blob],filename+".pdf",{type:"application/pdf"});
         if(IOS_PDF_URL) URL.revokeObjectURL(IOS_PDF_URL);
@@ -737,7 +745,7 @@
       setTimeout(hide, 15000); // safety: never leave the mask stuck
       const filename=`${iow}_${dateVal()}`;
       if(IS_IOS) await prepareIosPdf(el,filename,hide);
-      else vmmsDownloadPdf("sheet", filename, {landscape:false, onePage:true, onDone:hide});
+      else vmmsDownloadPdf("sheet", filename, {landscape:false, onePage:false, onDone:hide});
     }
 
     // ---- Print / PDF (native browser render → correct vertical alignment, sharp text) ----
