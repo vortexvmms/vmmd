@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.6")  # fast manager resource roll-up
+app = FastAPI(title="VCMS API", version="0.75.7")  # indexed resource roll-up
 
 app.add_middleware(
     CORSMiddleware,
@@ -2873,7 +2873,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         # additional user-RLS site lookup for them: on the free database tier that
         # lookup could stall long enough for Safari/Chrome to drop the request.
         # Supervisors still pass the normal RLS access check.
-        if user["role"] not in {"admin", "manager", "project manager", "site manager"}:
+        if user["role"] not in FULL_ROLES + MANAGER_ROLES:
             access = await client.get(
                 f"{REST}/sites", params={"id": f"eq.{site_id}", "select": "id"},
                 headers=supabase_headers(user["token"]))
@@ -2882,14 +2882,16 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         rollup_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         r = await client.get(
                 f"{REST}/daily_reports",
+                # Fetch through the indexed site_id column, then apply the month
+                # range in Python. Combining the date range with large JSON DPR
+                # columns caused PostgREST to intermittently stall on this site.
                 params={"site_id": f"eq.{site_id}",
-                        "and": f"(report_date.gte.{start},report_date.lte.{end})",
                         "select": "report_date,project_title,location,item_of_work,manpower,equipment,materials",
                         "order": "report_date.asc"},
                 headers=rollup_headers)
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load Resource Summary DPR data")
-        reports = r.json()
+        reports = [x for x in r.json() if start <= (x.get("report_date") or "") <= end]
         allocation_rows, attendance_by_allocation = [], {}
         # DPR manpower is already a complete prepared resource record. Only use
         # attendance as a fallback when the whole month has no DPRs (for example
