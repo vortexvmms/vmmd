@@ -55,7 +55,8 @@ begin
   from public.sites
   where upper(trim(site_name)) in (
     'TUNNEL REPAIR WORK', 'TUNNEL REPAIR',
-    'POKB - TUNNEL REPAIR WORK', 'POKB-TUNNEL REPAIR WORK'
+    'POKB - TUNNEL REPAIR WORK', 'POKB-TUNNEL REPAIR WORK',
+    'POKB-DLP TUNNEL REPAIR WORK'
   );
 
   if target_id is null then
@@ -64,7 +65,8 @@ begin
 
   if (select count(*) from public.sites where upper(trim(site_name)) in (
       'TUNNEL REPAIR WORK', 'TUNNEL REPAIR',
-      'POKB - TUNNEL REPAIR WORK', 'POKB-TUNNEL REPAIR WORK')) <> 1 then
+      'POKB - TUNNEL REPAIR WORK', 'POKB-TUNNEL REPAIR WORK',
+      'POKB-DLP TUNNEL REPAIR WORK')) <> 1 then
     raise exception 'Target site name is not unique. No data was changed.';
   end if;
 
