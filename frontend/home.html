@@ -236,7 +236,6 @@
         { grp:"Planning", items:[["Schedule","schedule.html","cal"],["Reports","reports.html","doc"]] },
         { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]] },
         { grp:"Procurement", items:[["New PR","pr-new.html","cart"]] },
-        { grp:"Admin", items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]] },
         { grp:"More", items:[["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
       const nav = [
         { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
@@ -244,10 +243,8 @@
         { grp:"Planning", items:[["Schedule","schedule.html","cal"],["Reports","reports.html","doc"]] },
         { grp:"Site progress", items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]] },
         { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
-        { grp:"Admin", items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]] },
         { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
       if(t==="manager") nav[1].items.unshift(["Request manpower","request.html","cal"]);
-      if(role==="operation_manager"||role==="general_manager") nav.forEach(s=>{s.items=s.items.filter(it=>it[1]!=="worker-cards.html"&&it[1]!=="training-matrix.html");});
       return nav;
     }
     let NAVITEMS=[];

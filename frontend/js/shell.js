@@ -21,8 +21,8 @@
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
         full:null,
-        manager:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","reports.html","timesheet.html","worker-cards.html","training-matrix.html","settings.html","help.html"]),
-        supervisor:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","dpr.html","dprlist.html","pr-new.html","whatsapp.html","dashboard.html","reports.html","worker-cards.html","training-matrix.html","settings.html","help.html"]),
+        manager:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","reports.html","timesheet.html","settings.html","help.html"]),
+        supervisor:new Set(["home.html","todo.html","schedule.html","request.html","attendance.html","dpr.html","dprlist.html","pr-new.html","whatsapp.html","dashboard.html","reports.html","settings.html","help.html"]),
         payroll:new Set(["home.html","todo.html","schedule.html","verify.html","reports.html","timesheet.html","manhours.html","settings.html","help.html"]),
       };
       var IC = {home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',chk:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',user:'<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/>',bld:'<path d="M4 20V6l6-2 6 2v14M3 20h18"/>',cal:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',clk:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',doc:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>',chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>',chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>',gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>'};
@@ -36,7 +36,6 @@
           {grp:"Planning",items:[["Schedule","schedule.html","cal"],["Reports","reports.html","doc"]]},
           {grp:"Site progress",items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]]},
           {grp:"Procurement",items:[["New PR","pr-new.html","cart"]]},
-          {grp:"Admin",items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]]},
           {grp:"More",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]} ];
         var full = [
           {items:[["Home","home.html","home"],["To-do","todo.html","chk"]]},
@@ -44,7 +43,6 @@
           {grp:"Planning",items:[["Schedule","schedule.html","cal"],["Reports","reports.html","doc"]]},
           {grp:"Site progress",items:[["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
           {grp:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
-          {grp:"Admin",items:[["SIC Submission","worker-cards.html","doc"],["Training matrix","training-matrix.html","grid"]]},
           {grp:"More",items:[["WhatsApp","whatsapp.html","chat"],["Users","users.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]]} ];
         var allow = ALLOW[t];
         var out = full.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return !allow || allow.has(it[1]); })}; }).filter(function(s){ return s.items.length; });
@@ -52,9 +50,6 @@
         if (t === "manager") {
           var mp = out.filter(function(s){ return s.grp === "Manpower"; })[0];
           if (mp && !mp.items.some(function(it){ return it[1] === "request.html"; })) mp.items.unshift(["Request manpower","request.html","cal"]);
-        }
-        if (rl === "operation_manager" || rl === "general_manager") {
-          out = out.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return it[1] !== "worker-cards.html" && it[1] !== "training-matrix.html"; })}; }).filter(function(s){ return s.items.length; });
         }
         return out;
       }

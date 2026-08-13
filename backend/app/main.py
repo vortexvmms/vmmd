@@ -3557,7 +3557,7 @@ async def todos_delete(todo_id: str, user: dict = Depends(get_current_user)):
 
 # ---------------- Worker Cards / Training documents ----------------
 # Everyone except Operation Manager and General Manager maintains worker cards.
-CARD_ROLES = tuple(r for r in ALL_ROLES if r not in ("operation_manager", "general_manager"))
+CARD_ROLES = ()  # Feature retired: worker cards/certificates are not accessible
 
 
 class CardIn(BaseModel):
@@ -4027,6 +4027,8 @@ async def storage_upload_url(body: UploadUrlIn, user: dict = Depends(get_current
     key = body.path.strip("/").replace("..", "")
     if not key:
         raise HTTPException(status_code=400, detail="Bad path")
+    if key.lower().startswith(("worker-cards/", "worker-certificates/")):
+        raise HTTPException(status_code=410, detail="Worker cards and certificates feature has been removed")
     return {"configured": True, "put_url": _r2_presign_put(key),
             "public_url": f"{R2_PUBLIC_BASE}/{key}",
             "content_type": body.content_type or "image/jpeg"}
@@ -4044,6 +4046,8 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
     key = path.strip("/").replace("..", "")
     if not key:
         raise HTTPException(status_code=400, detail="Bad path")
+    if key.lower().startswith(("worker-cards/", "worker-certificates/")):
+        raise HTTPException(status_code=410, detail="Worker cards and certificates feature has been removed")
     body = await request.body()
     if not body:
         raise HTTPException(status_code=400, detail="Empty body")
