@@ -223,11 +223,15 @@ if (window.tailwind) {
       body{padding-bottom:env(safe-area-inset-bottom,0px)}
       /* One consistent mobile page header. Desktop shell and Home are untouched. */
       body:not(.shell)>header{
-        padding:12px 64px 12px 16px!important;
+        width:100%!important;
+        max-width:none!important;
+        padding:12px 16px!important;
         min-height:0!important;
         border-radius:0!important;
         overflow:visible!important;
       }
+      /* Headers whose title/filters are wrapped in rows: reserve bell space only
+         on the title row, never on the Date/Site controls underneath. */
       body:not(.shell)>header>div{
         width:100%!important;
         max-width:none!important;
@@ -239,6 +243,7 @@ if (window.tailwind) {
         display:flex!important;
         align-items:center!important;
         gap:10px!important;
+        padding-right:48px!important;
       }
       body:not(.shell)>header>div:first-child>a:first-child{
         flex:0 0 12px!important;
@@ -270,6 +275,23 @@ if (window.tailwind) {
         height:44px!important;
         margin:0!important;
       }
+      /* Classic single-row headers have the back link/title directly inside. */
+      body:not(.shell)>header>a:first-child{flex:0 0 12px!important;width:12px!important;margin:0!important}
+      body:not(.shell)>header>a:first-child~div,body:not(.shell)>header>a:first-child~h1{min-width:0!important}
+      body:not(.shell)>header:has(>a:first-child){padding-right:64px!important}
+
+      /* Request's helper/copy tools were a desktop row on phones, squeezing the
+         instruction into a few words per line. Stack it cleanly on mobile. */
+      body.vmms-page-request main>div:first-child{
+        display:flex!important;
+        flex-direction:column!important;
+        align-items:stretch!important;
+        gap:10px!important;
+      }
+      body.vmms-page-request main>div:first-child>p{width:100%!important;margin:0!important;line-height:1.45!important}
+      body.vmms-page-request main>div:first-child>div{width:100%!important;justify-content:flex-start!important;flex-wrap:nowrap!important}
+      body.vmms-page-request #copyfrom{flex:1 1 auto!important;min-width:0!important}
+      body.vmms-page-request #copylast{flex:0 0 auto!important}
       #vmms-bell{top:9px!important;right:12px!important;width:40px!important;height:40px!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
