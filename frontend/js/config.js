@@ -221,7 +221,56 @@ if (window.tailwind) {
       html,body{max-width:100%;overflow-x:hidden}
       *,*::before,*::after{box-sizing:border-box}
       body{padding-bottom:env(safe-area-inset-bottom,0px)}
-      body:not(.shell)>header{padding-right:78px!important}
+      /* One consistent mobile page header. Desktop shell and Home are untouched. */
+      body:not(.shell)>header{
+        padding:12px 64px 12px 16px!important;
+        min-height:0!important;
+        border-radius:0!important;
+        overflow:visible!important;
+      }
+      body:not(.shell)>header>div{
+        width:100%!important;
+        max-width:none!important;
+        margin-left:0!important;
+        margin-right:0!important;
+      }
+      body:not(.shell)>header>div:first-child{
+        min-height:40px!important;
+        display:flex!important;
+        align-items:center!important;
+        gap:10px!important;
+      }
+      body:not(.shell)>header>div:first-child>a:first-child{
+        flex:0 0 12px!important;
+        width:12px!important;
+        margin:0!important;
+        padding:0!important;
+        text-align:left!important;
+      }
+      body:not(.shell)>header>div:first-child>div{min-width:0!important}
+      body:not(.shell)>header h1{
+        margin:0!important;
+        font-size:18px!important;
+        line-height:1.2!important;
+        white-space:nowrap!important;
+        overflow:hidden!important;
+        text-overflow:ellipsis!important;
+      }
+      body:not(.shell)>header p{margin-top:2px!important;line-height:1.25!important}
+      body:not(.shell)>header>div:first-child>a:not(:first-child){
+        margin:0!important;
+        min-height:38px!important;
+        display:inline-flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        white-space:nowrap!important;
+      }
+      body:not(.shell)>header input[type=date],body:not(.shell)>header select{
+        min-width:0!important;
+        height:44px!important;
+        margin:0!important;
+      }
+      #vmms-bell{top:9px!important;right:12px!important;width:40px!important;height:40px!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
       body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
