@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.75.9")  # lightweight resource roll-up
+app = FastAPI(title="VCMS API", version="0.76.0")  # resource roll-up diagnostics
 
 app.add_middleware(
     CORSMiddleware,
@@ -2789,6 +2789,14 @@ def _rs_clean(v):
     return v
 
 
+def _rs_number(v, default=0.0):
+    """Accept saved numeric text without letting one typo break a whole report."""
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return default
+
+
 def _rs_pos_rank(role):
     r = (role or "").lower()
     kws = ["manager", "engineer", "supervisor", "wshc", "rescuer", "first aid",
@@ -2865,10 +2873,12 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
     days = list(range(1, ndays + 1))
     weekdays = ["MTWTFSS"[date_cls(y, m, d).weekday()] for d in days]
 
-    # Monthly reports can return wider JSON than normal app requests. Give this
-    # export its own clean connection so a stale shared keep-alive socket cannot
-    # leave the page permanently at Loading / Failed to fetch.
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    print(f"[resource-summary] start site={site_id} month={month} role={user['role']}", flush=True)
+    try:
+      # Monthly reports can return wider JSON than normal app requests. Give this
+      # export its own clean connection so a stale shared keep-alive socket cannot
+      # leave the page permanently at Loading / Failed to fetch.
+      async with httpx.AsyncClient(timeout=60.0) as client:
         # Confirm this signed-in user can see the requested site, then use the
         # server-only key for the heavy monthly roll-up. This avoids expensive
         # per-row RLS evaluation that was timing out on the free database tier.
@@ -2936,6 +2946,12 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
                 if ratt.status_code != 200:
                     raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
                 attendance_by_allocation = {x["allocation_id"]: x for x in ratt.json()}
+      print(f"[resource-summary] source complete reports={len(reports)} allocations={len(allocation_rows)}", flush=True)
+    except HTTPException:
+      raise
+    except Exception as exc:
+      print(f"[resource-summary] source error {type(exc).__name__}: {exc}", flush=True)
+      raise HTTPException(status_code=500, detail=f"Resource Summary source error: {type(exc).__name__}")
 
     att, mp_pos, mats, plant = {}, {}, {}, {}
     manhours = {d: 0.0 for d in days}
@@ -2988,8 +3004,8 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         for w in (rep.get("manpower") or []):
             name = (w.get("name") or "").strip()
             role = _rs_norm_role(w.get("role"))
-            hrs = float(w.get("total") or 0)
-            no = int(w.get("no") or 1)
+            hrs = _rs_number(w.get("total"))
+            no = int(_rs_number(w.get("no"), 1) or 1)
             # Operational attendance above is authoritative. Keep only DPR-only
             # entries such as PM/CM/visitors who have no worker allocation.
             if name and (d, name.lower()) in attendance_workers_by_day:
@@ -3008,7 +3024,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             name = " ".join((e.get("name") or "").split())
             if not name:
                 continue
-            no = float(e.get("no") or 0) or 1
+            no = _rs_number(e.get("no")) or 1
             key = name.lower()
             pl = plant.setdefault(key, {"name": name, "unit": "Nos", "days": {}, "total": 0.0})
             pl["days"][d] = pl["days"].get(d, 0.0) + no
@@ -3018,7 +3034,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             if not name:
                 continue
             unit = (mt.get("unit") or "").strip()
-            qty = float(mt.get("qty") or 0)
+            qty = _rs_number(mt.get("qty"))
             key = name.lower() + "||" + unit.lower()
             mm = mats.setdefault(key, {"name": name, "unit": unit, "days": {}, "total": 0.0})
             mm["days"][d] = mm["days"].get(d, 0.0) + qty
