@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.81.0")  # VCMS Camera V1 stage 6
+app = FastAPI(title="VCMS API", version="0.82.0")  # Camera photo deletion
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +80,30 @@ def _r2_presign_put(key: str, expires: int = 600) -> str:
     }
     canon_qs = "&".join(f"{_up.quote(k, safe='~')}={_up.quote(v, safe='~')}" for k, v in sorted(q.items()))
     canon_req = f"PUT\n{canon_uri}\n{canon_qs}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
+    sts = f"AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{_hl.sha256(canon_req.encode()).hexdigest()}"
+    def _sign(k, m): return _hm.new(k, m.encode(), _hl.sha256).digest()
+    k_date = _sign(("AWS4" + R2_SECRET).encode(), datestamp)
+    k_sign = _sign(_sign(_sign(k_date, region), service), "aws4_request")
+    sig = _hm.new(k_sign, sts.encode(), _hl.sha256).hexdigest()
+    return f"https://{host}{canon_uri}?{canon_qs}&X-Amz-Signature={sig}"
+
+def _r2_presign_delete(key: str, expires: int = 600) -> str:
+    """SigV4 presigned DELETE URL used only by the authenticated backend."""
+    host = f"{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+    region, service = "auto", "s3"
+    now = _dt.datetime.utcnow()
+    amzdate = now.strftime("%Y%m%dT%H%M%SZ"); datestamp = now.strftime("%Y%m%d")
+    canon_uri = "/" + R2_BUCKET + "/" + _up.quote(key, safe="/~")
+    scope = f"{datestamp}/{region}/{service}/aws4_request"
+    q = {
+        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+        "X-Amz-Credential": f"{R2_ACCESS_KEY_ID}/{scope}",
+        "X-Amz-Date": amzdate,
+        "X-Amz-Expires": str(expires),
+        "X-Amz-SignedHeaders": "host",
+    }
+    canon_qs = "&".join(f"{_up.quote(k, safe='~')}={_up.quote(v, safe='~')}" for k, v in sorted(q.items()))
+    canon_req = f"DELETE\n{canon_uri}\n{canon_qs}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
     sts = f"AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{_hl.sha256(canon_req.encode()).hexdigest()}"
     def _sign(k, m): return _hm.new(k, m.encode(), _hl.sha256).digest()
     k_date = _sign(("AWS4" + R2_SECRET).encode(), datestamp)
@@ -3515,6 +3539,40 @@ async def save_camera_photo(body: CameraPhotoIn, user: dict = Depends(get_curren
                 if again.status_code == 200 and again.json(): return again.json()[0]
             raise HTTPException(status_code=500, detail="Photo uploaded but its library record could not be saved")
         return (r.json() or [{"photo_id": body.photo_id}])[0]
+
+
+@app.delete("/api/v1/camera/photos/{photo_id}")
+async def delete_camera_photo(photo_id: str, user: dict = Depends(get_current_user)):
+    """Delete an authorised, unused Camera photo from R2 and the library."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        r = await client.get(f"{REST}/camera_photos", params={
+            "select": "photo_id,uploaded_by,r2_object_key,dpr_id,dpr_status",
+            "photo_id": f"eq.{photo_id}", "limit": "1"
+        }, headers=headers)
+        rows = r.json() if r.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        photo = rows[0]
+        if str(photo.get("uploaded_by")) != str(user["user_id"]) and not _camera_manager(user):
+            raise HTTPException(status_code=403, detail="You can delete only your own photos")
+        if photo.get("dpr_id") or photo.get("dpr_status") == "used":
+            raise HTTPException(status_code=409, detail="Remove this photo from the DPR before deleting it")
+        key = str(photo.get("r2_object_key") or "").strip("/").replace("..", "")
+        if not key.startswith("site-photos/"):
+            raise HTTPException(status_code=400, detail="Invalid Camera storage path")
+        if not R2_ENABLED:
+            raise HTTPException(status_code=503, detail="Photo storage is not configured")
+        rr = await client.delete(_r2_presign_delete(key))
+        if rr.status_code not in (200, 202, 204, 404):
+            raise HTTPException(status_code=502, detail="Could not delete the photo from storage")
+        delete_headers = service_headers() if SUPABASE_SERVICE_KEY else headers
+        rd = await client.delete(f"{REST}/camera_photos", params={"photo_id": f"eq.{photo_id}"}, headers=delete_headers)
+        if rd.status_code not in (200, 204):
+            raise HTTPException(status_code=500, detail="Photo was removed from storage but its library record remains")
+    return {"ok": True, "photo_id": photo_id}
 
 
 class ProjectIn(BaseModel):
