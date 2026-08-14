@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.79.0")  # VCMS Camera V1 stage 3
+app = FastAPI(title="VCMS API", version="0.80.0")  # VCMS Camera V1 stage 5
 
 app.add_middleware(
     CORSMiddleware,
@@ -3420,6 +3420,30 @@ class CameraPhotoIn(BaseModel):
     height: int = 1200
     input_format: str | None = None
     output_format: str = "image/jpeg"
+
+
+@app.get("/api/v1/camera/photos")
+async def list_camera_photos(project_id: str | None = None, photo_date: str | None = None,
+                             mine: bool = True, user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        params = {"select": "*,dpr_projects(title,site_id,sites(site_name))", "order": "captured_at.desc.nullslast,created_at.desc", "limit": "500"}
+        if project_id: params["project_id"] = f"eq.{project_id}"
+        if mine or not _camera_manager(user): params["uploaded_by"] = f"eq.{user['user_id']}"
+        if photo_date:
+            params["captured_at"] = f"gte.{photo_date}T00:00:00+08:00"
+            params["and"] = f"(captured_at.lt.{photo_date}T23:59:59.999+08:00)"
+        r = await client.get(f"{REST}/camera_photos", params=params, headers=headers)
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load Camera photos")
+        photos = r.json()
+        if not _camera_manager(user):
+            rs = await client.get(f"{REST}/site_supervisors", params={"select": "site_id", "user_id": f"eq.{user['user_id']}"}, headers=headers)
+            allowed = {x.get("site_id") for x in (rs.json() if rs.status_code == 200 else [])}
+            photos = [p for p in photos if (p.get("dpr_projects") or {}).get("site_id") in allowed]
+        return photos
 
 
 @app.post("/api/v1/camera/photos", status_code=201)
