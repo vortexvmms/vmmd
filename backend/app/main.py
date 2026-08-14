@@ -3438,8 +3438,9 @@ async def list_camera_photos(project_id: str | None = None, photo_date: str | No
         if project_id: params["project_id"] = f"eq.{project_id}"
         if mine or not _camera_manager(user): params["uploaded_by"] = f"eq.{user['user_id']}"
         if photo_date:
-            params["captured_at"] = f"gte.{photo_date}T00:00:00+08:00"
-            params["and"] = f"(captured_at.lt.{photo_date}T23:59:59.999+08:00)"
+            try: next_day = (date_cls.fromisoformat(photo_date) + timedelta(days=1)).isoformat()
+            except ValueError: raise HTTPException(status_code=400, detail="Invalid photo date")
+            params["and"] = f"(captured_at.gte.{photo_date}T00:00:00+08:00,captured_at.lt.{next_day}T00:00:00+08:00)"
         r = await client.get(f"{REST}/camera_photos", params=params, headers=headers)
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail="Could not load Camera photos")
