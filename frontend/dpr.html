@@ -37,6 +37,8 @@
     .photo img { width:100%; height:110px; object-fit:cover; display:block; }
     .photo input { width:100%; border:none; border-top:1px solid #F1F1F1; padding:7px 8px; font-size:12px; }
     .photo .rm { position:absolute; top:5px; right:5px; background:rgba(192,0,0,.92); color:#fff; border:none; border-radius:50%; width:24px; height:24px; font-weight:700; cursor:pointer; }
+    .camlib{display:none;position:fixed;inset:0;background:#101827b8;z-index:100;padding:14px;align-items:center;justify-content:center}.camlib.open{display:flex}.camdialog{width:min(900px,100%);max-height:92vh;overflow:auto;background:#f2f4f7;border-radius:14px}.camhead{position:sticky;top:0;z-index:2;background:#252b35;color:#fff;padding:13px;display:flex;align-items:center;gap:8px}.camhead h3{margin:0;font-size:16px;flex:1}.camhead button{border:0;background:#fff;border-radius:8px;padding:8px 10px;font-weight:800}.camgroups{padding:12px}.camgroup{background:#fff;border-radius:11px;padding:10px;margin-bottom:10px}.camgroup h4{margin:0 0 8px;color:#990000}.camactivity{font-size:12px;font-weight:800;color:#667085;margin:10px 0 5px}.camphotos{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.campic{position:relative;aspect-ratio:4/3;border:3px solid transparent;border-radius:8px;overflow:hidden;background:#ddd}.campic img{width:100%;height:100%;object-fit:cover}.campic input{position:absolute;top:5px;left:5px;width:22px;height:22px;accent-color:#c00000}.campic.sel{border-color:#c00000}.campic.used{opacity:.5}.camfoot{position:sticky;bottom:0;background:#fff;border-top:1px solid #ddd;padding:10px;display:flex;gap:8px}.camfoot button{height:44px;border:0;border-radius:8px;font-weight:800;flex:1}.camadd{background:#c00000;color:#fff}.camempty{padding:40px;text-align:center;color:#667085}.libbtn{background:#252b35!important;color:#fff!important;border-style:solid!important;border-color:#252b35!important}
+    @media(min-width:700px){.camphotos{grid-template-columns:repeat(5,1fr)}}
     /* print sheet — parked off-screen when idle; brought on-screen (behind a white
        mask) during capture, because html2canvas renders a blank canvas for elements
        held at a large negative offset. */
@@ -204,8 +206,11 @@
         + Add photos (from phone / files)
         <input id="pfile" type="file" accept="image/*" multiple class="hidden" onchange="onPhotos(event)">
       </label>
+      <button type="button" class="addbtn libbtn" onclick="openCameraLibrary()">▧ Add Site Photos from VCMS Camera</button>
       <p id="upmsg" class="text-xs text-gray-400 mt-1"></p>
     </div>
+
+    <div id="camlib" class="camlib"><div class="camdialog"><div class="camhead"><h3>VCMS Camera · Project and DPR date</h3><button onclick="closeCameraLibrary()">Close</button></div><div id="camgroups" class="camgroups"></div><div class="camfoot"><button onclick="closeCameraLibrary()">Cancel</button><button id="camadd" class="camadd" onclick="addCameraPhotos()">Add Selected to DPR</button></div></div></div>
 
     <h2 class="sect">Sign-off</h2>
     <div class="panel p-4 grid2">
@@ -259,7 +264,7 @@
 
   <script>
     requireLogin();
-    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", SCHEDULE_ACTIVITIES=[];
+    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", SCHEDULE_ACTIVITIES=[], CAMLIB=[];
     const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     const SIG_KEY="vcms_my_signature";   // saved default signature URL (this browser)
     // Role / Trade list — position-wise (management → engineers → supervisors → safety → operators → trades → worker)
@@ -414,6 +419,12 @@
       msg.textContent="";
     }
     async function onPhotos(e){ const f=[...e.target.files]; e.target.value=""; await handleUpload(f); }
+    function selectedDprProject(){const v=document.getElementById("proj").value;if(v!==""&&PROJECTS[+v])return PROJECTS[+v];const rows=PROJECTS.filter(p=>(!p.site_id||p.site_id===siteVal())&&(!val("f-item")||String(p.item_of_work||"").toLowerCase()===val("f-item").toLowerCase()));return rows.length===1?rows[0]:null}
+    async function openCameraLibrary(){const p=selectedDprProject();if(!p?.id){toast("Choose the Project directory item first",true);return}document.getElementById("camlib").classList.add("open");document.getElementById("camgroups").innerHTML='<div class="camempty">Loading Camera photos…</div>';try{const r=await vmmsApi(`/api/v1/camera/photos?project_id=${encodeURIComponent(p.id)}&photo_date=${encodeURIComponent(dateVal())}&mine=false`);if(!r.ok)throw Error("load");CAMLIB=await r.json();renderCameraLibrary()}catch(e){document.getElementById("camgroups").innerHTML='<div class="camempty">Could not load Camera photos. Check the connection and try again.</div>'}}
+    function renderCameraLibrary(){if(!CAMLIB.length){document.getElementById("camgroups").innerHTML='<div class="camempty">No uploaded Camera photos for this project and DPR date.</div>';return}const groups={};CAMLIB.forEach(x=>(((groups[x.item_of_work_name]??={})[x.activity_name]??=[]).push(x)));document.getElementById("camgroups").innerHTML=Object.entries(groups).map(([w,acts])=>`<section class="camgroup"><h4>${esc(w)}</h4>${Object.entries(acts).map(([a,rows])=>`<div class="camactivity">${esc(a)}</div><div class="camphotos">${rows.map(camPic).join("")}</div>`).join("")}</section>`).join("")}
+    function camPic(x){const already=PHOTOS.some(p=>p.camera_photo_id===x.photo_id),used=x.dpr_status==="used"&&!already,t=x.captured_at?new Date(x.captured_at).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"}):"Time unknown";return `<label class="campic ${already?"sel":""} ${used?"used":""}" title="${esc(t)}"><img loading="lazy" src="${esc(x.public_url)}"><input type="checkbox" value="${x.photo_id}" ${already?"checked":""} ${used?"disabled":""} onchange="this.closest('.campic').classList.toggle('sel',this.checked)"></label>`}
+    function closeCameraLibrary(){document.getElementById("camlib").classList.remove("open")}
+    function addCameraPhotos(){const ids=[...document.querySelectorAll("#camgroups input:checked")].map(x=>x.value);CAMLIB.forEach(x=>{if(ids.includes(x.photo_id)&&!PHOTOS.some(p=>p.camera_photo_id===x.photo_id))PHOTOS.push({url:x.public_url,caption:x.activity_name||x.item_of_work_name||"",camera_photo_id:x.photo_id})});renderPhotos();closeCameraLibrary();toast(`${ids.length} Camera photo${ids.length===1?"":"s"} selected`,false,true)}
     // Shrink big phone photos before upload so reports (and the PDF) stay small.
     async function compressImage(file, maxDim=1600, quality=0.72){
       try{
@@ -620,7 +631,9 @@
     async function save(){
       const btn=document.getElementById("savebtn"); btn.disabled=true; btn.textContent="Saving…";
       try{ const r=await vmmsApi("/api/v1/dpr",{method:"POST",body:JSON.stringify(collect())}); const d=await r.json();
-        if(!r.ok) throw new Error(d.detail||"Could not save"); toast("✓ Report saved", false, true); if(window.vmmsClearPageDraft)vmmsClearPageDraft(); await loadMissingDprs();
+        if(!r.ok) throw new Error(d.detail||"Could not save");
+        if(d.id){const photo_ids=PHOTOS.map(p=>p.camera_photo_id).filter(Boolean);const lr=await vmmsApi("/api/v1/camera/photos/dpr-link",{method:"POST",body:JSON.stringify({dpr_id:d.id,photo_ids})});if(!lr.ok)toast("Report saved, but Camera photo status could not be updated",true)}
+        toast("✓ Report saved", false, true); if(window.vmmsClearPageDraft)vmmsClearPageDraft(); await loadMissingDprs();
         document.getElementById("banner").classList.add("hidden");
       }catch(ex){ toast(ex.message,true); } finally{ btn.disabled=false; btn.textContent="Save"; }
     }

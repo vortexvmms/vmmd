@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.80.0")  # VCMS Camera V1 stage 5
+app = FastAPI(title="VCMS API", version="0.81.0")  # VCMS Camera V1 stage 6
 
 app.add_middleware(
     CORSMiddleware,
@@ -3422,6 +3422,11 @@ class CameraPhotoIn(BaseModel):
     output_format: str = "image/jpeg"
 
 
+class CameraDprLinkIn(BaseModel):
+    dpr_id: str
+    photo_ids: list[str]
+
+
 @app.get("/api/v1/camera/photos")
 async def list_camera_photos(project_id: str | None = None, photo_date: str | None = None,
                              mine: bool = True, user: dict = Depends(get_current_user)):
@@ -3444,6 +3449,31 @@ async def list_camera_photos(project_id: str | None = None, photo_date: str | No
             allowed = {x.get("site_id") for x in (rs.json() if rs.status_code == 200 else [])}
             photos = [p for p in photos if (p.get("dpr_projects") or {}).get("site_id") in allowed]
         return photos
+
+
+@app.post("/api/v1/camera/photos/dpr-link")
+async def link_camera_photos_to_dpr(body: CameraDprLinkIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    wanted = list(dict.fromkeys(body.photo_ids))[:30]
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        rd = await client.get(f"{REST}/daily_reports", params={"select": "id,site_id", "id": f"eq.{body.dpr_id}", "limit": "1"}, headers=headers)
+        reports = rd.json() if rd.status_code == 200 else []
+        if not reports: raise HTTPException(status_code=400, detail="Invalid DPR")
+        if not _camera_manager(user):
+            rs = await client.get(f"{REST}/site_supervisors", params={"select": "site_id", "user_id": f"eq.{user['user_id']}", "site_id": f"eq.{reports[0]['site_id']}", "limit": "1"}, headers=headers)
+            if rs.status_code != 200 or not rs.json(): raise HTTPException(status_code=403, detail="DPR site is not assigned to this user")
+        old = await client.get(f"{REST}/camera_photos", params={"select": "photo_id", "dpr_id": f"eq.{body.dpr_id}"}, headers=headers)
+        old_ids = {x.get("photo_id") for x in (old.json() if old.status_code == 200 else [])}
+        for pid in old_ids - set(wanted):
+            await client.patch(f"{REST}/camera_photos", params={"photo_id": f"eq.{pid}"}, headers=headers,
+                               json={"dpr_status": "available", "dpr_id": None, "updated_at": datetime.now(timezone.utc).isoformat()})
+        for pid in wanted:
+            r = await client.patch(f"{REST}/camera_photos", params={"photo_id": f"eq.{pid}"}, headers=headers,
+                                   json={"dpr_status": "used", "dpr_id": body.dpr_id, "updated_at": datetime.now(timezone.utc).isoformat()})
+            if r.status_code not in (200, 204): raise HTTPException(status_code=500, detail="Could not link one or more photos")
+    return {"ok": True, "count": len(wanted)}
 
 
 @app.post("/api/v1/camera/photos", status_code=201)
