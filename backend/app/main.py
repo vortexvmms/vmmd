@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.78.0")  # VCMS Camera V1 stage 1
+app = FastAPI(title="VCMS API", version="0.79.0")  # VCMS Camera V1 stage 3
 
 app.add_middleware(
     CORSMiddleware,
@@ -3398,6 +3398,68 @@ async def delete_camera_activity(row_id: str, user: dict = Depends(get_current_u
         r = await client.delete(f"{REST}/camera_activities", params={"id": f"eq.{row_id}"}, headers=supabase_headers(user["token"]))
         if r.status_code not in (200, 204): raise HTTPException(status_code=500, detail="Could not delete activity")
     return {"ok": True}
+
+
+class CameraPhotoIn(BaseModel):
+    photo_id: str
+    project_id: str
+    item_of_work_id: str | None = None
+    item_of_work_name: str
+    item_of_work_source: str
+    activity_id: str | None = None
+    activity_name: str
+    activity_source: str
+    capture_source: str
+    captured_at: str | None = None
+    imported_at: str | None = None
+    uploaded_at: str | None = None
+    r2_object_key: str
+    public_url: str
+    file_size: int = 0
+    width: int = 1600
+    height: int = 1200
+    input_format: str | None = None
+    output_format: str = "image/jpeg"
+
+
+@app.post("/api/v1/camera/photos", status_code=201)
+async def save_camera_photo(body: CameraPhotoIn, user: dict = Depends(get_current_user)):
+    """Create one idempotent Photo Library record after the R2 PUT is confirmed."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if body.capture_source not in ("camera", "gallery"):
+        raise HTTPException(status_code=400, detail="Invalid capture source")
+    if body.item_of_work_source not in ("directory", "manual") or body.activity_source not in ("directory", "manual"):
+        raise HTTPException(status_code=400, detail="Invalid directory source")
+    key = body.r2_object_key.strip("/").replace("..", "")
+    if not key.startswith("site-photos/"):
+        raise HTTPException(status_code=400, detail="Invalid Camera storage path")
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        existing = await client.get(f"{REST}/camera_photos", params={"select": "*", "photo_id": f"eq.{body.photo_id}", "limit": "1"}, headers=headers)
+        if existing.status_code == 200 and existing.json():
+            return existing.json()[0]
+        rp = await client.get(f"{REST}/dpr_projects", params={"select": "id,site_id", "id": f"eq.{body.project_id}", "limit": "1"}, headers=headers)
+        rows = rp.json() if rp.status_code == 200 else []
+        if not rows:
+            raise HTTPException(status_code=400, detail="Invalid project")
+        if not _camera_manager(user):
+            rs = await client.get(f"{REST}/site_supervisors", params={"select": "site_id", "user_id": f"eq.{user['user_id']}", "site_id": f"eq.{rows[0].get('site_id')}", "limit": "1"}, headers=headers)
+            if rs.status_code != 200 or not rs.json():
+                raise HTTPException(status_code=403, detail="Project is not assigned to this user")
+        payload = body.dict()
+        payload.update({"uploaded_by": user["user_id"], "r2_object_key": key,
+                        "uploaded_at": body.uploaded_at or datetime.now(timezone.utc).isoformat(),
+                        "sync_status": "uploaded", "dpr_status": "available"})
+        r = await client.post(f"{REST}/camera_photos",
+            headers={**headers, "Prefer": "return=representation"}, json=payload)
+        if r.status_code not in (200, 201):
+            # A repeated request racing the first insert returns the same photo.
+            if r.status_code == 409:
+                again = await client.get(f"{REST}/camera_photos", params={"select": "*", "photo_id": f"eq.{body.photo_id}", "limit": "1"}, headers=headers)
+                if again.status_code == 200 and again.json(): return again.json()[0]
+            raise HTTPException(status_code=500, detail="Photo uploaded but its library record could not be saved")
+        return (r.json() or [{"photo_id": body.photo_id}])[0]
 
 
 class ProjectIn(BaseModel):
