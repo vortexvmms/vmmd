@@ -1,0 +1,1 @@
+{"id":"vcms-camera-v1","name":"VCMS Camera","short_name":"Camera","description":"VCMS site evidence camera","start_url":"./camera.html","scope":"./","display":"standalone","background_color":"#eef0f4","theme_color":"#a90000","icons":[{"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"}]}

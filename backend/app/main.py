@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.77.1")  # site update wording
+app = FastAPI(title="VCMS API", version="0.78.0")  # VCMS Camera V1 stage 1
 
 app.add_middleware(
     CORSMiddleware,
@@ -3288,6 +3288,116 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
                         for todo_id in stale[i:i + 10]])
     return {"enabled": enabled, "from": start, "to": end,
             "count": len(missing), "items": missing}
+
+
+class CameraWorkItemIn(BaseModel):
+    dpr_project_id: str
+    name: str
+    sort_order: int = 0
+    active: bool = True
+
+
+class CameraActivityIn(BaseModel):
+    work_item_id: str
+    name: str
+    sort_order: int = 0
+    active: bool = True
+
+
+def _camera_manager(user: dict) -> bool:
+    return user["role"] in COORDINATOR_ROLES
+
+
+@app.get("/api/v1/camera/setup")
+async def camera_setup(manage: bool = False, user: dict = Depends(get_current_user)):
+    """Camera selectors backed by the existing DPR project directory."""
+    if user["role"] not in DPR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        rp, rw, ra = await asyncio.gather(
+            client.get(f"{REST}/dpr_projects", params={"select": "id,title,site_id,location,item_of_work,lifecycle_status,reminder_enabled,sites(site_name)", "order": "title.asc"}, headers=headers),
+            client.get(f"{REST}/camera_work_items", params={"select": "*", "order": "sort_order.asc,name.asc"}, headers=headers),
+            client.get(f"{REST}/camera_activities", params={"select": "*", "order": "sort_order.asc,name.asc"}, headers=headers),
+        )
+        if rw.status_code != 200 or ra.status_code != 200:
+            raise HTTPException(status_code=503, detail="Camera setup is not ready. Run the Camera V1 Stage 1 migration.")
+        projects = rp.json() if rp.status_code == 200 else []
+        # Office/manager roles see all. Supervisors only see sites assigned to them.
+        if not _camera_manager(user):
+            rs = await client.get(f"{REST}/site_supervisors", params={"select": "site_id", "user_id": f"eq.{user['user_id']}"}, headers=headers)
+            allowed = {x.get("site_id") for x in (rs.json() if rs.status_code == 200 else [])}
+            projects = [p for p in projects if p.get("site_id") in allowed]
+        if not (manage and _camera_manager(user)):
+            projects = [p for p in projects if p.get("lifecycle_status") == "active"]
+        project_ids = {p.get("id") for p in projects}
+        work_items = [x for x in rw.json() if x.get("dpr_project_id") in project_ids]
+        if not (manage and _camera_manager(user)):
+            work_items = [x for x in work_items if x.get("active", True)]
+        work_ids = {x.get("id") for x in work_items}
+        activities = [x for x in ra.json() if x.get("work_item_id") in work_ids]
+        if not (manage and _camera_manager(user)):
+            activities = [x for x in activities if x.get("active", True)]
+        return {"can_manage": _camera_manager(user), "projects": projects,
+                "work_items": work_items, "activities": activities}
+
+
+async def _camera_write(table: str, body: dict, user: dict, row_id: str | None = None):
+    if not _camera_manager(user):
+        raise HTTPException(status_code=403, detail="Only managers can maintain camera lists")
+    body["name"] = (body.get("name") or "").strip()
+    if not body["name"]:
+        raise HTTPException(status_code=400, detail="Name is required")
+    body["updated_at"] = datetime.now(timezone.utc).isoformat()
+    async with shared_client() as client:
+        headers = {**supabase_headers(user["token"]), "Prefer": "return=representation"}
+        if row_id:
+            r = await client.patch(f"{REST}/{table}", params={"id": f"eq.{row_id}"}, headers=headers, json=body)
+        else:
+            body["created_by"] = user["user_id"]
+            r = await client.post(f"{REST}/{table}", headers=headers, json=body)
+        if r.status_code not in (200, 201, 204):
+            detail = "Duplicate name" if r.status_code == 409 else "Could not save camera setup"
+            raise HTTPException(status_code=400 if r.status_code == 409 else 500, detail=detail)
+        return (r.json() or [{"ok": True}])[0]
+
+
+@app.post("/api/v1/camera/work-items", status_code=201)
+async def add_camera_work_item(body: CameraWorkItemIn, user: dict = Depends(get_current_user)):
+    return await _camera_write("camera_work_items", body.dict(), user)
+
+
+@app.patch("/api/v1/camera/work-items/{row_id}")
+async def edit_camera_work_item(row_id: str, body: CameraWorkItemIn, user: dict = Depends(get_current_user)):
+    return await _camera_write("camera_work_items", body.dict(), user, row_id)
+
+
+@app.delete("/api/v1/camera/work-items/{row_id}")
+async def delete_camera_work_item(row_id: str, user: dict = Depends(get_current_user)):
+    if not _camera_manager(user): raise HTTPException(status_code=403, detail="Only managers can maintain camera lists")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/camera_work_items", params={"id": f"eq.{row_id}"}, headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204): raise HTTPException(status_code=500, detail="Could not delete item")
+    return {"ok": True}
+
+
+@app.post("/api/v1/camera/activities", status_code=201)
+async def add_camera_activity(body: CameraActivityIn, user: dict = Depends(get_current_user)):
+    return await _camera_write("camera_activities", body.dict(), user)
+
+
+@app.patch("/api/v1/camera/activities/{row_id}")
+async def edit_camera_activity(row_id: str, body: CameraActivityIn, user: dict = Depends(get_current_user)):
+    return await _camera_write("camera_activities", body.dict(), user, row_id)
+
+
+@app.delete("/api/v1/camera/activities/{row_id}")
+async def delete_camera_activity(row_id: str, user: dict = Depends(get_current_user)):
+    if not _camera_manager(user): raise HTTPException(status_code=403, detail="Only managers can maintain camera lists")
+    async with shared_client() as client:
+        r = await client.delete(f"{REST}/camera_activities", params={"id": f"eq.{row_id}"}, headers=supabase_headers(user["token"]))
+        if r.status_code not in (200, 204): raise HTTPException(status_code=500, detail="Could not delete activity")
+    return {"ok": True}
 
 
 class ProjectIn(BaseModel):
