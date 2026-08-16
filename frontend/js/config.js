@@ -679,9 +679,19 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
     // Startup downloads only the unread number. Full notification text is
     // requested only when the bell is opened. Poll slowly and never while the
     // PWA is in the background, avoiding account-specific mobile slowdown.
-    loadCount();
+    // Notifications are non-critical on mobile. Let the page and its main data
+    // become interactive first, then fetch the badge during idle time.
+    var lastCountAt=0;
+    function queuedCount(){
+      if(document.hidden || Date.now()-lastCountAt<60000)return;
+      lastCountAt=Date.now(); loadCount();
+    }
+    if(window.innerWidth<900){
+      if('requestIdleCallback' in window) requestIdleCallback(queuedCount,{timeout:2500});
+      else setTimeout(queuedCount,1800);
+    }else queuedCount();
     var countTimer=setInterval(function(){if(!document.hidden)loadCount();},300000);
-    document.addEventListener('visibilitychange',function(){if(!document.hidden)loadCount();});
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)queuedCount();});
   });
 })();
 

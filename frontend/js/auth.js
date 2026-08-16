@@ -3,8 +3,11 @@
 // and authenticated calls to the VCMS backend.
 
 const VMMS_SESSION_KEY = "vmms_session";
+const VMMS_ME_KEY = "vmms_me_cache_v1";
+const VMMS_ME_TTL = 5 * 60 * 1000;
 
 function saveSession(s) {
+  try { sessionStorage.removeItem(VMMS_ME_KEY); } catch {}
   localStorage.setItem(VMMS_SESSION_KEY, JSON.stringify({
     access_token: s.access_token,
     refresh_token: s.refresh_token,
@@ -147,6 +150,18 @@ function vmmsClearRefCache(prefix) {
 async function vmmsApi(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
 
+  // The signed-in profile is required by almost every page, but it changes
+  // very rarely. Keep it briefly in this browser tab so mobile navigation does
+  // not spend another network round-trip fetching the same profile each time.
+  if (method === "GET" && path === "/api/v1/me") {
+    try {
+      const hit = JSON.parse(sessionStorage.getItem(VMMS_ME_KEY) || "null");
+      if (hit && (Date.now() - hit.t) < VMMS_ME_TTL) {
+        return new Response(JSON.stringify(hit.data), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+    } catch (_) {}
+  }
+
   // Serve reference GETs from the phone cache when still fresh.
   if (method === "GET") {
     const ttl = _refTtl(path);
@@ -218,6 +233,12 @@ async function vmmsApi(path, options = {}) {
         const b = await r.clone().text();
         const o = _refRead(); o[path] = { t: Date.now(), b }; _refWrite(o);
       } catch {}
+    }
+    if (method === "GET" && path === "/api/v1/me" && r.ok) {
+      try {
+        const data = await r.clone().json();
+        sessionStorage.setItem(VMMS_ME_KEY, JSON.stringify({ t: Date.now(), data }));
+      } catch (_) {}
     }
     return r;
   } finally {

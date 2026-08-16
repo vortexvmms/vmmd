@@ -17,9 +17,14 @@ from datetime import date as date_cls
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.82.0")  # Camera photo deletion
+app = FastAPI(title="VCMS API", version="0.83.0")  # Mobile speed release 1
+
+# Compress larger JSON responses (attendance, allocations, dashboards). This
+# materially reduces mobile data transfer while leaving tiny responses alone.
+app.add_middleware(GZipMiddleware, minimum_size=750, compresslevel=5)
 
 app.add_middleware(
     CORSMiddleware,

@@ -10,6 +10,9 @@
       var file = (location.pathname.split("/").pop() || "").toLowerCase();
       if (file === "login.html" || file === "index.html" || file === "") return;
       if (document.body.classList.contains("shell")) return;
+      // The injected shell is desktop-only. Exit before any profile/API work on
+      // phones; the page's native mobile header remains in charge.
+      if (window.matchMedia && window.matchMedia("(max-width:899px)").matches) return;
       if (document.getElementById("vcms-rail")) return;
       if (typeof getSession !== "function" || !getSession()) return;
 
