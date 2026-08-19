@@ -12,7 +12,7 @@ import os
 import time
 import json as _json
 import asyncio
-from datetime import date as date_cls
+from datetime import date as date_cls, timedelta
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.83.0")  # Mobile speed release 1
+app = FastAPI(title="VCMS API", version="0.84.0")  # Administrator audit log
 
 # Compress larger JSON responses (attendance, allocations, dashboards). This
 # materially reduces mobile data transfer while leaving tiny responses alone.
@@ -288,6 +288,66 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
             "new_value": new_value,
         },
     )
+
+
+@app.get("/api/v1/audit-log")
+async def get_audit_log(date_from: str | None = None, date_to: str | None = None,
+                        action: str | None = None, actor_id: str | None = None,
+                        limit: int = 200, user: dict = Depends(get_current_user)):
+    """Administrator-only, read-only audit history for the VCMS Audit Log page."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Administrator only")
+    try:
+        start = date_cls.fromisoformat(date_from) if date_from else date_cls.today() - timedelta(days=6)
+        end = date_cls.fromisoformat(date_to) if date_to else date_cls.today()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date")
+    if end < start or (end - start).days > 92:
+        raise HTTPException(status_code=400, detail="Choose a date range up to 93 days")
+    limit = max(1, min(limit, 500))
+    filters = [f"at.gte.{start.isoformat()}T00:00:00+08:00",
+               f"at.lt.{(end + timedelta(days=1)).isoformat()}T00:00:00+08:00"]
+    if action:
+        filters.append(f"action.eq.{action}")
+    if actor_id:
+        filters.append(f"user_id.eq.{actor_id}")
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/audit_log",
+            params={"select": "id,user_id,action,entity,entity_id,old_value,new_value,at,users(name)",
+                    "and": "(" + ",".join(filters) + ")", "order": "at.desc", "limit": str(limit)},
+            headers=supabase_headers(user["token"]),
+        )
+        if r.status_code != 200:
+            raise HTTPException(status_code=500, detail="Could not load audit log")
+        rows = r.json()
+        site_ids = set()
+        for row in rows:
+            if row.get("action") == "request_manpower" and ":" in (row.get("entity_id") or ""):
+                site_ids.add(row["entity_id"].split(":", 1)[1])
+        site_names = {}
+        if site_ids:
+            sr = await client.get(f"{REST}/sites",
+                params={"id": f"in.({','.join(site_ids)})", "select": "id,site_name"},
+                headers=supabase_headers(user["token"]))
+            if sr.status_code == 200:
+                site_names = {x["id"]: x["site_name"] for x in sr.json()}
+        items = []
+        for row in rows:
+            entity_id = row.get("entity_id") or ""
+            site_name = None
+            if row.get("action") == "request_manpower" and ":" in entity_id:
+                site_name = site_names.get(entity_id.split(":", 1)[1])
+            items.append({
+                "id": row["id"], "at": row["at"], "user_id": row.get("user_id"),
+                "user_name": (row.get("users") or {}).get("name") or "Unknown user",
+                "action": row["action"], "entity": row["entity"], "entity_id": entity_id,
+                "site_name": site_name, "old_value": row.get("old_value"),
+                "new_value": row.get("new_value"),
+            })
+        actors = sorted({(x["user_id"], x["user_name"]) for x in items if x["user_id"]}, key=lambda x: x[1])
+        return {"items": items, "actors": [{"id": x[0], "name": x[1]} for x in actors],
+                "count": len(items), "limited": len(items) == limit}
 
 
 # ---------------- basics ----------------

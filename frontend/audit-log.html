@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#C00000">
+  <title>VCMS — Audit Log</title>
+  <link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/config.js?v=20260813-8"></script><script src="js/auth.js?v=20260813-8"></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#E4E7EC;color:#20242B;font-family:Arial,system-ui,sans-serif}.page{max-width:1500px;margin:auto;padding:18px 22px 40px}.head{background:#B00000;color:white;padding:15px 18px;position:sticky;top:0;z-index:10;box-shadow:0 2px 8px #0002}.headin{display:flex;align-items:center;gap:13px}.back{color:#fff;text-decoration:none;font-size:26px;font-weight:800}.head h1{font-size:19px;margin:0}.head p{font-size:12px;margin:2px 0 0;color:#FECACA}.filters,.card{background:#fff;border:1px solid #D7DCE3;border-radius:14px;box-shadow:0 4px 14px #1822300d}.filters{padding:14px;display:grid;grid-template-columns:1fr 1fr 1.25fr 1.25fr auto;gap:10px;align-items:end}.field label{display:block;font-size:11px;font-weight:800;color:#667085;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}.field input,.field select{width:100%;height:42px;border:1px solid #C9D0DA;border-radius:9px;background:#fff;padding:0 11px;font-size:14px}.load{height:42px;border:0;border-radius:9px;background:#C00000;color:#fff;padding:0 24px;font-weight:800;cursor:pointer}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.kpi{padding:14px 16px;border-top:3px solid #C00000}.kpi b{display:block;font-size:25px}.kpi span{font-size:12px;font-weight:700;color:#667085}.tablecard{overflow:hidden}.tablewrap{overflow:auto;max-height:calc(100vh - 290px)}table{width:100%;border-collapse:collapse;min-width:900px}th{position:sticky;top:0;background:#252B35;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:11px 12px;z-index:2}td{padding:10px 12px;border-bottom:1px solid #E7EAF0;font-size:13px;vertical-align:top}tbody tr:hover{background:#FFF7F7}.action{display:inline-block;background:#FDE8E8;color:#A20D0D;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.muted{color:#778195}.details{border:1px solid #D8DEE7;background:#fff;border-radius:7px;padding:5px 9px;cursor:pointer;font-weight:700;color:#344054}.empty{text-align:center;padding:40px;color:#8A94A3}.warn{font-size:12px;color:#9A6700;background:#FFF8D8;padding:8px 12px;border-radius:8px;margin:10px 0}.json{white-space:pre-wrap;word-break:break-word;font:11px ui-monospace,monospace;max-width:420px}.hidden{display:none!important}
+    @media(max-width:899px){.page{padding:12px}.filters{grid-template-columns:1fr 1fr}.field.wide{grid-column:span 2}.load{grid-column:span 2}.kpis{gap:7px}.kpi{padding:10px}.kpi b{font-size:21px}.tablewrap{max-height:none}.head{padding:12px 54px 12px 12px}}
+  </style>
+</head>
+<body>
+  <header class="head"><div class="headin"><a class="back" href="home.html">‹</a><div><h1>Audit Log</h1><p>Administrator only · read-only system history</p></div></div></header>
+  <main class="page">
+    <section id="blocked" class="card empty hidden">🔒 Administrator only</section>
+    <div id="content" class="hidden">
+      <section class="filters">
+        <div class="field"><label>From</label><input id="from" type="date"></div>
+        <div class="field"><label>To</label><input id="to" type="date"></div>
+        <div class="field wide"><label>Action</label><select id="action"><option value="">All actions</option><option value="request_manpower">Manpower requests</option><option value="allocate">Allocation</option><option value="mark_attendance">Attendance changes</option><option value="bulk_end">Bulk end time</option><option value="submit_morning">Morning submissions</option><option value="submit_day">End-time submissions</option><option value="create">Created records</option><option value="update">Updated records</option></select></div>
+        <div class="field wide"><label>User</label><select id="actor"><option value="">All users</option></select></div>
+        <button class="load" onclick="loadLog()">View log</button>
+      </section>
+      <div class="kpis"><div class="card kpi"><b id="total">0</b><span>Audit entries</span></div><div class="card kpi"><b id="people">0</b><span>Users involved</span></div><div class="card kpi"><b id="requests">0</b><span>Manpower requests</span></div></div>
+      <div id="limited" class="warn hidden">Showing the latest 500 entries. Reduce the date range for the complete list.</div>
+      <section class="card tablecard"><div class="tablewrap"><table><thead><tr><th>Date &amp; time</th><th>User</th><th>Action</th><th>Record / site</th><th>Summary</th><th>Details</th></tr></thead><tbody id="rows"></tbody></table><div id="empty" class="empty hidden">No audit entries for these filters.</div></div></section>
+    </div>
+  </main>
+  <script>
+    requireLogin();let ITEMS=[];const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const iso=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    function displayDate(v){try{return new Date(v).toLocaleString("en-GB",{timeZone:"Asia/Singapore",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})}catch(e){return v||""}}
+    function nice(v){return String(v||"").replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase())}
+    function summary(x){if(x.action==="request_manpower"){const n=((x.new_value||{}).worker_ids||[]).length;return `${n} worker${n===1?"":"s"} requested`;}if(x.new_value&&typeof x.new_value==="object")return Object.keys(x.new_value).map(nice).slice(0,4).join(", ")||"Updated";return nice(x.entity)}
+    function render(){const actor=document.getElementById("actor").value;const rows=actor?ITEMS.filter(x=>x.user_id===actor):ITEMS;document.getElementById("total").textContent=rows.length;document.getElementById("people").textContent=new Set(rows.map(x=>x.user_id).filter(Boolean)).size;document.getElementById("requests").textContent=rows.filter(x=>x.action==="request_manpower").length;document.getElementById("empty").classList.toggle("hidden",!!rows.length);document.getElementById("rows").innerHTML=rows.map(x=>`<tr><td>${esc(displayDate(x.at))}</td><td><b>${esc(x.user_name)}</b></td><td><span class="action">${esc(nice(x.action))}</span><div class="muted">${esc(x.entity)}</div></td><td>${esc(x.site_name||x.entity_id||"—")}</td><td>${esc(summary(x))}</td><td><details><summary class="details">View</summary><div class="json"><b>Before</b>\n${esc(JSON.stringify(x.old_value,null,2)||"—")}\n\n<b>After</b>\n${esc(JSON.stringify(x.new_value,null,2)||"—")}</div></details></td></tr>`).join("")}
+    async function loadLog(){const q=new URLSearchParams({date_from:document.getElementById("from").value,date_to:document.getElementById("to").value,limit:"500"});const a=document.getElementById("action").value;if(a)q.set("action",a);document.getElementById("rows").innerHTML='<tr><td colspan="6" class="empty">Loading audit history…</td></tr>';const r=await vmmsApi("/api/v1/audit-log?"+q);if(!r.ok){document.getElementById("rows").innerHTML='<tr><td colspan="6" class="empty">Could not load the audit log.</td></tr>';return}const d=await r.json();ITEMS=d.items||[];const sel=document.getElementById("actor"),keep=sel.value;sel.innerHTML='<option value="">All users</option>'+d.actors.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");sel.value=keep;document.getElementById("limited").classList.toggle("hidden",!d.limited);render()}
+    async function boot(){const r=await vmmsApi("/api/v1/me");if(!r.ok){vmmsLogout();return}const me=await r.json();if(me.role!=="admin"){document.getElementById("blocked").classList.remove("hidden");return}document.getElementById("content").classList.remove("hidden");const now=new Date(),from=new Date();from.setDate(now.getDate()-6);document.getElementById("from").value=iso(from);document.getElementById("to").value=iso(now);document.getElementById("actor").addEventListener("change",render);loadLog()}
+    boot();if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
+  </script>
+</body></html>
