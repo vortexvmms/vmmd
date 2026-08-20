@@ -126,6 +126,8 @@
       .mgreet{ display:block; } .mnav{ display:block; margin-bottom:6px; } .mrswitch{ display:block; }
       .kpis{ grid-template-columns:repeat(2,1fr); } .updates{ grid-template-columns:1fr; } .content{ padding:13px; }
       .home-wrap{ gap:12px; }
+      body.sup-mobile .overviewbar,body.sup-mobile .kpis,body.sup-mobile .mobile-updates,body.sup-mobile .panel,body.sup-mobile .home-wrap>div:nth-child(2),body.sup-mobile .home-wrap>div:first-child>.SECT{display:none!important}
+      body.sup-mobile .home-wrap{display:block}body.sup-mobile .mnav{margin-top:4px}body.sup-mobile .mnav .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}body.sup-mobile .mnav a{min-height:92px;justify-content:center;font-size:14px;box-shadow:0 4px 12px rgba(15,23,42,.06)}
     }
   </style>
 </head>
@@ -268,6 +270,10 @@
     try{if(localStorage.getItem("vcms_side_mini")==="1")toggleSide(true)}catch(e){}
     /* mobile home menu — grouped into 3 sections (like old layout) */
     function mobileSections(role){
+      if(TIER[role]==="supervisor")return[
+        {name:"Daily work",items:[["Request manpower","request.html","cal"],["Attendance / End time","attendance.html","check"],["WhatsApp","whatsapp.html","chat"]]},
+        {name:"Support",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]}
+      ];
       const nav=navFor(role);
       const labeled=nav.slice(1);                          // skip Home/To-do row
       const todo=nav[0].items.filter(it=>it[1]!=="home.html");
@@ -369,6 +375,9 @@
       document.getElementById("mgreet").textContent=g;
       document.getElementById("mfull").textContent=ME.name||"";
       document.getElementById("mchip").textContent=ROLE_LABELS[ME.role]||ME.role;
+      const supervisorMobile=window.innerWidth<=900&&TIER[ME.role]==="supervisor";
+      document.body.classList.toggle("sup-mobile",supervisorMobile);
+      if(supervisorMobile)return; // lightweight landing page: skip dashboard/tasks downloads on 4G
       const requested=new URLSearchParams(location.search).get("date");if(/^\d{4}-\d{2}-\d{2}$/.test(requested||"")&&requested<=localISODate())REPORT_DATE=requested;
       const hdate=document.getElementById("home-date");hdate.value=REPORT_DATE;hdate.max=localISODate();
       document.getElementById("subgreet").textContent=new Date(REPORT_DATE+"T12:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short",year:"numeric"}).toUpperCase()+" · YOUR SITE OVERVIEW";

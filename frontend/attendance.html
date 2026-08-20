@@ -144,6 +144,18 @@
     let ATT_FILTER = "all";
     const SAVE_QUEUE = new Map();
     let SAVE_TIMER = null, SAVE_RUNNING = false;
+    const ATT_QUEUE_KEY = "vcms_attendance_pending_v1";
+    let UNMATCHED_PENDING=[];
+
+    function readPending(){try{return JSON.parse(localStorage.getItem(ATT_QUEUE_KEY)||"[]")}catch(e){return[]}}
+    function persistPending(){
+      try{localStorage.setItem(ATT_QUEUE_KEY,JSON.stringify([...UNMATCHED_PENDING,...[...SAVE_QUEUE.values()].map(q=>({changes:q.changes,work_date:q.work_date,site_id:q.site_id,queued_at:q.queued_at||new Date().toISOString()}))]))}catch(e){}
+    }
+    function restorePending(){
+      const byId=new Map(ALL_ROWS.map(x=>[x.allocation_id,x]));
+      UNMATCHED_PENDING=[];readPending().forEach(p=>{const x=byId.get(p.changes?.allocation_id);if(!x){UNMATCHED_PENDING.push(p);return;}const prev={present:x.present,end_time:x.end_time,absence_type:x.absence_type,marked:x.marked,normal_hours:x.normal_hours,ot_hours:x.ot_hours};Object.assign(x,p.changes);x.marked=true;x._saving=true;x._saved=false;SAVE_QUEUE.set(x.allocation_id,{x,changes:p.changes,prev,work_date:p.work_date,site_id:p.site_id,queued_at:p.queued_at});});
+      if(SAVE_QUEUE.size){syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · waiting to sync`,"warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,navigator.onLine?300:3000);}
+    }
 
     function syncState(text, kind=""){
       const el=document.getElementById("sync-state");
@@ -200,11 +212,14 @@
 
     async function loadDay() {
       const date = document.getElementById("date").value;
-      const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
-      let all = r.ok ? await r.json() : [];
+      let all=[];
+      try{const r=await vmmsApi(`/api/v1/attendance?date=${date}`);if(!r.ok)throw Error("load failed");all=await r.json();try{localStorage.setItem("vcms_att_day_"+date,JSON.stringify(all))}catch(e){}}
+      catch(e){try{all=JSON.parse(localStorage.getItem("vcms_att_day_"+date)||"[]")}catch(x){}if(all.length)syncState("Offline copy loaded · changes will sync automatically","warn");}
       // HOME LEAVE workers are on leave — no end time to set, so hide that site here
       all = all.filter(x => (x.site_name || "").trim().toUpperCase() !== "HOME LEAVE");
       ALL_ROWS = all;
+      SAVE_QUEUE.clear();
+      restorePending();
       const siteMap = {};
       all.forEach(x => siteMap[x.site_id] = x.site_name);
       SITES = Object.entries(siteMap).map(([id, name]) => ({ id, name }));
@@ -358,7 +373,8 @@
       render();                                // instant feedback
       const old=SAVE_QUEUE.get(x.allocation_id);
       SAVE_QUEUE.set(x.allocation_id,{x,changes:{...(old?.changes||{}),...changes,allocation_id:x.allocation_id,edit_reason:reason},prev:old?.prev||prev});
-      syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} pending`,"warn");
+      const queued=SAVE_QUEUE.get(x.allocation_id);queued.work_date=document.getElementById("date").value;queued.site_id=document.getElementById("site").value;queued.queued_at=queued.queued_at||new Date().toISOString();persistPending();
+      syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · ${navigator.onLine?"syncing":"waiting for network"}`,"warn");
       clearTimeout(SAVE_TIMER); SAVE_TIMER=setTimeout(flushSaves,450);
     }
 
@@ -366,7 +382,8 @@
       SAVE_TIMER=null;
       if(SAVE_RUNNING||!SAVE_QUEUE.size)return;
       SAVE_RUNNING=true;
-      const batch=[...SAVE_QUEUE.values()]; SAVE_QUEUE.clear();
+      if(!navigator.onLine){syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · waiting for network`,"warn");SAVE_RUNNING=false;SAVE_TIMER=setTimeout(flushSaves,5000);return;}
+      const batch=[...SAVE_QUEUE.values()];
       syncState(`Syncing ${batch.length} change${batch.length===1?"":"s"}…`);
       try{
         const r=await vmmsApi("/api/v1/attendance/batch",{method:"POST",body:JSON.stringify({changes:batch.map(q=>q.changes)})});
@@ -374,13 +391,13 @@
         if(!r.ok)throw new Error(data.detail||"Could not sync");
         const resultMap=new Map((data.results||[]).map(v=>[v.allocation_id,v]));
         let failed=0;
-        batch.forEach(q=>{const d=resultMap.get(q.x.allocation_id);if(d?.ok){q.x.normal_hours=d.normal_hours;q.x.ot_hours=d.ot_hours;q.x.day_type=d.day_type;q.x._saving=false;q.x._saved=true;}else{Object.assign(q.x,q.prev);q.x._saving=false;failed++;}});
+        batch.forEach(q=>{const d=resultMap.get(q.x.allocation_id);if(d?.ok){q.x.normal_hours=d.normal_hours;q.x.ot_hours=d.ot_hours;q.x.day_type=d.day_type;q.x._saving=false;q.x._saved=true;if(SAVE_QUEUE.get(q.x.allocation_id)===q)SAVE_QUEUE.delete(q.x.allocation_id);}else{q.x._saving=true;failed++;}});persistPending();
         render();
-        if(failed)syncState(`${failed} change${failed===1?"":"s"} need retry`,"err");
+        if(failed){syncState(`${failed} change${failed===1?"":"s"} need retry`,"err");SAVE_TIMER=setTimeout(flushSaves,5000);}
         else{syncState("All changes saved ✓","ok");setTimeout(()=>{if(!SAVE_QUEUE.size)syncState("");},1800);}
         setTimeout(()=>{batch.forEach(q=>q.x._saved=false);render();},1600);
       }catch(ex){
-        batch.forEach(q=>SAVE_QUEUE.set(q.x.allocation_id,q));
+        batch.forEach(q=>{q.x._saving=true;if(!SAVE_QUEUE.has(q.x.allocation_id))SAVE_QUEUE.set(q.x.allocation_id,q)});persistPending();
         syncState(`Connection weak — ${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} waiting`,"err");
         SAVE_TIMER=setTimeout(flushSaves,5000);
       }finally{SAVE_RUNNING=false;if(SAVE_QUEUE.size&&!SAVE_TIMER)SAVE_TIMER=setTimeout(flushSaves,500);}
@@ -400,6 +417,11 @@
     }
 
     async function bulkApply(t) { document.getElementById("bulk-time").value = t; await bulkSet(false); }
+    function queueBulkLocally(ids,t,nd){
+      const wanted=ids?new Set(ids):null,date=document.getElementById("date").value,site=document.getElementById("site").value;
+      ROWS.filter(x=>x.present&&x.absence_type!=="class"&&(!wanted||wanted.has(x.allocation_id))).forEach(x=>{const old=SAVE_QUEUE.get(x.allocation_id),prev=old?.prev||{present:x.present,end_time:x.end_time,absence_type:x.absence_type,marked:x.marked,normal_hours:x.normal_hours,ot_hours:x.ot_hours};x.end_time=t;x.end_next_day=nd;x._saving=true;x._saved=false;SAVE_QUEUE.set(x.allocation_id,{x,prev,changes:{...(old?.changes||{}),allocation_id:x.allocation_id,present:true,end_time:t,end_next_day:nd},work_date:date,site_id:site,queued_at:old?.queued_at||new Date().toISOString()});});
+      persistPending();render();syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · ${navigator.onLine?"retrying":"waiting for network"}`,"warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,navigator.onLine?700:5000);
+    }
     async function bulkSet(pendingOnly=false) {
       const t = document.getElementById("bulk-time").value;
       if (!t) { toast("Pick a time first"); return; }
@@ -412,9 +434,10 @@
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not apply");
+        if(!data.ok){queueBulkLocally(data.failed_allocation_ids||ids,t,nextDayFor({start_time:"08:00"},t));toast(`${data.updated} confirmed; ${data.failed} saved on phone for automatic retry`,true);return;}
         toast(`End time ${t} set for ${data.updated} ${pendingOnly?"pending ":"present "}workers — adjust exceptions individually`);
         await loadDay();
-      } catch (ex) { toast(ex.message, true); }
+      } catch (ex) { queueBulkLocally(ids,t,nextDayFor({start_time:"08:00"},t));toast("Network weak — end times saved on this phone and will retry automatically",true); }
     }
 
     // ---- group end-time: tick a set of workers, set ONE time for all of them ----
@@ -471,14 +494,16 @@
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || "Could not set the group");
+        if(!d.ok){queueBulkLocally(d.failed_allocation_ids||ids,t,nd);SEL.clear();toast(`${d.updated} confirmed; ${d.failed} saved on phone for automatic retry`,true);return;}
         SEL.clear();
         await loadDay();                               // authoritative hours from the server
         toast(`${label} set for ${d.updated} worker(s)`, false, true);
-      } catch (ex) { toast(ex.message, true); await loadDay(); }
+      } catch (ex) { queueBulkLocally(ids,t,nd);SEL.clear();toast("Network weak — group end times saved on this phone and will retry automatically",true); }
     }
 
     async function submitDay(stage) {
       const morning = stage === "morning";
+      if(SAVE_QUEUE.size||SAVE_RUNNING){flushSaves();toast(`${SAVE_QUEUE.size||1} change(s) are still syncing. Submit after the green confirmation.`,true);return;}
       if(!morning){const pending=ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time);if(pending.length){setAttFilter("pending");toast(`${pending.length} present worker(s) still need an end time`,true);return;}}
       if (!morning && !confirm("Submit the end times and lock this day? After this, changes need a reason.")) return;
       try {
@@ -493,6 +518,9 @@
         await loadDay();
       } catch (ex) { toast(ex.message, true); }
     }
+
+    addEventListener("online",()=>{if(SAVE_QUEUE.size){syncState("Connection restored · syncing saved changes…","warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,100);}});
+    addEventListener("offline",()=>{if(SAVE_QUEUE.size)syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · waiting for network`,"warn");});
 
     let TRANSFERABLE = [];
     async function openTransfer() {

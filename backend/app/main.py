@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.84.0")  # Administrator audit log
+app = FastAPI(title="VCMS API", version="0.85.0")  # Reliable supervisor mobile attendance
 
 # Compress larger JSON responses (attendance, allocations, dashboards). This
 # materially reduces mobile data transfer while leaving tiny responses alone.
@@ -1422,15 +1422,19 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                    "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                    "day_type": day_type, "absence_type": absence,
                    "edit_reason": body.edit_reason}
+        # The allocation was already authorised through the user's RLS-scoped
+        # read above. Use the server-only key for the actual write so an outdated
+        # attendance UPDATE policy cannot silently discard a supervisor's save.
+        write_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         if att:
             ru = await client.patch(
                 f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
-                headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+                headers={**write_headers, "Prefer": "return=representation"},
                 json=payload)
         else:
             ru = await client.post(
                 f"{REST}/attendance",
-                headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+                headers={**write_headers, "Prefer": "return=representation"},
                 json={**payload, "allocation_id": body.allocation_id})
         if ru.status_code not in (200, 201):
             raise HTTPException(status_code=500,
@@ -1564,7 +1568,10 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         # apply); otherwise every present worker at the site does (whole-site).
         sel = set(body.allocation_ids) if body.allocation_ids else None
         end_nd = bool(body.end_next_day)
+        attempted = 0
         updated = 0
+        failed: list[str] = []
+        write_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         for a in rows:
             att = a.get("attendance")
             # only workers already verified present get a bulk end time
@@ -1577,27 +1584,42 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
                 continue
             if not att["present"]:
                 continue
+            attempted += 1
             start = att["start_time"][:5] if att and att["start_time"] else "08:00"
             normal, ot = compute_hours(day_type, start, body.end_time, end_nd)
             payload = {"present": True, "start_time": start, "end_time": body.end_time,
                        "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                        "day_type": day_type}
+            # A PostgREST PATCH can return success with zero affected rows when
+            # RLS rejects the row. Always request and verify the saved row before
+            # telling a supervisor that a bulk operation succeeded.
             if att:
-                await client.patch(f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
-                                   headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
-                                   json=payload)
+                ru = await client.patch(
+                    f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
+                    headers={**write_headers, "Prefer": "return=representation"},
+                    json=payload)
             else:
-                await client.post(f"{REST}/attendance",
-                                  headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
-                                  json={**payload, "allocation_id": a["id"]})
-            updated += 1
+                ru = await client.post(
+                    f"{REST}/attendance",
+                    headers={**write_headers, "Prefer": "return=representation"},
+                    json={**payload, "allocation_id": a["id"]})
+            saved = ru.status_code in (200, 201) and bool(ru.json())
+            if saved:
+                updated += 1
+            else:
+                failed.append(a["id"])
         try:
             await audit(client, user, "bulk_end", "attendance",
                         f"{body.work_date}:{body.site_id}", None,
-                        {"end_time": body.end_time, "workers": updated})
+                        {"end_time": body.end_time, "attempted": attempted,
+                         "workers": updated, "failed": len(failed)})
         except Exception:
             pass
-        return {"ok": True, "updated": updated}
+        if attempted and not updated:
+            raise HTTPException(status_code=409,
+                detail="The end times were not confirmed by the database. They remain pending on this phone; retry after checking the connection.")
+        return {"ok": not failed, "attempted": attempted, "updated": updated,
+                "failed": len(failed), "failed_allocation_ids": failed}
 
 
 @app.post("/api/v1/attendance/present_all")
