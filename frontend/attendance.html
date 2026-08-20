@@ -16,6 +16,23 @@
     .att-filters{display:flex;gap:7px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}.att-filters::-webkit-scrollbar{display:none}.att-filter{flex:none;border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800}.att-filter.on{background:#252b35;color:#fff;border-color:#252b35}
     .save-state{min-width:62px;text-align:right}.worker-saving{pointer-events:none;opacity:.72}
     #sync-state{position:fixed;right:12px;bottom:88px;z-index:35;border-radius:999px;padding:8px 12px;background:#1f2937;color:#fff;font-size:12px;font-weight:800;box-shadow:0 5px 18px rgba(0,0,0,.2)}#sync-state.ok{background:#15803d}#sync-state.warn{background:#b45309}#sync-state.err{background:#b91c1c}
+    #submit-checklist,.quick-end{display:none}
+    #submit-checklist .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+    @media(max-width:899px){
+      body.evening-mode #morningbar{display:none!important}
+      body.evening-mode #submit-checklist{display:block;background:#fff;border:1px solid #d7dde5;border-left:4px solid #c00000;border-radius:12px;padding:11px 12px;margin-bottom:11px;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+      body.evening-mode #bulkbar{background:#fff!important;padding:12px!important;border-color:#d7dde5!important}
+      body.evening-mode #bulkbar .bulk-help{display:none}
+      body.evening-mode .quick-end{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+      body.evening-mode .worker-card{padding:11px 12px!important;background:#fff!important}
+      body.evening-mode .worker-card>div:first-child{margin-bottom:7px!important}
+      body.evening-mode .worker-extra{display:none;margin-top:9px;padding-top:9px;border-top:1px solid #e5e7eb}
+      body.evening-mode .worker-extra.open{display:block}
+      body.evening-mode .quick-time{min-width:49px;padding:7px 9px;border-radius:9px;font-size:12px;font-weight:800}
+      body.evening-mode .card-options{padding:7px 9px;border-radius:9px;font-size:11px;font-weight:800;background:#eef0f3;color:#4b5563}
+      body.evening-mode .quick-state{margin-left:auto;font-size:11px;font-weight:800}
+      body.evening-mode #list{gap:7px}
+    }
     @media(min-width:900px){
       body{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
       body>header>div{max-width:none!important;width:100%!important}
@@ -51,6 +68,7 @@
 
   <main id="att-main" class="flex-1 p-4 max-w-md mx-auto w-full pb-36">
     <div id="banner" class="hidden rounded-xl p-3 mb-3 text-sm font-medium text-center"></div>
+    <div id="submit-checklist"></div>
     <div id="att-kpis"></div>
     <div class="att-work"><div class="att-tools">
 
@@ -70,7 +88,7 @@
         <input id="bulk-time" type="time" step="900" class="border border-gray-300 rounded-lg p-2 text-sm flex-1 min-w-[100px]">
         <button onclick="bulkSet()" class="border-2 border-gray-800 text-gray-800 font-bold px-3 py-2 rounded-lg text-sm">Apply</button>
       </div>
-      <div class="mt-3 pt-2 border-t border-gray-200">
+      <div class="bulk-help mt-3 pt-2 border-t border-gray-200">
         <p class="text-xs text-gray-500 mb-1">Different times per group? Tick the workers on their cards below, then pick the time in the red bar. Tip for big sites: set the most common time above first, then just fix the groups that differ.</p>
         <div class="flex gap-3">
           <button onclick="selectAllPresent()" class="text-xs font-bold text-red-700 underline">Select all present</button>
@@ -141,7 +159,7 @@
 
     let ME = null, ROWS = [], ALL_ROWS = [], SITES = [];
     const SEL = new Set();   // allocation_ids selected for a group end-time apply
-    let ATT_FILTER = "all";
+    let ATT_FILTER = "all", EVENING_MODE = false, AUTO_FILTER_DONE = false;
     const SAVE_QUEUE = new Map();
     let SAVE_TIMER = null, SAVE_RUNNING = false;
     const ATT_QUEUE_KEY = "vcms_attendance_pending_v1";
@@ -212,6 +230,7 @@
     }
 
     async function loadDay() {
+      AUTO_FILTER_DONE=false;
       const date = document.getElementById("date").value;
       let all=[];
       try{const r=await vmmsApi(`/api/v1/attendance?date=${date}`);if(!r.ok)throw Error("load failed");all=await r.json();try{localStorage.setItem("vcms_att_day_"+date,JSON.stringify(all))}catch(e){}}
@@ -234,7 +253,7 @@
 
     // Switching sites uses the attendance already downloaded for this date.
     // Previously it fetched the whole date again on every site change.
-    function switchSite(){ SEL.clear(); ROWS=ALL_ROWS.filter(x=>x.site_id===document.getElementById("site").value); render(); }
+    function switchSite(){ SEL.clear(); AUTO_FILTER_DONE=false; ROWS=ALL_ROWS.filter(x=>x.site_id===document.getElementById("site").value); render(); }
 
     function render() {
       const list = document.getElementById("list");
@@ -258,6 +277,14 @@
       const absent=ROWS.filter(x=>x.marked&&!x.present).length;
       const pendingEnd=ROWS.filter(x=>x.present&&!x.end_time&&x.absence_type!=="class").length;
       const transferred=ROWS.filter(x=>x.transferred||x.transfer_from_site_id).length;
+      EVENING_MODE=morningDone||new Date().getHours()>=16;
+      document.body.classList.toggle("evening-mode",EVENING_MODE);
+      if(EVENING_MODE&&!AUTO_FILTER_DONE){ATT_FILTER=morningDone&&pendingEnd?"pending":"all";AUTO_FILTER_DONE=true;document.querySelectorAll(".att-filter").forEach(b=>b.classList.toggle("on",b.dataset.f===ATT_FILTER));}
+      const confirmed=present-pendingEnd,queued=SAVE_QUEUE.size,ready=morningDone&&pendingEnd===0&&queued===0&&!SAVE_RUNNING;
+      document.getElementById("submit-checklist").innerHTML=`
+        <div class="flex items-center justify-between gap-2"><b class="text-sm text-gray-800">Evening submission check</b><span class="text-xs font-bold ${ready?"text-green-700":"text-amber-700"}">${fullySubmitted?"SUBMITTED ✓":(ready?"READY ✓":"ACTION NEEDED")}</span></div>
+        <div class="grid grid-cols-3 gap-2 mt-2 text-center"><div><b class="block text-base">${present}</b><span class="text-[10px] text-gray-500">PRESENT</span></div><div><b class="block text-base text-green-700">${confirmed}</b><span class="text-[10px] text-gray-500">END SAVED</span></div><div><b class="block text-base ${pendingEnd?"text-red-700":"text-green-700"}">${pendingEnd}</b><span class="text-[10px] text-gray-500">PENDING</span></div></div>
+        ${queued?`<p class="text-xs font-bold text-amber-700 mt-2">${queued} phone change(s) waiting for confirmation</p>`:""}`;
       document.getElementById("att-kpis").innerHTML=[[total,"Allocated"],[present,"Present"],[absent,"On leave"],[notMarked,"Not marked"],[pendingEnd,"End-time pending"],[transferred,"Transferred"]].map(v=>`<div class="att-kpi"><b>${v[0]}</b><span>${v[1]}</span></div>`).join("");
 
       // banner
@@ -290,7 +317,7 @@
       visibleRows.forEach(x => {
         const absent = x.marked && !x.present;
         const div = document.createElement("div");
-        div.className = "bg-gray-100 border rounded-xl shadow-sm p-4 " + (x._saving ? "worker-saving " : "") +
+        div.className = "worker-card bg-gray-100 border rounded-xl shadow-sm p-4 " + (x._saving ? "worker-saving " : "") +
           (absent ? "border-gray-300 opacity-60" : (!x.marked ? "border-yellow-300" : "border-gray-300"));
         div.innerHTML = `
           <div class="flex items-center gap-2 mb-2">
@@ -320,7 +347,13 @@
                    <span class="text-sm font-bold text-indigo-700">📚 CLASS (8h)</span>
                    <button class="clr-class text-xs font-bold text-gray-500 underline">Undo</button>
                  </div>`
-              : `<div class="flex items-center flex-wrap gap-1 mb-2">
+              : `<div class="quick-end">
+                   ${COMMON_PRESETS.map(([t,l])=>`<button class="qtime quick-time ${x.end_time===t?"bg-red-700 text-white":"bg-gray-100 text-gray-700"}" data-t="${t}">${l}</button>`).join("")}
+                   <button class="card-options">${x._expanded?"Close":"Options"}</button>
+                   <span class="quick-state ${x._saving?"text-amber-600":(x.end_time?"text-green-700":"text-red-700")}">${x._saving?"Syncing…":(x.end_time?`${x.end_time} ✓`:"Pending")}</span>
+                 </div>
+                 <div class="worker-extra ${(!EVENING_MODE||x._expanded||x.shift_type==="night"||x.partial_leave_type)?"open":""}">
+                 <div class="flex items-center flex-wrap gap-1 mb-2">
                    <button class="mode-day text-xs font-bold px-2.5 py-1.5 rounded-full ${x.shift_type!=="night"&&!x.partial_leave_type?"bg-gray-800 text-white":"bg-white text-gray-600 border"}">Day</button>
                    <button class="mode-night text-xs font-bold px-2.5 py-1.5 rounded-full ${x.shift_type==="night"?"bg-indigo-700 text-white":"bg-white text-gray-600 border"}">🌙 Night</button>
                    ${["mc","al","ul"].map(v=>`<button class="mode-half text-xs font-bold px-2.5 py-1.5 rounded-full ${x.partial_leave_type===v?"bg-amber-500 text-white":"bg-white text-gray-600 border"}" data-r="${v}">½ ${v.toUpperCase()}</button>`).join("")}
@@ -337,7 +370,8 @@
                    </span>
                  </div>
                  <input type="time" step="900" value="${x.end_time || ""}"
-                        class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">`}
+                        class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
+                 </div>`}
           </div>`;
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
@@ -354,6 +388,8 @@
         const nightBtn=div.querySelector(".mode-night");if(nightBtn)nightBtn.addEventListener("click",()=>mark(x,{present:true,shift_type:"night",start_time:"20:00",end_time:null,end_next_day:false,partial_leave_type:"",leave_portion:""},div));
         div.querySelectorAll(".mode-half").forEach(b=>b.addEventListener("click",()=>mark(x,{present:true,shift_type:"day",start_time:"08:00",end_time:"12:00",end_next_day:false,partial_leave_type:b.dataset.r,leave_portion:"second_half"},div)));
         div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: nextDayFor(x, b.dataset.t) }, div)));
+        div.querySelectorAll(".qtime").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: nextDayFor(x, b.dataset.t) }, div)));
+        const optBtn=div.querySelector(".card-options");if(optBtn)optBtn.addEventListener("click",()=>{x._expanded=!x._expanded;render();});
         const moreBtn=div.querySelector(".tmore"); if(moreBtn) moreBtn.addEventListener("click",()=>{x._more=!x._more;render();});
         const tc = div.querySelector(".tcustom");
         if (tc) tc.addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
