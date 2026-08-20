@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v33-attendance-shifts-partial-leave';
+const CACHE = 'vcms-v34-end-time-reliability';
 const APP_SHELL = [
   './','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html','camera.html','camera-settings.html','camera-photos.html','audit-log.html','camera-manifest.json',
   'css/app.css','js/config.js?v=20260813-8','js/auth.js?v=20260813-8','js/shell.js?v=20260813-8','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'

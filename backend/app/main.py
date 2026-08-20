@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.86.0")  # Partial-day leave and night shifts
+app = FastAPI(title="VCMS API", version="0.86.1")  # Reliable mobile end-time submission
 
 # Compress larger JSON responses (attendance, allocations, dashboards). This
 # materially reduces mobile data transfer while leaving tiny responses alone.
@@ -1610,6 +1610,14 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         updated = 0
         failed: list[str] = []
         write_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
+        saves: list[tuple[str, object]] = []
+
+        async def save_end_time(a: dict, att: dict, payload: dict):
+            return a["id"], await client.patch(
+                f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
+                headers={**write_headers, "Prefer": "return=representation"},
+                json=payload)
+
         for a in rows:
             att = a.get("attendance")
             # only workers already verified present get a bulk end time
@@ -1628,24 +1636,24 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
             payload = {"present": True, "start_time": start, "end_time": body.end_time,
                        "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                        "day_type": day_type}
+            # Run independent worker saves concurrently. The former sequential
+            # loop made a 20–40 worker site exceed mobile network timeouts even
+            # though Supabase eventually committed every row.
+            saves.append((a["id"], save_end_time(a, att, payload)))
+
+        results = await asyncio.gather(*(job for _, job in saves), return_exceptions=True)
+        for (allocation_id, _), result in zip(saves, results):
+            if isinstance(result, Exception):
+                failed.append(allocation_id)
+                continue
+            _, ru = result
             # A PostgREST PATCH can return success with zero affected rows when
-            # RLS rejects the row. Always request and verify the saved row before
-            # telling a supervisor that a bulk operation succeeded.
-            if att:
-                ru = await client.patch(
-                    f"{REST}/attendance", params={"id": f"eq.{att['id']}"},
-                    headers={**write_headers, "Prefer": "return=representation"},
-                    json=payload)
-            else:
-                ru = await client.post(
-                    f"{REST}/attendance",
-                    headers={**write_headers, "Prefer": "return=representation"},
-                    json={**payload, "allocation_id": a["id"]})
+            # RLS rejects the row. Verify the returned representation.
             saved = ru.status_code in (200, 201) and bool(ru.json())
             if saved:
                 updated += 1
             else:
-                failed.append(a["id"])
+                failed.append(allocation_id)
         try:
             await audit(client, user, "bulk_end", "attendance",
                         f"{body.work_date}:{body.site_id}", None,
@@ -1728,14 +1736,20 @@ async def submit_day(body: SubmitDay, user: dict = Depends(get_current_user)):
                                 detail="End time missing for: " + ", ".join(missing[:5]) +
                                        (f" (+{len(missing)-5} more)" if len(missing) > 5 else ""))
         att_ids = [a["attendance"]["id"] for a in rows if a.get("attendance")]
+        # Authorization was already established by the user's RLS-scoped read
+        # above. Use the server-only key for the final lock, just as individual
+        # end-time saves do, and verify every row was actually updated.
+        write_headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
         r = await client.patch(
             f"{REST}/attendance",
             params={"id": f"in.({','.join(att_ids)})"},
-            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+            headers={**write_headers, "Prefer": "return=representation"},
             json={"submitted_at": "now()", "submitted_by": user["user_id"]},
         )
-        if r.status_code not in (200, 204):
-            raise HTTPException(status_code=500, detail="Could not submit the day")
+        saved_rows = r.json() if r.status_code in (200, 201) else []
+        if len(saved_rows) != len(att_ids):
+            raise HTTPException(status_code=500,
+                                detail="End times were saved, but final submission was not confirmed. Please tap Submit End Times again.")
         await audit(client, user, "submit_day", "attendance",
                     f"{body.work_date}:{body.site_id}", None, {"workers": len(att_ids)})
         return {"ok": True, "stage": "evening", "submitted": len(att_ids)}

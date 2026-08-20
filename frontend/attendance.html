@@ -434,6 +434,29 @@
       ROWS.filter(x=>x.present&&x.absence_type!=="class"&&(!wanted||wanted.has(x.allocation_id))).forEach(x=>{const old=SAVE_QUEUE.get(x.allocation_id),prev=old?.prev||{present:x.present,end_time:x.end_time,absence_type:x.absence_type,marked:x.marked,normal_hours:x.normal_hours,ot_hours:x.ot_hours};x.end_time=t;x.end_next_day=nd;x._saving=true;x._saved=false;SAVE_QUEUE.set(x.allocation_id,{x,prev,changes:{...(old?.changes||{}),allocation_id:x.allocation_id,present:true,end_time:t,end_next_day:nd},work_date:date,site_id:site,queued_at:old?.queued_at||new Date().toISOString()});});
       persistPending();render();syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · ${navigator.onLine?"retrying":"waiting for network"}`,"warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,navigator.onLine?700:5000);
     }
+    function sameSavedValue(actual,wanted){return wanted===null?(actual===null||actual===""):String(actual??"")===String(wanted)}
+    async function reconcileSavedChanges(){
+      if(!navigator.onLine||!SAVE_QUEUE.size)return false;
+      try{
+        const date=document.getElementById("date").value,r=await vmmsApi(`/api/v1/attendance?date=${date}`);
+        if(!r.ok)return false;
+        const latest=await r.json(),byId=new Map(latest.map(x=>[x.allocation_id,x]));
+        for(const [id,q] of [...SAVE_QUEUE]){const row=byId.get(id),c=q.changes||{};if(row&&Object.keys(c).filter(k=>k!=="allocation_id"&&k!=="edit_reason").every(k=>sameSavedValue(row[k],c[k])))SAVE_QUEUE.delete(id);}
+        persistPending();
+        return true;
+      }catch(e){return false;}
+    }
+    async function reconcileBulkOrQueue(ids,t,nd,label){
+      await new Promise(r=>setTimeout(r,700));
+      try{
+        const date=document.getElementById("date").value,r=await vmmsApi(`/api/v1/attendance?date=${date}`);
+        if(!r.ok)throw Error("Could not verify");
+        const latest=await r.json(),byId=new Map(latest.map(x=>[x.allocation_id,x]));
+        const missing=ids.filter(id=>{const x=byId.get(id);return !x||x.end_time!==t||!!x.end_next_day!==!!nd});
+        if(!missing.length){await loadDay();toast(`${label} confirmed for ${ids.length} worker(s)`,false,true);return;}
+        queueBulkLocally(missing,t,nd);toast(`${ids.length-missing.length} confirmed; ${missing.length} saved on this phone for retry`,true);
+      }catch(e){queueBulkLocally(ids,t,nd);toast("Connection weak — end times are safe on this phone and will retry",true);}
+    }
     async function bulkSet(pendingOnly=false) {
       const t = document.getElementById("bulk-time").value;
       if (!t) { toast("Pick a time first"); return; }
@@ -450,7 +473,7 @@
         if(!data.ok){queueBulkLocally(data.failed_allocation_ids||ids,t,nextDayFor({start_time:"08:00"},t));toast(`${data.updated} confirmed; ${data.failed} saved on phone for automatic retry`,true);return;}
         toast(`End time ${t} set for ${data.updated} ${pendingOnly?"pending ":"day-shift "}workers — adjust exceptions individually`);
         await loadDay();
-      } catch (ex) { queueBulkLocally(ids,t,nextDayFor({start_time:"08:00"},t));toast("Network weak — end times saved on this phone and will retry automatically",true); }
+      } catch (ex) { await reconcileBulkOrQueue(ids,t,nextDayFor({start_time:"08:00"},t),`End time ${t}`); }
     }
 
     // ---- group end-time: tick a set of workers, set ONE time for all of them ----
@@ -511,12 +534,18 @@
         SEL.clear();
         await loadDay();                               // authoritative hours from the server
         toast(`${label} set for ${d.updated} worker(s)`, false, true);
-      } catch (ex) { queueBulkLocally(ids,t,nd);SEL.clear();toast("Network weak — group end times saved on this phone and will retry automatically",true); }
+      } catch (ex) { SEL.clear();await reconcileBulkOrQueue(ids,t,nd,label); }
     }
 
     async function submitDay(stage) {
       const morning = stage === "morning";
-      if(SAVE_QUEUE.size||SAVE_RUNNING){flushSaves();toast(`${SAVE_QUEUE.size||1} change(s) are still syncing. Submit after the green confirmation.`,true);return;}
+      if(SAVE_QUEUE.size||SAVE_RUNNING){
+        await flushSaves();
+        for(let i=0;i<12&&SAVE_RUNNING;i++)await new Promise(r=>setTimeout(r,250));
+        await reconcileSavedChanges();
+        if(SAVE_QUEUE.size||SAVE_RUNNING){toast(`${SAVE_QUEUE.size||1} change(s) are safely stored on this phone but not yet confirmed. Keep this page open and tap Submit again when the signal improves.`,true);return;}
+        await loadDay();
+      }
       if(!morning){const pending=ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time);if(pending.length){setAttFilter("pending");toast(`${pending.length} present worker(s) still need an end time`,true);return;}}
       if (!morning && !confirm("Submit the end times and lock this day? After this, changes need a reason.")) return;
       try {
