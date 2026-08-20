@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.85.0")  # Reliable supervisor mobile attendance
+app = FastAPI(title="VCMS API", version="0.86.0")  # Partial-day leave and night shifts
 
 # Compress larger JSON responses (attendance, allocations, dashboards). This
 # materially reduces mobile data transfer while leaving tiny responses alone.
@@ -1300,6 +1300,9 @@ class AttendanceMark(BaseModel):
     end_time: str | None = None        # "HH:MM"
     end_next_day: bool | None = None
     absence_type: str | None = None    # 'absent' | 'mc' (only when present=false)
+    shift_type: str | None = None      # day | night | custom
+    partial_leave_type: str | None = None  # mc | al | ul, while present=true
+    leave_portion: str | None = None   # first_half | second_half
     edit_reason: str | None = None
 
 
@@ -1325,7 +1328,8 @@ async def _load_day(client, token, work_date: str, site_id: str | None):
     params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
               "select": "id,site_id,worker_id,sites(site_name),workers(name,worker_code),"
                         "attendance(id,present,start_time,end_time,end_next_day,"
-                        "normal_hours,ot_hours,day_type,submitted_at,absence_type)"}
+                        "normal_hours,ot_hours,day_type,submitted_at,absence_type,"
+                        "shift_type,partial_leave_type,leave_portion,leave_value)"}
     if site_id:
         params["site_id"] = f"eq.{site_id}"
     r = await client.get(f"{REST}/allocations", params=params,
@@ -1359,6 +1363,10 @@ async def day_sheet(date: str, site_id: str = "",
                 "ot_hours": float(att["ot_hours"]) if att else 0,
                 "submitted": bool(att and att["submitted_at"]),
                 "absence_type": (att.get("absence_type") if att else None) or "absent",
+                "shift_type": (att.get("shift_type") if att else None) or "day",
+                "partial_leave_type": att.get("partial_leave_type") if att else None,
+                "leave_portion": att.get("leave_portion") if att else None,
+                "leave_value": float(att.get("leave_value") or 0) if att else 0,
             })
         return sorted(out, key=lambda x: (x["site_name"], x["worker_name"]))
 
@@ -1367,7 +1375,9 @@ async def day_sheet(date: str, site_id: str = "",
 async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current_user)):
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    if body.start_time and user["role"] in SUPERVISOR_ROLES:
+    safe_shift_start = ((body.shift_type == "night" and body.start_time == "20:00") or
+                        (body.shift_type == "day" and body.start_time == "08:00"))
+    if body.start_time and user["role"] in SUPERVISOR_ROLES and not safe_shift_start:
         raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
 
     async with shared_client() as client:
@@ -1375,7 +1385,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         ra = await client.get(
             f"{REST}/allocations",
             params={"id": f"eq.{body.allocation_id}",
-                    "select": "id,work_date,site_id,worker_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at)"},
+                    "select": "id,work_date,site_id,worker_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at,absence_type,shift_type,partial_leave_type,leave_portion,leave_value)"},
             headers=supabase_headers(user["token"]),
         )
         arows = ra.json() if ra.status_code == 200 else []
@@ -1394,12 +1404,35 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         end = body.end_time if body.end_time is not None else (att["end_time"][:5] if att and att["end_time"] else None)
         end_nd = body.end_next_day if body.end_next_day is not None else (att["end_next_day"] if att else False)
         present = body.present if body.present is not None else (att["present"] if att else True)
+        fields_set = getattr(body, "model_fields_set", getattr(body, "__fields_set__", set()))
+        shift_type = (body.shift_type if "shift_type" in fields_set else
+                      ((att or {}).get("shift_type") or "day"))
+        partial_leave = (body.partial_leave_type if "partial_leave_type" in fields_set else
+                         (att or {}).get("partial_leave_type"))
+        leave_portion = (body.leave_portion if "leave_portion" in fields_set else
+                         (att or {}).get("leave_portion"))
+        partial_leave = partial_leave or None
+        leave_portion = leave_portion or None
 
         # "Class" = paid training day. The worker is not on site but the company
         # pays 08:00–17:00 (a normal 8-hour day). Stored as a present, paid day and
         # tagged 'class' so reports can show it distinctly.
         if body.absence_type == "class":
             present, start, end, end_nd = True, "08:00", "17:00", False
+            shift_type, partial_leave, leave_portion = "day", None, None
+
+        if shift_type not in ("day", "night", "custom"):
+            raise HTTPException(status_code=400, detail="Invalid shift type")
+        if partial_leave not in (None, "mc", "al", "ul"):
+            raise HTTPException(status_code=400, detail="Invalid partial leave type")
+        if leave_portion not in (None, "first_half", "second_half"):
+            raise HTTPException(status_code=400, detail="Invalid leave portion")
+        if partial_leave and (not present or not leave_portion):
+            raise HTTPException(status_code=400, detail="Partial leave requires a present worker and a half-day period")
+        if not present:
+            partial_leave, leave_portion, shift_type = None, None, "day"
+        if shift_type == "night" and end and _to_min(end) <= _to_min(start):
+            end_nd = True
 
         if user["role"] != "admin" and await month_locked(client, user["token"], alloc["work_date"]):
             raise HTTPException(status_code=403, detail="Month closed by payroll — administrator only")
@@ -1417,10 +1450,13 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             raise HTTPException(status_code=400, detail="Invalid absence type")
         absence = "class" if body.absence_type == "class" else (
             None if present else (body.absence_type or (att.get("absence_type") if att else None) or "absent"))
+        leave_value = 0.5 if present and partial_leave else (1.0 if not present and absence in ("mc", "al", "ul") else 0.0)
 
         payload = {"present": present, "start_time": start, "end_time": end,
                    "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                    "day_type": day_type, "absence_type": absence,
+                   "shift_type": shift_type, "partial_leave_type": partial_leave,
+                   "leave_portion": leave_portion, "leave_value": leave_value,
                    "edit_reason": body.edit_reason}
         # The allocation was already authorised through the user's RLS-scoped
         # read above. Use the server-only key for the actual write so an outdated
@@ -1465,7 +1501,9 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             await asyncio.wait_for(
                 audit(client, user, "mark_attendance", "attendance", body.allocation_id,
                       {k: att.get(k) for k in ("present", "end_time")} if att else None,
-                      {"present": present, "end_time": end, "normal": normal, "ot": ot}),
+                      {"present": present, "end_time": end, "normal": normal, "ot": ot,
+                       "shift_type": shift_type, "partial_leave_type": partial_leave,
+                       "leave_portion": leave_portion, "leave_value": leave_value}),
                 timeout=1.0)
         except Exception:
             pass
@@ -1566,7 +1604,7 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
         day_type = await get_day_type(client, user["token"], body.work_date)
         # When allocation_ids is given, only those workers get the time (group
         # apply); otherwise every present worker at the site does (whole-site).
-        sel = set(body.allocation_ids) if body.allocation_ids else None
+        sel = set(body.allocation_ids) if body.allocation_ids is not None else None
         end_nd = bool(body.end_next_day)
         attempted = 0
         updated = 0
@@ -1855,7 +1893,8 @@ def format_allocation_message(work_date: str, site_names: list[str],
     return "\n".join(lines)
 
 
-ABSENCE_LABEL = {"mc": "MC", "ul": "UL", "al": "AL"}
+ABSENCE_LABEL = {"mc": "MC", "ul": "UL", "al": "AL",
+                 "half_mc": "½ DAY MC", "half_ul": "½ DAY UL", "half_al": "½ DAY AL"}
 
 
 def _leave_lines(leave: list[dict]) -> list[str]:
@@ -1944,6 +1983,9 @@ async def update_message(date: str, site_id: str,
                     leave.append({"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
                                   "type": att["absence_type"]})
                 continue
+            if att.get("partial_leave_type") in ("mc", "ul", "al"):
+                leave.append({"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
+                              "type": "half_" + att["partial_leave_type"]})
             if not att["end_time"]:
                 missing += 1
                 continue
@@ -1980,6 +2022,10 @@ async def update_all_message(date: str, user: dict = Depends(get_current_user)):
                         {"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
                          "type": att["absence_type"]})
                 continue
+            if att.get("partial_leave_type") in ("mc", "ul", "al"):
+                leave_by_site.setdefault(sname, []).append(
+                    {"name": w.get("name", "?"), "code": w.get("worker_code", "?"),
+                     "type": "half_" + att["partial_leave_type"]})
             if not att["end_time"]:
                 missing += 1
                 continue
@@ -2114,7 +2160,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                         "status": "eq.allocated",
                         "select": "work_date,site_id,worker_id,sites(site_name),"
                                   "workers(name,worker_code),"
-                                  "attendance(present,submitted_at,normal_hours,ot_hours,absence_type)",
+                                  "attendance(present,submitted_at,normal_hours,ot_hours,absence_type,partial_leave_type,leave_value)",
                         "order": "work_date.asc,id.asc", "limit": _page, "offset": _off},
                 headers=supabase_headers(user["token"]))
             if rm.status_code != 200:
@@ -2140,15 +2186,15 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             month_nh += nh
             month_ot += ot
 
-            # count each MC / AL / UL day per worker across the month
-            if att and not att.get("present"):
-                at = att.get("absence_type")
+            # Count full-day and half-day MC / AL / UL values per worker.
+            if att:
+                at = (att.get("partial_leave_type") if att.get("present") else att.get("absence_type"))
                 if at in ("mc", "al", "ul"):
                     w = a.get("workers") or {}
                     code = w.get("worker_code") or a.get("worker_id") or "?"
                     lw = leave_by_worker.setdefault(
                         code, {"name": w.get("name", "?"), "code": code, "mc": 0, "al": 0, "ul": 0})
-                    lw[at] += 1
+                    lw[at] += float(att.get("leave_value") or (0.5 if att.get("present") else 1))
 
             sm = site_month.setdefault(sname, {"nh": 0.0, "ot": 0.0})
             sm["nh"] += nh
@@ -2161,11 +2207,11 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                     t["with_att"] += 1
                     if att["submitted_at"]:
                         t["submitted"] += 1
-                    if not att["present"]:
-                        at = att.get("absence_type")
-                        if at == "mc": today_mc += 1
-                        elif at == "al": today_al += 1
-                        elif at == "ul": today_ul += 1
+                    at = (att.get("partial_leave_type") if att.get("present") else att.get("absence_type"))
+                    lv = float(att.get("leave_value") or (0.5 if att.get("present") and at else 1))
+                    if at == "mc": today_mc += lv
+                    elif at == "al": today_al += lv
+                    elif at == "ul": today_ul += lv
 
         # Split the day into MORNING (attendance marked) and EVENING (end times submitted)
         morning_pending, morning_completed = [], []
@@ -2237,7 +2283,7 @@ async def _range_rows(client, token, dfrom: str, dto: str, site_id: str | None):
     base = {"work_date": f"gte.{dfrom}", "status": "eq.allocated",
             "select": "work_date,site_id,sites(site_name),"
                       "workers(name,worker_code),"
-                      "attendance(present,start_time,end_time,normal_hours,ot_hours,day_type,submitted_at,absence_type)",
+                      "attendance(present,start_time,end_time,end_next_day,normal_hours,ot_hours,day_type,submitted_at,absence_type,shift_type,partial_leave_type,leave_portion,leave_value)",
             "and": f"(work_date.lte.{dto}" + (f",site_id.eq.{site_id}" if site_id else "") + ")",
             "order": "work_date.asc,id.asc"}
     rows, off, page = [], 0, 1000
@@ -2274,6 +2320,11 @@ async def report_attendance(dfrom: str, dto: str, site_id: str = "",
                 "present": att["present"] if att else None,
                 "absence": ("class" if att and att.get("absence_type") == "class"
                             else ((att.get("absence_type") or "absent") if att and not att["present"] else "")),
+                "partial_leave": att.get("partial_leave_type") if att and att.get("present") else "",
+                "leave_portion": att.get("leave_portion") if att else "",
+                "leave_value": float(att.get("leave_value") or 0) if att else 0,
+                "shift_type": att.get("shift_type") or "day" if att else "",
+                "end_next_day": bool(att and att.get("end_next_day")),
                 "start": att["start_time"][:5] if att and att["start_time"] else "",
                 "end": att["end_time"][:5] if att and att["end_time"] else "",
                 "nh": float(att["normal_hours"]) if att and att["present"] else 0,

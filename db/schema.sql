@@ -166,6 +166,10 @@ create table if not exists public.attendance (
   submitted_at   timestamptz,
   submitted_by   uuid references public.users (id),
   edit_reason    text,                              -- mandatory on post-submit edits
+  shift_type     text not null default 'day' check (shift_type in ('day','night','custom')),
+  partial_leave_type text check (partial_leave_type is null or partial_leave_type in ('mc','al','ul')),
+  leave_portion  text check (leave_portion is null or leave_portion in ('first_half','second_half')),
+  leave_value    numeric(3,2) not null default 0 check (leave_value in (0,0.5,1)),
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );

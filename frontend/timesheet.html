@@ -165,8 +165,9 @@
                    (x.day_type || "").toLowerCase().includes("holiday");
         const main = nh ? String(nh).replace(/\.0$/,"") : "";
         const otTxt = ot ? `<sup class="ot">+${String(ot).replace(/\.0$/,"")}</sup>` : "";
-        return { html: (ph?'<span class="code-ph">PH</span> ':'') + main + otTxt,
-                 xlsx: (ph?"PH ":"") + (nh||0) + (ot?`+${ot}`:""), cls: ph?"":"" };
+        const half=x.partial_leave?`<small>½${x.partial_leave.toUpperCase()}</small>`:"",halfX=x.partial_leave?` / 0.5 ${x.partial_leave.toUpperCase()}`:"";
+        return { html: (ph?'<span class="code-ph">PH</span> ':'') + main + otTxt + half,
+                 xlsx: (ph?"PH ":"") + (nh||0) + (ot?`+${ot}`:"") + halfX, cls: ph?"":"" };
       }
       const a = (x.absence || "").toLowerCase();
       if (a === "mc") return { html: '<span class="code-mc">MC</span>', xlsx: "MC" };
@@ -184,7 +185,7 @@
                                           d:0, nh:0, ot:0, mc:0, al:0, ul:0 });
         const day = +x.date.slice(8,10);
         w.days[day] = x;
-        if (x.present) { w.d++; w.nh += x.nh; w.ot += x.ot; }
+        if (x.present) { w.d++; w.nh += x.nh; w.ot += x.ot;const a=(x.partial_leave||"").toLowerCase();if(a==="mc")w.mc+=.5;else if(a==="al")w.al+=.5;else if(a==="ul")w.ul+=.5; }
         else {
           const a = (x.absence||"").toLowerCase();
           if (a==="mc") w.mc++; else if (a==="al") w.al++; else if (a==="ul") w.ul++;

@@ -156,10 +156,10 @@
     function render() {
       const view = document.getElementById("view").value;
       if (view === "detail") {
-        HEADERS = ["Date", "Site", "ID", "Worker", "Present", "Start", "End", "Normal", "OT", "Day"];
+        HEADERS = ["Date", "Site", "ID", "Worker", "Attendance", "Shift", "Start", "End", "Normal", "OT", "Day"];
         ROWS = DATA.map(x => [fmtD(x.date), x.site, x.worker_code, x.worker,
-                              x.present === null ? "-" : (x.present ? "Yes" : (x.absence ? x.absence.toUpperCase() : "Absent")),
-                              x.start, x.end, x.nh, x.ot, x.day_type]);
+                              x.present === null ? "-" : (x.present ? (x.partial_leave ? `Worked + ½ ${x.partial_leave.toUpperCase()}` : "Worked") : (x.absence ? x.absence.toUpperCase() : "Absent")),
+                              (x.shift_type||"").toUpperCase(),x.start,x.end+(x.end_next_day?" (+1 day)":""),x.nh,x.ot,x.day_type]);
       } else if (view === "worker") {
         const agg = {};
         DATA.forEach(x => {

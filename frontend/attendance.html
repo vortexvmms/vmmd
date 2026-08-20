@@ -171,6 +171,7 @@
                      ["01:00", "1AM", true], ["02:00", "2AM", true], ["03:00", "3AM", true],
                      ["04:00", "4AM", true], ["05:00", "5AM", true], ["06:00", "6AM", true]];
     const COMMON_PRESETS = [["17:00","5PM",false],["19:00","7PM",false],["22:00","10PM",false]];
+    const NIGHT_PRESETS = [["05:00","5AM",true],["06:00","6AM",true],["07:00","7AM",true],["08:00","8AM",true]];
     // Absence reasons: value, label, highlight colour
     // "Absent" removed — the reason itself (MC / UL / AL) explains the absence
     const REASONS = [["mc", "MC", "bg-yellow-500"],
@@ -319,10 +320,17 @@
                    <span class="text-sm font-bold text-indigo-700">📚 CLASS (8h)</span>
                    <button class="clr-class text-xs font-bold text-gray-500 underline">Undo</button>
                  </div>`
-              : `<div class="flex items-center flex-wrap gap-1">
-                   ${(x._more?PRESETS:COMMON_PRESETS).map(([t, lbl, nd]) =>
+              : `<div class="flex items-center flex-wrap gap-1 mb-2">
+                   <button class="mode-day text-xs font-bold px-2.5 py-1.5 rounded-full ${x.shift_type!=="night"&&!x.partial_leave_type?"bg-gray-800 text-white":"bg-white text-gray-600 border"}">Day</button>
+                   <button class="mode-night text-xs font-bold px-2.5 py-1.5 rounded-full ${x.shift_type==="night"?"bg-indigo-700 text-white":"bg-white text-gray-600 border"}">🌙 Night</button>
+                   ${["mc","al","ul"].map(v=>`<button class="mode-half text-xs font-bold px-2.5 py-1.5 rounded-full ${x.partial_leave_type===v?"bg-amber-500 text-white":"bg-white text-gray-600 border"}" data-r="${v}">½ ${v.toUpperCase()}</button>`).join("")}
+                 </div>
+                 ${x.partial_leave_type?`<div class="text-xs font-bold text-amber-700 mb-2">Worked 08:00–${x.end_time||"12:00"} · Afternoon ${x.partial_leave_type.toUpperCase()} (0.5 day)</div>`:""}
+                 ${x.shift_type==="night"?`<div class="text-xs font-bold text-indigo-700 mb-2">Night shift · starts 20:00 · overnight finish handled automatically</div>`:""}
+                 <div class="flex items-center flex-wrap gap-1">
+                   ${(x.shift_type==="night"?NIGHT_PRESETS:(x._more?PRESETS:COMMON_PRESETS)).map(([t, lbl, nd]) =>
                      `<button class="tchip text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time === t ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}" data-t="${t}">${lbl}</button>`).join("")}
-                   <button class="tmore text-xs font-bold px-2.5 py-1.5 rounded-full bg-gray-200 text-gray-700">${x._more?"Less":"More"}</button>
+                   ${x.shift_type!=="night"?`<button class="tmore text-xs font-bold px-2.5 py-1.5 rounded-full bg-gray-200 text-gray-700">${x._more?"Less":"More"}</button>`:""}
                    <button class="tcustom text-xs font-bold px-2.5 py-1.5 rounded-full ${x.end_time && !PRESETS.some(p => p[0] === x.end_time) ? "bg-red-700 text-white" : "bg-gray-100 text-gray-600"}">⋯</button>
                    <span class="save-state text-xs font-bold ${x._saving ? "text-amber-600" : (x._saved ? "text-green-700" : (x.ot_hours > 0 ? "text-red-700" : "text-gray-500"))} ml-auto">
                      ${x._saving ? `Saving…` : (x._saved ? `Saved ✓` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"))}
@@ -342,6 +350,9 @@
         if (clsBtn) clsBtn.addEventListener("click", () => mark(x, { present: true, absence_type: "class" }, div));
         const clrCls = div.querySelector(".clr-class");
         if (clrCls) clrCls.addEventListener("click", () => mark(x, { present: true, absence_type: "" }, div));
+        const dayBtn=div.querySelector(".mode-day");if(dayBtn)dayBtn.addEventListener("click",()=>mark(x,{present:true,shift_type:"day",start_time:"08:00",end_time:null,end_next_day:false,partial_leave_type:"",leave_portion:""},div));
+        const nightBtn=div.querySelector(".mode-night");if(nightBtn)nightBtn.addEventListener("click",()=>mark(x,{present:true,shift_type:"night",start_time:"20:00",end_time:null,end_next_day:false,partial_leave_type:"",leave_portion:""},div));
+        div.querySelectorAll(".mode-half").forEach(b=>b.addEventListener("click",()=>mark(x,{present:true,shift_type:"day",start_time:"08:00",end_time:"12:00",end_next_day:false,partial_leave_type:b.dataset.r,leave_portion:"second_half"},div)));
         div.querySelectorAll(".tchip").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: nextDayFor(x, b.dataset.t) }, div)));
         const moreBtn=div.querySelector(".tmore"); if(moreBtn) moreBtn.addEventListener("click",()=>{x._more=!x._more;render();});
         const tc = div.querySelector(".tcustom");
@@ -365,6 +376,7 @@
       const prev = {
         present: x.present, end_time: x.end_time, absence_type: x.absence_type,
         marked: x.marked, normal_hours: x.normal_hours, ot_hours: x.ot_hours,
+        start_time:x.start_time,shift_type:x.shift_type,partial_leave_type:x.partial_leave_type,leave_portion:x.leave_portion,leave_value:x.leave_value,
       };
       Object.assign(x, changes);
       x.marked = true;
@@ -425,8 +437,9 @@
     async function bulkSet(pendingOnly=false) {
       const t = document.getElementById("bulk-time").value;
       if (!t) { toast("Pick a time first"); return; }
-      const ids=pendingOnly?ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time).map(x=>x.allocation_id):null;
+      const ids=ROWS.filter(x=>x.present&&x.absence_type!=="class"&&x.shift_type!=="night"&&(!pendingOnly||!x.end_time)).map(x=>x.allocation_id);
       if(pendingOnly&&!ids.length){toast("All present workers already have an end time",false,true);return;}
+      if(!ids.length){toast("No day-shift workers available for bulk end time");return;}
       try {
         const r = await vmmsApi("/api/v1/attendance/bulk_end", {
           method: "POST",
@@ -435,7 +448,7 @@
         const data = await r.json();
         if (!r.ok) throw new Error(data.detail || "Could not apply");
         if(!data.ok){queueBulkLocally(data.failed_allocation_ids||ids,t,nextDayFor({start_time:"08:00"},t));toast(`${data.updated} confirmed; ${data.failed} saved on phone for automatic retry`,true);return;}
-        toast(`End time ${t} set for ${data.updated} ${pendingOnly?"pending ":"present "}workers — adjust exceptions individually`);
+        toast(`End time ${t} set for ${data.updated} ${pendingOnly?"pending ":"day-shift "}workers — adjust exceptions individually`);
         await loadDay();
       } catch (ex) { queueBulkLocally(ids,t,nextDayFor({start_time:"08:00"},t));toast("Network weak — end times saved on this phone and will retry automatically",true); }
     }

@@ -274,8 +274,8 @@
                    .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name));
         } else if (kind === "mc" || kind === "al" || kind === "ul") {
           const r = await vmmsApi(`/api/v1/attendance?date=${date}`); const a = r.ok ? await r.json() : [];
-          items = a.filter(x => !x.present && x.absence_type === kind).sort((x,y)=>x.worker_name.localeCompare(y.worker_name))
-                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name, kind.toUpperCase()));
+          items = a.filter(x => (!x.present && x.absence_type === kind) || (x.present && x.partial_leave_type === kind)).sort((x,y)=>x.worker_name.localeCompare(y.worker_name))
+                   .map(x => dRow(`${x.worker_code} ${x.worker_name}`, x.site_name, x.present ? `½ ${kind.toUpperCase()}` : kind.toUpperCase()));
         } else if (kind === "month_nh" || kind === "month_ot") {
           const key = kind === "month_nh" ? "month_nh" : "month_ot";
           const ss = (DASH && DASH.site_summary ? DASH.site_summary : []).slice()
