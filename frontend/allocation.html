@@ -13,6 +13,11 @@
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     .alloc-kpis,.alloc-side{display:none}
+    .copy-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:end}
+    .copy-date{display:block;width:100%;height:48px;min-height:48px;margin-top:6px;padding:0 12px;box-sizing:border-box;border:1px solid #d6b96b;border-radius:10px;background:#fff;color:#111827;font-size:16px;font-weight:700;text-align:center;-webkit-appearance:none;appearance:none}
+    .copy-action{width:100%;height:48px;min-height:48px;padding:0 12px;border:0;border-radius:10px;background:#252b35;color:#fff;font-size:15px;font-weight:800;white-space:nowrap;box-shadow:0 3px 8px rgba(15,23,42,.14)}
+    .copy-action:active{transform:translateY(1px)}
+    @media(max-width:430px){.copy-controls{grid-template-columns:1fr}.copy-action{margin-top:0}}
     @media(min-width:900px){
       body{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
       body>header>div{max-width:none!important;width:100%!important}
@@ -63,24 +68,24 @@
   <main id="alloc-main" class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
     <div id="alloc-kpis" class="alloc-kpis"></div>
     <div class="alloc-workspace"><div class="alloc-centre">
-    <details id="copybar" class="hidden bg-amber-50 border border-amber-300 rounded-xl shadow-sm p-3 mb-3">
-      <summary class="text-sm font-bold text-amber-900 cursor-pointer">Admin tool · Copy a previous allocation</summary>
-      <p class="text-xs text-amber-800 mt-2 mb-2">Existing allocations stay unchanged. Only active, currently unallocated workers are added.</p>
-      <div class="flex items-end gap-2 flex-wrap">
-        <label class="text-xs font-bold text-amber-900 flex-1 min-w-[160px]">Copy from date
-          <input id="copyfrom" type="date" class="mt-1 w-full border border-amber-300 rounded-lg p-2 text-sm bg-white text-gray-900">
-        </label>
-        <button onclick="copyDay()" class="bg-gray-800 text-white font-bold px-4 py-2 rounded-lg text-sm min-h-[40px]">Copy and merge</button>
-      </div>
-    </details>
-
-    <!-- Status: allocation done / unsaved changes (pending state uses the copybar above) -->
+    <!-- Primary day status remains first; Admin recovery tools are secondary. -->
     <div id="statusbar" class="hidden rounded-lg shadow-sm p-3 mb-3 text-sm font-bold text-center"></div>
 
     <!-- Undo copy / clear the whole day (for light days like Sunday) -->
     <div id="clearbar" class="hidden text-center mb-3">
       <button onclick="clearDay()" class="text-xs font-bold text-red-700 border border-red-300 hover:bg-red-50 rounded-lg px-3 py-2">↺ Undo copy / Clear this day</button>
     </div>
+
+    <details id="copybar" class="hidden bg-amber-50 border border-amber-300 rounded-xl shadow-sm p-3 mb-3">
+      <summary class="text-sm font-bold text-amber-900 cursor-pointer">Admin tool · Copy a previous allocation</summary>
+      <p class="text-xs text-amber-800 mt-2 mb-2">Existing allocations stay unchanged. Only active, currently unallocated workers are added.</p>
+      <div class="copy-controls">
+        <label class="text-xs font-bold text-amber-900">Copy from date
+          <input id="copyfrom" type="date" class="copy-date">
+        </label>
+        <button onclick="copyDay()" class="copy-action">Copy and merge</button>
+      </div>
+    </details>
 
     <div id="filterbar" class="flex flex-wrap items-center gap-2 mb-3">
       <input id="search" type="search" placeholder="Search worker…"

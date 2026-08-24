@@ -247,6 +247,7 @@
         { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
         { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
       if(role==="admin") nav.splice(nav.length-1,0,{grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
+      if(role==="admin") nav[1].items.unshift(["Request manpower","request.html","cal"]);
       if(t==="manager") nav[1].items.unshift(["Request manpower","request.html","cal"]);
       return nav;
     }

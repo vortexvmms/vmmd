@@ -50,6 +50,11 @@
         if (rl === "admin") full.splice(full.length-1, 0, {grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
         var allow = ALLOW[t];
         var out = full.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return !allow || allow.has(it[1]); })}; }).filter(function(s){ return s.items.length; });
+        // Admin and managers sometimes submit the manpower request themselves.
+        if (rl === "admin") {
+          var adminMp = out.filter(function(s){ return s.grp === "Manpower"; })[0];
+          if (adminMp && !adminMp.items.some(function(it){ return it[1] === "request.html"; })) adminMp.items.unshift(["Request manpower","request.html","cal"]);
+        }
         // Managers (Site Manager / WSHC Lead) sometimes request manpower too.
         if (t === "manager") {
           var mp = out.filter(function(s){ return s.grp === "Manpower"; })[0];
