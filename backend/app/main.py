@@ -20,7 +20,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.86.1")  # Reliable mobile end-time submission
+app = FastAPI(title="VCMS API", version="0.87.0")  # Admin allocation copy + notifications offload
+
+# Notifications are currently unused. Keep the code and database intact, but
+# default delivery to OFF so mobile pages do not poll and actions do not wait
+# for notification fan-out. It can be restored later with one environment flag.
+NOTIFICATIONS_ENABLED = os.environ.get("NOTIFICATIONS_ENABLED", "false").lower() == "true"
 
 # Compress larger JSON responses (attendance, allocations, dashboards). This
 # materially reduces mobile data transfer while leaving tiny responses alone.
@@ -990,6 +995,8 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
 @app.post("/api/v1/allocations/copy")
 async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current_user)):
     require_allocator(user)
+    if body.from_date >= body.to_date:
+        raise HTTPException(status_code=400, detail="Copy-from date must be earlier than the target date")
     async with shared_client() as client:
         src = await client.get(
             f"{REST}/allocations",
@@ -2544,7 +2551,7 @@ async def _svc_user_ids(client, params: dict) -> list[str]:
 async def notify(client, recipients, kind, title, body="", link=None):
     """Insert one notification per recipient (deduped) + everyone notify_all,
     and also send a phone Web Push to those same recipients."""
-    if not SUPABASE_SERVICE_KEY:
+    if not NOTIFICATIONS_ENABLED or not SUPABASE_SERVICE_KEY:
         return
     try:
         ids = set(r for r in (recipients or []) if r)
@@ -2609,12 +2616,14 @@ async def send_web_push(client, user_ids, title, body="", link=None):
 
 
 async def notify_roles(client, roles, kind, title, body="", link=None):
+    if not NOTIFICATIONS_ENABLED:
+        return
     ids = await _svc_user_ids(client, {"role": f"in.({','.join(roles)})"})
     await notify(client, ids, kind, title, body, link)
 
 
 async def notify_site_supervisors(client, site_ids, kind, title, body="", link=None):
-    if not SUPABASE_SERVICE_KEY or not site_ids:
+    if not NOTIFICATIONS_ENABLED or not SUPABASE_SERVICE_KEY or not site_ids:
         return
     try:
         r = await client.get(f"{REST}/site_supervisors",
@@ -2628,6 +2637,8 @@ async def notify_site_supervisors(client, site_ids, kind, title, body="", link=N
 
 async def notify_allocator(client, kind, title, body="", link=None):
     """Manpower-request notifications go to users flagged notify_requests (the allocator)."""
+    if not NOTIFICATIONS_ENABLED:
+        return
     ids = await _svc_user_ids(client, {"notify_requests": "eq.true"})
     await notify(client, ids, kind, title, body, link)
 

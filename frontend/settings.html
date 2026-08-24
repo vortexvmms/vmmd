@@ -39,22 +39,6 @@
       </div>
     </div>
 
-    <!-- ============ NOTIFICATIONS (every user) ============ -->
-    <h2 class="text-sm font-bold text-gray-500 mb-2">NOTIFICATIONS ON THIS PHONE</h2>
-    <div class="bg-white rounded-xl shadow p-4 mb-8">
-      <div class="flex items-start gap-3">
-        <div class="flex-1">
-          <p class="font-bold text-gray-900 text-sm">Phone alerts</p>
-          <p id="pushmsg" class="text-xs text-gray-500 mt-1">Checking…</p>
-        </div>
-        <div class="flex flex-col gap-2 items-end">
-          <button id="pushbtn" onclick="onPushBtn()" class="hidden bg-red-700 text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">Enable</button>
-          <button id="pushtest" onclick="onPushTest()" class="hidden text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 py-2 whitespace-nowrap">Send test</button>
-        </div>
-      </div>
-      <p class="text-[11px] text-gray-400 mt-3">You'll be alerted for manpower allocation, manpower requests, and the 8:30am / 9pm submission reminders. Each phone is controlled separately.</p>
-    </div>
-
     <!-- ============ PERSONAL WORKFLOW REMINDERS ============ -->
     <h2 class="text-sm font-bold text-gray-500 mb-2">WORKFLOW REMINDERS</h2>
     <div class="bg-white rounded-xl shadow p-4 mb-8">
@@ -69,35 +53,6 @@
         </button>
       </div>
       <p id="dpr-reminder-state" class="text-xs font-bold text-gray-500 mt-3">Checking…</p>
-    </div>
-
-    <!-- ============ SEND NOTIFICATION (admins only) ============ -->
-    <div id="bcast-wrap" class="hidden">
-      <h2 class="text-sm font-bold text-gray-500 mb-2">SEND A NOTIFICATION</h2>
-      <p class="text-xs text-gray-400 mb-2">Sends to the in-app bell and to phones that have notifications on. Administrators only.</p>
-      <div class="bg-white rounded-xl shadow p-4 mb-8">
-        <label class="block text-xs font-bold text-gray-500 mb-1">Send to</label>
-        <select id="bc-target" class="w-full border border-gray-300 rounded-lg p-2 mb-3 bg-white" onchange="onTargetChange()">
-          <option value="all">Everyone</option>
-          <option value="role">Selected roles</option>
-          <option value="site">Selected sites (their supervisors)</option>
-        </select>
-
-        <div id="bc-roles-wrap" class="hidden mb-3">
-          <label class="block text-xs font-bold text-gray-500 mb-1">Roles</label>
-          <div id="bc-roles" class="flex flex-wrap gap-2"></div>
-        </div>
-        <div id="bc-sites-wrap" class="hidden mb-3">
-          <label class="block text-xs font-bold text-gray-500 mb-1">Sites</label>
-          <div id="bc-sites" class="flex flex-wrap gap-2 max-h-40 overflow-auto"></div>
-        </div>
-
-        <label class="block text-xs font-bold text-gray-500 mb-1">Title</label>
-        <input id="bc-title" maxlength="80" placeholder="e.g. Site meeting tomorrow" class="w-full border border-gray-300 rounded-lg p-2 mb-3">
-        <label class="block text-xs font-bold text-gray-500 mb-1">Message</label>
-        <textarea id="bc-body" rows="3" maxlength="300" placeholder="Type your message…" class="w-full border border-gray-300 rounded-lg p-2 mb-3"></textarea>
-        <button id="bc-send" onclick="sendBroadcast()" class="w-full bg-red-700 text-white font-bold py-2.5 rounded-lg">Send notification</button>
-      </div>
     </div>
 
     <!-- ============ MANAGEMENT (coordinators only) ============ -->
@@ -156,16 +111,6 @@
       ME = await r.json();
 
       renderDprReminderToggle();
-
-      // Notifications — for everyone
-      refreshPush();
-
-      // Broadcast composer — admins / full tier only
-      if (isFull(ME.role)) {
-        document.getElementById("bcast-wrap").classList.remove("hidden");
-        buildRolePicker();
-        loadSitesForPicker();
-      }
 
       // Holidays + OT rules — coordinators only
       if (isCoordinator(ME.role)) {

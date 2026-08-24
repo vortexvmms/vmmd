@@ -264,8 +264,6 @@
             </div>
           </div>
           <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-            <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_all?'checked':''} onchange="setFlag('${u.id}','notify_all',this.checked)" class="accent-red-700 w-4 h-4"> 🔔 Gets ALL notifications</label>
-            <label class="flex items-center gap-1.5"><input type="checkbox" ${u.notify_requests?'checked':''} onchange="setFlag('${u.id}','notify_requests',this.checked)" class="accent-red-700 w-4 h-4"> 📋 Gets manpower requests</label>
             <label class="flex items-center gap-1.5"><input type="checkbox" ${u.dpr_reminders?'checked':''} onchange="setFlag('${u.id}','dpr_reminders',this.checked)" class="accent-red-700 w-4 h-4"> 📅 Gets pending DPR tasks</label>
           </div>
           <button onclick="toggleDprSites('${u.id}')" class="mt-2 text-xs font-bold text-red-700">▸ DPR reminder sites${Array.isArray(u.dpr_reminder_sites)?' (custom)':' (all)'}</button>

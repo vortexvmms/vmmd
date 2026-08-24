@@ -627,6 +627,9 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
 
 /* ---- Notification bell (global, top-right) ---- */
 (function () {
+  // Notification centre is intentionally offloaded. This avoids the global
+  // bell, unread-count polling and push setup on every mobile page.
+  if (window.VMMS_NOTIFICATIONS_ENABLED !== true) return;
   function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
   ready(function () {
     if (typeof getSession !== 'function' || !getSession()) return;   // signed-in pages only
