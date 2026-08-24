@@ -16,6 +16,13 @@ create table if not exists public.admin_data_corrections (
   executed_at timestamptz not null default now()
 );
 
+-- The correction ledger contains operational history and must never be
+-- exposed to ordinary authenticated users.
+alter table public.admin_data_corrections enable row level security;
+drop policy if exists admin_data_corrections_admin_read on public.admin_data_corrections;
+create policy admin_data_corrections_admin_read on public.admin_data_corrections
+  for select using (public.my_role() = 'admin');
+
 do $$
 declare
   source_id uuid;

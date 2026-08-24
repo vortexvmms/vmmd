@@ -37,8 +37,7 @@ window.esc = function (v) {
     ':root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#0f1216 !important;color:#e5e7eb !important;border-color:#3a4150 !important;}' +
     ':root[data-theme="dark"] .app-lbl{color:#cbd2dc !important;}' +
     ':root[data-theme="dark"] .sect-h .t{color:#e5e7eb !important;}' +
-    ':root[data-theme="dark"] .soon-note,:root[data-theme="dark"] .sect.soon .sect-h .t{color:#6b7280 !important;}' +
-    ':root[data-theme="dark"] .vmms-bell-panel,:root[data-theme="dark"] #vmms-bell-panel{background:#1b2028 !important;}';
+    ':root[data-theme="dark"] .soon-note,:root[data-theme="dark"] .sect.soon .sect-h .t{color:#6b7280 !important;}';
   var s = document.createElement("style");
   s.id = "vcms-theme-css"; s.textContent = css;
   (document.head || document.documentElement).appendChild(s);
@@ -172,6 +171,7 @@ window.VMMS_TIER = {
   full: ["admin", "general_manager", "operation_manager", "hr_assistant"],
   manager: ["main_sup", "wshc_lead"],
   supervisor: ["site_sup", "safety_sup", "wshc", "logistics_sup"],
+  payroll: ["payroll"],
 };
 window.isFull = function (r) { return VMMS_TIER.full.indexOf(r) !== -1; };
 window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };
@@ -370,7 +370,6 @@ if (window.tailwind) {
       body.vmms-page-request main>div:first-child>div{width:100%!important;justify-content:flex-start!important;flex-wrap:nowrap!important}
       body.vmms-page-request #copyfrom{flex:1 1 auto!important;min-width:0!important}
       body.vmms-page-request #copylast{flex:0 0 auto!important}
-      #vmms-bell{top:9px!important;right:12px!important;width:40px!important;height:40px!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
       #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
       body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
@@ -625,126 +624,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
   else document.addEventListener("DOMContentLoaded", add);
 })();
 
-/* ---- Notification bell (global, top-right) ---- */
-(function () {
-  // Notification centre is intentionally offloaded. This avoids the global
-  // bell, unread-count polling and push setup on every mobile page.
-  if (window.VMMS_NOTIFICATIONS_ENABLED !== true) return;
-  function ready(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
-  ready(function () {
-    if (typeof getSession !== 'function' || !getSession()) return;   // signed-in pages only
-    if (typeof vmmsApi !== 'function') return;
-    if (document.getElementById('vmms-bell')) return;
-    var esc = window.esc || function(v){return String(v==null?'':v);};
-
-    var btn = document.createElement('button');
-    btn.id = 'vmms-bell'; btn.className = 'no-print'; btn.setAttribute('aria-label','Notifications');
-    btn.style.cssText = 'position:fixed;top:9px;right:12px;z-index:10000;width:40px;height:40px;border-radius:9999px;background:#fff;color:#C00000;border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;-webkit-tap-highlight-color:transparent;';
-    btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span id="vmms-bell-badge" style="position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9999px;background:#C00000;color:#fff;font:700 11px/18px system-ui,sans-serif;text-align:center;display:none;"></span>';
-
-    var panel = document.createElement('div');
-    panel.id = 'vmms-bell-panel'; panel.className = 'no-print';
-    panel.style.cssText = 'position:fixed;top:56px;right:10px;z-index:10000;width:340px;max-width:92vw;max-height:72vh;overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.22);display:none;';
-    panel.innerHTML = '<div style="position:sticky;top:0;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid #f0f0f0;"><span style="font:700 14px system-ui,sans-serif;color:#111;">Notifications</span><span><button id="vmms-bell-read" style="font:700 11px system-ui;color:#C00000;background:none;border:none;cursor:pointer;">Mark all read</button><button id="vmms-bell-clear" style="font:700 11px system-ui;color:#666;background:none;border:none;cursor:pointer;margin-left:10px;">Clear</button></span></div><div id="vmms-bell-list"></div>';
-
-    document.body.appendChild(btn); document.body.appendChild(panel);
-
-    function fmt(ts){ try{ var d=new Date(ts),diff=(Date.now()-d)/1000; if(diff<60)return 'just now'; if(diff<3600)return Math.floor(diff/60)+'m ago'; if(diff<86400)return Math.floor(diff/3600)+'h ago'; return d.toLocaleDateString('en-GB'); }catch(e){return '';} }
-    function render(data){
-      var items=(data&&data.items)||[], unread=(data&&data.unread)||0;
-      var badge=document.getElementById('vmms-bell-badge');
-      if(unread>0){ badge.textContent=unread>99?'99+':unread; badge.style.display='block'; } else badge.style.display='none';
-      var list=document.getElementById('vmms-bell-list');
-      if(!items.length){ list.innerHTML='<div style="padding:22px 14px;color:#9ca3af;font:500 13px system-ui;text-align:center;">No notifications</div>'; return; }
-      list.innerHTML=items.map(function(n){
-        var dot=n.read_at?'<span style="flex:none;width:8px;"></span>':'<span style="flex:none;width:8px;height:8px;border-radius:9999px;background:#C00000;margin-top:5px;"></span>';
-        return '<div data-link="'+(n.link||'')+'" style="display:flex;gap:9px;padding:11px 14px;border-bottom:1px solid #f4f4f4;'+(n.link?'cursor:pointer;':'')+(n.read_at?'':'background:#fff7f7;')+'">'+dot+
-          '<div style="min-width:0;"><p style="font:700 13px system-ui;color:#111;margin:0;">'+esc(n.title)+'</p>'+
-          (n.body?'<p style="font:500 12px system-ui;color:#555;margin:2px 0 0;">'+esc(n.body)+'</p>':'')+
-          '<p style="font:500 11px system-ui;color:#9ca3af;margin:3px 0 0;">'+fmt(n.created_at)+'</p></div></div>';
-      }).join('');
-      list.querySelectorAll('[data-link]').forEach(function(el){ var lnk=el.getAttribute('data-link'); if(lnk) el.addEventListener('click', function(){ window.location.href=lnk; }); });
-    }
-    async function load(){ try{ var r=await vmmsApi('/api/v1/notifications'); if(!r.ok) return; render(await r.json()); }catch(e){} }
-    async function loadCount(){
-      try{
-        var r=await vmmsApi('/api/v1/notifications-count'); if(!r.ok)return;
-        var d=await r.json(), unread=Number(d.unread)||0, badge=document.getElementById('vmms-bell-badge');
-        if(unread>0){badge.textContent=unread>99?'99+':unread;badge.style.display='block';}else badge.style.display='none';
-      }catch(e){}
-    }
-
-    btn.addEventListener('click', function(){ var open=panel.style.display==='block'; panel.style.display=open?'none':'block'; if(!open) load(); });
-    document.addEventListener('click', function(e){ if(panel.style.display==='block' && !panel.contains(e.target) && !btn.contains(e.target)) panel.style.display='none'; });
-    document.getElementById('vmms-bell-read').addEventListener('click', async function(e){ e.stopPropagation(); try{ await vmmsApi('/api/v1/notifications/read_all',{method:'POST'}); }catch(_){} load(); loadCount(); });
-    document.getElementById('vmms-bell-clear').addEventListener('click', async function(e){ e.stopPropagation(); if(!confirm('Clear all notifications?'))return; try{ await vmmsApi('/api/v1/notifications',{method:'DELETE'}); }catch(_){} load(); loadCount(); });
-
-    // Startup downloads only the unread number. Full notification text is
-    // requested only when the bell is opened. Poll slowly and never while the
-    // PWA is in the background, avoiding account-specific mobile slowdown.
-    // Notifications are non-critical on mobile. Let the page and its main data
-    // become interactive first, then fetch the badge during idle time.
-    var lastCountAt=0;
-    function queuedCount(){
-      if(document.hidden || Date.now()-lastCountAt<60000)return;
-      lastCountAt=Date.now(); loadCount();
-    }
-    if(window.innerWidth<900){
-      if('requestIdleCallback' in window) requestIdleCallback(queuedCount,{timeout:2500});
-      else setTimeout(queuedCount,1800);
-    }else queuedCount();
-    var countTimer=setInterval(function(){if(!document.hidden)loadCount();},300000);
-    document.addEventListener('visibilitychange',function(){if(!document.hidden)queuedCount();});
-  });
-})();
-
-// ---- Web Push (phone notifications) ----
-function _vmmsB64ToU8(b64) {
-  var pad = '='.repeat((4 - b64.length % 4) % 4);
-  var s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
-  var raw = atob(s), arr = new Uint8Array(raw.length);
-  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
-}
-window.vmmsPushSupported = function () {
-  return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
-};
-window.vmmsPushStatus = async function () {
-  if (!vmmsPushSupported()) return 'unsupported';
-  if (Notification.permission === 'denied') return 'blocked';
-  try {
-    var reg = await navigator.serviceWorker.ready;
-    var s = await reg.pushManager.getSubscription();
-    return s ? 'on' : 'off';
-  } catch (e) { return 'off'; }
-};
-// Call from a user click. Returns {ok:true} or {ok:false, reason:'...'}.
-window.vmmsEnablePush = async function () {
-  try {
-    if (!vmmsPushSupported()) return { ok: false, reason: 'unsupported' };
-    var perm = await Notification.requestPermission();
-    if (perm !== 'granted') return { ok: false, reason: 'denied' };
-    var reg = await navigator.serviceWorker.ready;
-    var pk = await vmmsApi('/api/v1/push/pubkey');
-    var cfg = pk.ok ? await pk.json() : {};
-    if (!cfg.enabled || !cfg.public_key) return { ok: false, reason: 'server_off' };
-    var sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _vmmsB64ToU8(cfg.public_key) });
-    var j = sub.toJSON();
-    var r = await vmmsApi('/api/v1/push/subscribe', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent }) });
-    if (!r.ok) return { ok: false, reason: 'save_failed' };
-    return { ok: true };
-  } catch (e) { return { ok: false, reason: String(e && e.message || e) }; }
-};
-window.vmmsDisablePush = async function () {
-  try {
-    var reg = await navigator.serviceWorker.ready;
-    var sub = await reg.pushManager.getSubscription();
-    if (sub) { try { await vmmsApi('/api/v1/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint }) }); } catch (_) {} await sub.unsubscribe(); }
-    return { ok: true };
-  } catch (e) { return { ok: false }; }
-};
-window.vmmsTestPush = async function () { try { await vmmsApi('/api/v1/push/test', { method: 'POST' }); return true; } catch (e) { return false; } };
+/* Notifications and Web Push were retired in August 2026. */
 
 // Consistent premium KPI interaction on desktop dashboards. Mobile is unchanged.
 (function(){
