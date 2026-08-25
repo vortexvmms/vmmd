@@ -8,11 +8,8 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
   POST   /api/v1/attendance/bulk_end         set one end time for the whole site
   POST   /api/v1/attendance/submit           submit & lock the site's day
 """
-import os
-import time
-import json as _json
 import asyncio
-from datetime import date as date_cls, timedelta
+from datetime import date as date_cls, datetime, timedelta, timezone
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -20,17 +17,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="VCMS API", version="0.87.0")  # Admin allocation copy + notifications offload
+from .auth import (
+    cache_user as _cache_put,
+    get_current_user,
+    invalidate_users as _cache_invalidate_users,
+)
+from .core.roles import (
+    ALL_ROLES, ATTENDANCE_ROLES, COORDINATOR_ROLES, FULL_ROLES,
+    MANAGER_ROLES, SUPERVISOR_ROLES,
+)
+from .db import (
+    close_http_client, require_service, service_headers, shared_client,
+    supabase_headers,
+)
+from .settings import (
+    R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_KEY, SUPABASE_URL,
+)
+from .storage import r2_presign_delete as _r2_presign_delete
+from .storage import r2_presign_put as _r2_presign_put
 
-# Notifications are currently unused. Keep the code and database intact, but
-# default delivery to OFF so mobile pages do not poll and actions do not wait
-# for notification fan-out. It can be restored later with one environment flag.
-NOTIFICATIONS_ENABLED = os.environ.get("NOTIFICATIONS_ENABLED", "false").lower() == "true"
-
-# Compress larger JSON responses (attendance, allocations, dashboards). This
-# materially reduces mobile data transfer while leaving tiny responses alone.
+app = FastAPI(title="VCMS API", version="0.88.0")
 app.add_middleware(GZipMiddleware, minimum_size=750, compresslevel=5)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -45,7 +53,6 @@ app.add_middleware(
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    """Low-cost browser hardening for every API response."""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -56,227 +63,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Cache-Control"] = "no-store"
     return response
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
-# Service-role key — SERVER-SIDE ONLY. Used exclusively for admin-guarded user
-# management (create login, reset password). Never sent to the frontend.
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-REST = f"{SUPABASE_URL}/rest/v1"
-
-# ---- Cloudflare R2 photo storage (optional; falls back to Supabase if unset) ----
-# Set these in Render env to send new photo uploads to R2 (10 GB free, no egress).
-import hashlib as _hl, hmac as _hm, datetime as _dt, urllib.parse as _up
-R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "").strip()
-R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
-R2_SECRET = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
-R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
-R2_PUBLIC_BASE = os.environ.get("R2_PUBLIC_BASE", "").strip().rstrip("/")
-R2_ENABLED = all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET, R2_BUCKET, R2_PUBLIC_BASE])
-
-def _r2_presign_put(key: str, expires: int = 600) -> str:
-    """SigV4 presigned PUT URL for R2 (host-only signed, unsigned payload)."""
-    host = f"{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-    region, service = "auto", "s3"
-    now = _dt.datetime.utcnow()
-    amzdate = now.strftime("%Y%m%dT%H%M%SZ"); datestamp = now.strftime("%Y%m%d")
-    canon_uri = "/" + R2_BUCKET + "/" + _up.quote(key, safe="/~")
-    scope = f"{datestamp}/{region}/{service}/aws4_request"
-    q = {
-        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-        "X-Amz-Credential": f"{R2_ACCESS_KEY_ID}/{scope}",
-        "X-Amz-Date": amzdate,
-        "X-Amz-Expires": str(expires),
-        "X-Amz-SignedHeaders": "host",
-    }
-    canon_qs = "&".join(f"{_up.quote(k, safe='~')}={_up.quote(v, safe='~')}" for k, v in sorted(q.items()))
-    canon_req = f"PUT\n{canon_uri}\n{canon_qs}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
-    sts = f"AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{_hl.sha256(canon_req.encode()).hexdigest()}"
-    def _sign(k, m): return _hm.new(k, m.encode(), _hl.sha256).digest()
-    k_date = _sign(("AWS4" + R2_SECRET).encode(), datestamp)
-    k_sign = _sign(_sign(_sign(k_date, region), service), "aws4_request")
-    sig = _hm.new(k_sign, sts.encode(), _hl.sha256).hexdigest()
-    return f"https://{host}{canon_uri}?{canon_qs}&X-Amz-Signature={sig}"
-
-def _r2_presign_delete(key: str, expires: int = 600) -> str:
-    """SigV4 presigned DELETE URL used only by the authenticated backend."""
-    host = f"{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-    region, service = "auto", "s3"
-    now = _dt.datetime.utcnow()
-    amzdate = now.strftime("%Y%m%dT%H%M%SZ"); datestamp = now.strftime("%Y%m%d")
-    canon_uri = "/" + R2_BUCKET + "/" + _up.quote(key, safe="/~")
-    scope = f"{datestamp}/{region}/{service}/aws4_request"
-    q = {
-        "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
-        "X-Amz-Credential": f"{R2_ACCESS_KEY_ID}/{scope}",
-        "X-Amz-Date": amzdate,
-        "X-Amz-Expires": str(expires),
-        "X-Amz-SignedHeaders": "host",
-    }
-    canon_qs = "&".join(f"{_up.quote(k, safe='~')}={_up.quote(v, safe='~')}" for k, v in sorted(q.items()))
-    canon_req = f"DELETE\n{canon_uri}\n{canon_qs}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
-    sts = f"AWS4-HMAC-SHA256\n{amzdate}\n{scope}\n{_hl.sha256(canon_req.encode()).hexdigest()}"
-    def _sign(k, m): return _hm.new(k, m.encode(), _hl.sha256).digest()
-    k_date = _sign(("AWS4" + R2_SECRET).encode(), datestamp)
-    k_sign = _sign(_sign(_sign(k_date, region), service), "aws4_request")
-    sig = _hm.new(k_sign, sts.encode(), _hl.sha256).hexdigest()
-    return f"https://{host}{canon_uri}?{canon_qs}&X-Amz-Signature={sig}"
-
-# ---- one shared HTTP client to Supabase ----------------------------------
-# Every call used to open a brand-new httpx client, which meant a fresh TLS
-# handshake to Supabase for each of the ~6 hops in a single attendance save.
-# Reusing one kept-alive client keeps the connection open, cutting ~100-300ms
-# off every database call — a big latency win on the free tier at zero cost.
-# A single AsyncClient is safe for concurrent use across requests.
-_HTTP = httpx.AsyncClient(
-    timeout=20,
-    limits=httpx.Limits(max_keepalive_connections=20, max_connections=40,
-                        keepalive_expiry=120),
-)
-
-
-class _KeepOpen:
-    """Yield the shared client inside `async with` without closing it after."""
-    def __init__(self, c): self._c = c
-    async def __aenter__(self): return self._c
-    async def __aexit__(self, *exc): return False
-
-
-def shared_client(*_a, **_k):
-    """Drop-in for httpx.AsyncClient(...) that returns the shared client."""
-    return _KeepOpen(_HTTP)
-
 
 @app.on_event("shutdown")
 async def _close_http():
-    await _HTTP.aclose()
-
-
-def supabase_headers(user_token: str | None = None) -> dict:
-    headers = {"apikey": SUPABASE_ANON_KEY}
-    if user_token:
-        headers["Authorization"] = f"Bearer {user_token}"
-    elif SUPABASE_ANON_KEY.startswith("eyJ"):
-        headers["Authorization"] = f"Bearer {SUPABASE_ANON_KEY}"
-    return headers
-
-
-def service_headers() -> dict:
-    """Elevated headers for Supabase Auth admin operations (server-side only)."""
-    return {"apikey": SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-            "Content-Type": "application/json"}
-
-
-def require_service():
-    if not SUPABASE_SERVICE_KEY:
-        raise HTTPException(
-            status_code=501,
-            detail="Admin key not set up on the server yet. Add SUPABASE_SERVICE_ROLE_KEY "
-                   "in the backend (Render) environment, then try again.")
-
-
-# ---------------- Role tiers (Rev 6) ----------------
-# FULL       — admin, general_manager, operation_manager, hr_assistant  (everything)
-# MANAGER    — main_sup (Site Manager), wshc_lead  (all but workers/sites/allocation/users)
-# SUPERVISOR — site_sup, safety_sup, wshc, logistics_sup  (own site attendance/requests)
-FULL_ROLES = ("admin", "general_manager", "operation_manager", "hr_assistant")
-MANAGER_ROLES = ("main_sup", "wshc_lead")
-SUPERVISOR_ROLES = ("site_sup", "safety_sup", "wshc", "logistics_sup")
-ATTENDANCE_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES   # who can do attendance / requests
-COORDINATOR_ROLES = FULL_ROLES + MANAGER_ROLES                     # who can generate broadcast messages
-ALL_ROLES = FULL_ROLES + MANAGER_ROLES + SUPERVISOR_ROLES + ("payroll",)
-
-
-# --- identity cache -------------------------------------------------------
-# Every authenticated request otherwise costs TWO Supabase round-trips just to
-# identify the user (verify the JWT, then read the profile row). During
-# attendance a supervisor taps dozens of end-time chips in a burst — that was
-# ~2 extra network hops per tap on the free tier, which is what made each tap
-# feel like the server was "waking up" again. We cache the resolved identity
-# per token for a short window so a burst of taps reuses it. Trade-off: a role
-# or status change takes up to _USER_CACHE_TTL seconds to take effect.
-# The cache is keyed by the login token, which Supabase rotates roughly hourly
-# (the app auto-refreshes it), so caching for a token's full life effectively
-# means "for the whole session" — a new token after refresh is a fresh lookup.
-_USER_CACHE: dict[str, tuple[float, dict]] = {}
-_USER_CACHE_TTL = 600  # 10 min: fast for attendance, bounded if invalidation misses
-
-
-def _cache_get(token: str):
-    hit = _USER_CACHE.get(token)
-    if hit and hit[0] > time.time():
-        u = dict(hit[1]); u["token"] = token
-        return u
-    return None
-
-
-def _cache_put(token: str, user: dict):
-    _USER_CACHE[token] = (time.time() + _USER_CACHE_TTL,
-                          {k: v for k, v in user.items() if k != "token"})
-    if len(_USER_CACHE) > 400:                       # opportunistic cleanup
-        now = time.time()
-        for k in [k for k, (exp, _) in _USER_CACHE.items() if exp <= now]:
-            _USER_CACHE.pop(k, None)
-
-
-def _cache_invalidate_users(user_ids) -> None:
-    """Immediately revoke cached role/status/site context for selected profiles."""
-    wanted = {str(x) for x in (user_ids or []) if x}
-    if not wanted:
-        return
-    for token, (_, profile) in list(_USER_CACHE.items()):
-        if str(profile.get("user_id")) in wanted:
-            _USER_CACHE.pop(token, None)
-
-
-async def get_current_user(request: Request) -> dict:
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not signed in")
-    token = auth.removeprefix("Bearer ").strip()
-
-    cached = _cache_get(token)
-    if cached:
-        return cached
-
-    async with shared_client() as client:
-        r = await client.get(f"{SUPABASE_URL}/auth/v1/user", headers=supabase_headers(token))
-        if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Session expired — please log in again")
-        auth_user = r.json()
-        auth_uid = auth_user.get("id")
-
-        r2 = await client.get(
-            f"{REST}/users",
-            params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status,menu,dpr_reminders,dpr_reminder_sites"},
-            headers=supabase_headers(token),
-        )
-        if r2.status_code != 200:   # tolerate the 'menu' column not existing yet
-            r2 = await client.get(
-                f"{REST}/users",
-                params={"auth_uid": f"eq.{auth_uid}", "select": "id,name,role,status"},
-                headers=supabase_headers(token),
-            )
-        rows = r2.json() if r2.status_code == 200 else []
-        if not rows:
-            raise HTTPException(status_code=403, detail="No VMMS profile/role linked — ask the administrator")
-        profile = rows[0]
-        if profile.get("status") != "active":
-            raise HTTPException(status_code=403, detail="Account is deactivated")
-
-    user = {
-        "token": token,
-        "auth_uid": auth_uid,
-        "email": auth_user.get("email"),
-        "user_id": profile["id"],
-        "name": profile["name"],
-        "role": profile["role"],
-        "menu": profile.get("menu"),
-        "dpr_reminders": bool(profile.get("dpr_reminders", False)),
-        "dpr_reminder_sites": profile.get("dpr_reminder_sites"),
-    }
-    _cache_put(token, user)
-    return user
+    await close_http_client()
 
 
 async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
