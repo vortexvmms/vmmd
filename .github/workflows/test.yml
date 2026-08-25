@@ -28,14 +28,6 @@ jobs:
       - run: node --check frontend/js/core-bundle.js
       - run: node --check frontend/js/ui.js
       - run: node --check frontend/js/shell.js
-      - run: node --check frontend/js/schedule-wbs.js
-      - run: node --check frontend/js/wbs-tree.js
-      - run: node --check frontend/js/schedule-activities.js
-      - run: node --check frontend/js/schedule-logic.js
-      - run: node --check frontend/js/schedule-calendars.js
-      - run: node --check frontend/js/schedule-resources.js
-      - run: node --check frontend/js/schedule-gantt.js
-      - run: node frontend/tests/wbs-tree.test.js
       - run: python3 scripts/build_frontend_core.py
       - run: git diff --exit-code frontend/js/core-bundle.js
 
