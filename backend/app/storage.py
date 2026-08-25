@@ -1,4 +1,6 @@
 """Cloudflare R2 signing helpers used by the camera module."""
+from __future__ import annotations
+
 import datetime as dt
 import hashlib
 import hmac
@@ -48,4 +50,3 @@ def r2_presign_put(key: str, expires: int = 600) -> str:
 
 def r2_presign_delete(key: str, expires: int = 600) -> str:
     return _presign(key, "DELETE", expires)
-

@@ -1,4 +1,6 @@
 """Supabase HTTP transport with shared connection pooling."""
+from __future__ import annotations
+
 import httpx
 from fastapi import HTTPException
 
@@ -56,4 +58,3 @@ def require_service():
             status_code=501,
             detail="Administrator service is not configured. Contact the system administrator.",
         )
-

@@ -25,6 +25,8 @@ jobs:
           node-version: "22"
       - run: node --check frontend/js/project-context.js
       - run: node --check frontend/js/config.js
+      - run: node --check frontend/js/core-bundle.js
+      - run: node --check frontend/js/ui.js
       - run: node --check frontend/js/shell.js
       - run: node --check frontend/js/schedule-wbs.js
       - run: node --check frontend/js/wbs-tree.js
@@ -34,3 +36,16 @@ jobs:
       - run: node --check frontend/js/schedule-resources.js
       - run: node --check frontend/js/schedule-gantt.js
       - run: node frontend/tests/wbs-tree.test.js
+      - run: python3 scripts/build_frontend_core.py
+      - run: git diff --exit-code frontend/js/core-bundle.js
+
+  browser-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

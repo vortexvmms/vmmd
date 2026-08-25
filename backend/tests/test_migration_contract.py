@@ -19,7 +19,7 @@ def test_phase0_migration_has_project_isolation_objects():
 
 
 def test_frontend_catalogue_contains_every_backend_role():
-    frontend = (ROOT / "frontend" / "js" / "config.js").read_text()
+    frontend = (ROOT / "frontend" / "js" / "core" / "app-config.js").read_text()
     for role in ALL_ROLES:
         assert f'"{role}"' in frontend
 

@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/config.js?v=20260813-8"></script>
-  <script src="js/auth.js?v=20260813-8"></script>
+  <script src="js/core-bundle.js?v=20260825-core1"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-core1"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -37,12 +37,12 @@
     const COMMON_INTRO =
       "This is your quick guide — the same steps as the printed manual. Tap a heading to open or close it. " +
       "The app stays signed in. The first time you open it each morning it may take up to 1 minute to wake up — please wait, don't tap many times. " +
-      "The 🔔 bell at the top-right shows your notifications; tap it to read them and to mark all as read.";
+      "Use the header controls to access your account and daily tools.";
 
     const GETTING_STARTED = { h: "Getting started — phone & sign in", items: [
       { step: "First time only: open Chrome, go to vortexvmms.github.io/vmmd, then Chrome menu (⋮) → \"Add to Home screen\" → Add. A red VCMS icon appears on your phone." },
       { step: "Sign in with the email and password given by the office. You stay signed in on that phone." },
-      { step: "The 🔔 bell (top-right) tells you what needs your attention — new requests, allocations, or leave. A red dot means unread." },
+      { step: "Use Today tasks on the Home page to see work that needs your attention." },
       { note: "Forgot your password? Only the Administrator can reset it — call the office. Never share your password." },
     ]};
 
@@ -122,7 +122,7 @@
       { h: "Plan changes at night", items: [
         "Open Daily Allocation for that same date, change the sites, Save.",
         "Generate the allocation message again and send the new one to the group. No limit on how many times.",
-        "The supervisors you allocate to get a 🔔 notification telling them how many of their requested workers they got.",
+        "Supervisors can confirm their allocation directly from the Attendance page.",
       ]},
       { h: "WhatsApp messages", items: [
         "Allocation — one message for all sites (tomorrow's distribution).",
@@ -156,8 +156,8 @@
         "Supervisor sends a request → the allocator (Mani) is notified.",
         "Allocator saves an allocation → each affected site supervisor is notified (with how many they got).",
         "MC / UL / AL marked → Operation Manager, Site Manager and HR Assistant are notified.",
-        "Renganathan receives all notifications.",
-        { note: "Set who Mani is, and who gets all notifications, with the tick-boxes in Users & Access." },
+        "Management access is controlled by assigned roles and permitted sites.",
+        { note: "Set each user’s role and site access in Users & Access." },
       ]},
       { h: "A full day, end to end", items: [
         "Evening before: supervisors send their Request Manpower.",
@@ -173,7 +173,7 @@
         { step: "Open Users & Access to see everyone who can log in." },
         { step: "Change a person's role from the dropdown on their row — the app updates what they can do straight away." },
         { step: "Under \"Sections\", tick which home-screen options each person sees (every option is listed, not only the ones their role would normally get)." },
-        { step: "Tick \"📋 Gets manpower requests\" for the allocator (Mani), and \"🔔 Gets ALL notifications\" for anyone who should receive everything (e.g. Renganathan)." },
+        { step: "Assign the allocator and each supervisor’s permitted sites in Users & Access." },
         { note: "New logins are still created in Supabase (Authentication) first, then given a role here — see the setup guide." },
       ]},
       { h: "Automatic 4 AM email report (Administrator)", items: [

@@ -1,0 +1,11 @@
+{
+  "name": "vcms-regression",
+  "private": true,
+  "scripts": {
+    "build:core": "python3 scripts/build_frontend_core.py",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.54.2"
+  }
+}

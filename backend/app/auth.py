@@ -1,4 +1,6 @@
 """Authentication, profile resolution and short-lived identity caching."""
+from __future__ import annotations
+
 import time
 
 from fastapi import HTTPException, Request
@@ -88,4 +90,3 @@ async def get_current_user(request: Request) -> dict:
     }
     cache_user(token, user)
     return user
-

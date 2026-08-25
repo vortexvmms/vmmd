@@ -1,4 +1,6 @@
 """Environment-backed settings shared by all VCMS backend modules."""
+from __future__ import annotations
+
 import os
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
@@ -12,4 +14,3 @@ R2_SECRET = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
 R2_PUBLIC_BASE = os.environ.get("R2_PUBLIC_BASE", "").strip().rstrip("/")
 R2_ENABLED = all((R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET, R2_BUCKET, R2_PUBLIC_BASE))
-

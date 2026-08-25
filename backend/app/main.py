@@ -8,6 +8,8 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
   POST   /api/v1/attendance/bulk_end         set one end time for the whole site
   POST   /api/v1/attendance/submit           submit & lock the site's day
 """
+from __future__ import annotations
+
 import asyncio
 from datetime import date as date_cls, datetime, timedelta, timezone
 
@@ -30,6 +32,7 @@ from .db import (
     close_http_client, require_service, service_headers, shared_client,
     supabase_headers,
 )
+from .errors import install_error_handlers
 from .settings import (
     R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY, SUPABASE_URL,
@@ -38,6 +41,7 @@ from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
 
 app = FastAPI(title="VCMS API", version="0.88.0")
+install_error_handlers(app)
 app.add_middleware(GZipMiddleware, minimum_size=750, compresslevel=5)
 app.add_middleware(
     CORSMiddleware,
@@ -445,7 +449,7 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
 async def list_users(role: str = "", user: dict = Depends(get_current_user)):
     if user["role"] not in FULL_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,name,role,status,menu,notify_all,notify_requests,dpr_reminders,dpr_reminder_sites", "order": "name.asc"}
+    params = {"select": "id,name,role,status,menu,dpr_reminders,dpr_reminder_sites", "order": "name.asc"}
     if role:
         params["role"] = f"eq.{role}"
     async with shared_client() as client:
@@ -475,8 +479,6 @@ class UserStatus(BaseModel):
     status: str | None = None       # "active" | "inactive"
     role: str | None = None         # change the user's role
     menu: list[str] | None = None   # per-user menu allow-list; null = role default
-    notify_all: bool | None = None       # receives EVERY notification (developer)
-    notify_requests: bool | None = None  # receives manpower-request notifications (allocator)
     dpr_reminders: bool | None = None
     dpr_reminder_sites: list[str] | None = None  # null = all accessible sites
 
@@ -555,10 +557,6 @@ async def update_user(user_id: str, body: UserStatus, user: dict = Depends(get_c
     if "menu" in fields:
         updates["menu"] = body.menu     # only sent once the section chooser is enabled
 
-    if "notify_all" in fields:
-        updates["notify_all"] = bool(body.notify_all)
-    if "notify_requests" in fields:
-        updates["notify_requests"] = bool(body.notify_requests)
     if "dpr_reminders" in fields:
         updates["dpr_reminders"] = bool(body.dpr_reminders)
     if "dpr_reminder_sites" in fields:
@@ -759,26 +757,6 @@ async def save_allocation(body: AllocationBulk, user: dict = Depends(get_current
                     {"worker_ids": sorted(this_site.keys())},
                     {"worker_ids": sorted(requested)})
 
-        # notify the site's supervisors with the request outcome (allocated / not allocated)
-        if to_add or to_remove:
-            rs = await client.get(f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "site_name"},
-                                  headers=supabase_headers(user["token"]))
-            sname = rs.json()[0]["site_name"] if rs.status_code == 200 and rs.json() else "your site"
-            svc = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(user["token"])
-            rq = await client.get(f"{REST}/manpower_requests",
-                                  params={"request_date": f"eq.{body.work_date}",
-                                          "site_id": f"eq.{body.site_id}", "select": "worker_id"},
-                                  headers=svc)
-            reqset = {x["worker_id"] for x in (rq.json() if rq.status_code == 200 else [])}
-            if reqset:
-                got = len(reqset & requested)
-                pending = len(reqset - requested)
-                msg = (f"{sname} · {body.work_date}: {got} of your {len(reqset)} requested worker(s) allocated" +
-                       (f" — {pending} NOT allocated to you." if pending else " — all allocated ✓."))
-            else:
-                msg = f"{len(requested)} worker(s) allocated to {sname} for {body.work_date}."
-            await notify_site_supervisors(client, [body.site_id], "allocation", "Allocation updated",
-                                          msg, link=f"attendance.html?date={body.work_date}")
         return {"ok": True, "added": len(to_add), "removed": len(to_remove)}
 
 
@@ -834,12 +812,6 @@ async def copy_allocation(body: AllocationCopy, user: dict = Depends(get_current
                     f"{body.from_date}->{body.to_date}", None,
                     {"copied": copied, "skipped_on_leave": skipped_leave})
 
-        # notify supervisors of every site that received workers
-        if copied:
-            site_ids = list({a["site_id"] for a in active_rows if a["worker_id"] not in already})
-            await notify_site_supervisors(client, site_ids, "allocation", "Manpower allocated",
-                                          f"Allocation done for {body.to_date} ({copied} worker(s)).",
-                                          link=f"attendance.html?date={body.to_date}")
         return {"ok": True, "copied": copied,
                 "skipped_on_leave": skipped_leave,
                 "skipped_already_allocated": len(active_rows) - len(payload)}
@@ -980,13 +952,6 @@ async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)
                     {"worker_ids": sorted(existing.keys())},
                     {"worker_ids": sorted(requested)})
 
-        # notify the allocator (Mani) that a site requested manpower
-        rs = await client.get(f"{REST}/sites", params={"id": f"eq.{body.site_id}", "select": "site_name"},
-                              headers=supabase_headers(user["token"]))
-        sname = rs.json()[0]["site_name"] if rs.status_code == 200 and rs.json() else "A site"
-        await notify_allocator(client, "request", "Manpower requested",
-                               f"{sname} requested {len(requested)} worker(s) for {body.request_date}.",
-                               link=f"allocation.html?date={body.request_date}")
         return {"ok": True, "added": len(to_add), "removed": len(to_remove),
                 "total": len(requested)}
 
@@ -1305,28 +1270,6 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         except Exception:
             pass
 
-        # absence (MC / UL / AL) → notify Operation Manager, Site Manager, HR Assistant
-        was_present = att["present"] if att else None
-        if not present and was_present is not False:   # newly marked absent
-            wname, sname2 = "?", "?"
-            try:
-                rw = await client.get(f"{REST}/allocations",
-                                      params={"id": f"eq.{body.allocation_id}",
-                                              "select": "workers(name),sites(site_name)"},
-                                      headers=supabase_headers(user["token"]))
-                j = rw.json()[0] if rw.status_code == 200 and rw.json() else {}
-                wname = (j.get("workers") or {}).get("name", "?")
-                sname2 = (j.get("sites") or {}).get("site_name", "?")
-            except Exception:
-                pass
-            code = (absence or "absent").upper()
-            try:
-                await notify_roles(client, ["operation_manager", "main_sup", "hr_assistant"],
-                                   "absence", f"Worker absence — {code}",
-                                   f"{wname} marked {code} at {sname2} on {alloc['work_date']}.",
-                                   link=f"attendance.html?date={alloc['work_date']}")
-            except Exception:
-                pass
         return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
 
 
@@ -2323,350 +2266,6 @@ async def set_site_off(body: SiteOff, user: dict = Depends(get_current_user)):
             if d.status_code not in (200, 204):
                 raise HTTPException(status_code=403, detail="Could not update the site")
         return {"ok": True, "off": body.off}
-
-
-# ================= Notifications (Rev 9) =================
-# Notifications are created server-side with the service key and routed to the
-# right recipients. Every notification also copies to users flagged notify_all
-# (the developer). A notification failure never breaks the underlying action.
-
-async def _svc_user_ids(client, params: dict) -> list[str]:
-    if not SUPABASE_SERVICE_KEY:
-        return []
-    p = {"status": "eq.active", "select": "id", **params}
-    r = await client.get(f"{REST}/users", params=p, headers=service_headers())
-    return [u["id"] for u in (r.json() if r.status_code == 200 else [])]
-
-
-async def notify(client, recipients, kind, title, body="", link=None):
-    """Insert one notification per recipient (deduped) + everyone notify_all,
-    and also send a phone Web Push to those same recipients."""
-    if not NOTIFICATIONS_ENABLED or not SUPABASE_SERVICE_KEY:
-        return
-    try:
-        ids = set(r for r in (recipients or []) if r)
-        ids.update(await _svc_user_ids(client, {"notify_all": "eq.true"}))
-        if not ids:
-            return
-        rows = [{"user_id": uid, "kind": kind, "title": title,
-                 "body": body, "link": link} for uid in ids]
-        await client.post(f"{REST}/notifications",
-                          headers={**service_headers(), "Prefer": "return=minimal"},
-                          json=rows)
-        await send_web_push(client, list(ids), title, body, link)
-    except Exception:
-        pass
-
-
-# ---- Web Push (phone notifications) ----
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
-VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@vortex.sg").strip()
-PUSH_ENABLED = bool(VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY)
-
-
-async def send_web_push(client, user_ids, title, body="", link=None):
-    """Send a Web Push to every device of the given users; prune expired ones."""
-    if not (PUSH_ENABLED and SUPABASE_SERVICE_KEY and user_ids):
-        return
-    try:
-        ids = list({u for u in user_ids if u})
-        if not ids:
-            return
-        r = await client.get(f"{REST}/push_subscriptions",
-                             params={"user_id": f"in.({','.join(ids)})",
-                                     "select": "endpoint,p256dh,auth"},
-                             headers=service_headers())
-        subs = r.json() if r.status_code == 200 else []
-        if not subs:
-            return
-        payload = _json.dumps({"title": title, "body": body or "", "url": link or "home.html"})
-
-        def _send_one(s):
-            from pywebpush import webpush, WebPushException
-            try:
-                webpush({"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
-                        data=payload, vapid_private_key=VAPID_PRIVATE_KEY,
-                        vapid_claims={"sub": VAPID_SUBJECT}, ttl=3600)
-                return None
-            except WebPushException as e:
-                code = getattr(getattr(e, "response", None), "status_code", None)
-                return s["endpoint"] if code in (404, 410) else None
-            except Exception:
-                return None
-
-        results = await asyncio.gather(*[asyncio.to_thread(_send_one, s) for s in subs])
-        dead = [e for e in results if e]
-        if dead:
-            await client.delete(f"{REST}/push_subscriptions",
-                                params={"endpoint": f"in.({','.join(dead)})"},
-                                headers=service_headers())
-    except Exception:
-        pass
-
-
-async def notify_roles(client, roles, kind, title, body="", link=None):
-    if not NOTIFICATIONS_ENABLED:
-        return
-    ids = await _svc_user_ids(client, {"role": f"in.({','.join(roles)})"})
-    await notify(client, ids, kind, title, body, link)
-
-
-async def notify_site_supervisors(client, site_ids, kind, title, body="", link=None):
-    if not NOTIFICATIONS_ENABLED or not SUPABASE_SERVICE_KEY or not site_ids:
-        return
-    try:
-        r = await client.get(f"{REST}/site_supervisors",
-                             params={"site_id": f"in.({','.join(site_ids)})", "select": "user_id"},
-                             headers=service_headers())
-        ids = [u["user_id"] for u in (r.json() if r.status_code == 200 else [])]
-        await notify(client, ids, kind, title, body, link)
-    except Exception:
-        pass
-
-
-async def notify_allocator(client, kind, title, body="", link=None):
-    """Manpower-request notifications go to users flagged notify_requests (the allocator)."""
-    if not NOTIFICATIONS_ENABLED:
-        return
-    ids = await _svc_user_ids(client, {"notify_requests": "eq.true"})
-    await notify(client, ids, kind, title, body, link)
-
-
-@app.get("/api/v1/notifications")
-async def list_notifications(user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/notifications",
-            params={"user_id": f"eq.{user['user_id']}", "order": "created_at.desc",
-                    "limit": "50",
-                    "select": "id,kind,title,body,link,read_at,created_at"},
-            headers=supabase_headers(user["token"]))
-        rows = r.json() if r.status_code == 200 else []
-        unread = sum(1 for x in rows if not x.get("read_at"))
-        return {"items": rows, "unread": unread}
-
-
-@app.get("/api/v1/notifications-count")
-async def notification_count(user: dict = Depends(get_current_user)):
-    """Tiny startup request for the global bell. Notification bodies are loaded
-    only when the user opens the panel, keeping every mobile page responsive."""
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/notifications",
-            params={"user_id": f"eq.{user['user_id']}", "read_at": "is.null",
-                    "select": "id", "limit": "1"},
-            headers={**supabase_headers(user["token"]), "Prefer": "count=exact"})
-        if r.status_code not in (200, 206):
-            return {"unread": 0}
-        cr = r.headers.get("content-range", "0-0/0")
-        try:
-            unread = int(cr.rsplit("/", 1)[1])
-        except Exception:
-            unread = len(r.json() or [])
-        return {"unread": unread}
-
-
-@app.post("/api/v1/notifications/read_all")
-async def read_all_notifications(user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        await client.patch(
-            f"{REST}/notifications",
-            params={"user_id": f"eq.{user['user_id']}", "read_at": "is.null"},
-            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
-            json={"read_at": datetime.now(timezone.utc).isoformat()})
-        return {"ok": True}
-
-
-@app.delete("/api/v1/notifications")
-async def clear_notifications(user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        await client.delete(
-            f"{REST}/notifications",
-            params={"user_id": f"eq.{user['user_id']}"},
-            headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"})
-        return {"ok": True}
-
-
-# ================= Web Push subscriptions =================
-class PushSubIn(BaseModel):
-    endpoint: str
-    p256dh: str
-    auth: str
-    user_agent: str | None = None
-
-
-class PushEp(BaseModel):
-    endpoint: str
-
-
-@app.get("/api/v1/push/pubkey")
-async def push_pubkey():
-    tbl = None
-    if SUPABASE_SERVICE_KEY:
-        try:
-            async with shared_client() as c:
-                r = await c.get(f"{REST}/push_subscriptions",
-                                params={"select": "id", "limit": "1"},
-                                headers=service_headers())
-                tbl = r.status_code
-        except Exception:
-            tbl = "err"
-    return {"enabled": PUSH_ENABLED, "public_key": VAPID_PUBLIC_KEY, "table": tbl}
-
-
-@app.post("/api/v1/push/subscribe")
-async def push_subscribe(body: PushSubIn, user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        # Save with the service role: the backend already authenticated the user and
-        # sets user_id explicitly, so this is safe and avoids RLS/token-expiry issues.
-        r = await client.post(
-            f"{REST}/push_subscriptions",
-            params={"on_conflict": "endpoint"},
-            headers={**service_headers(),
-                     "Prefer": "resolution=merge-duplicates,return=minimal"},
-            json={"user_id": user["user_id"], "endpoint": body.endpoint,
-                  "p256dh": body.p256dh, "auth": body.auth, "user_agent": body.user_agent})
-        if r.status_code not in (200, 201, 204):
-            raise HTTPException(status_code=500, detail="Could not save subscription.")
-        return {"ok": True}
-
-
-@app.post("/api/v1/push/unsubscribe")
-async def push_unsubscribe(body: PushEp, user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        await client.delete(
-            f"{REST}/push_subscriptions",
-            params={"endpoint": f"eq.{body.endpoint}", "user_id": f"eq.{user['user_id']}"},
-            headers=service_headers())
-    return {"ok": True}
-
-
-@app.post("/api/v1/push/test")
-async def push_test(user: dict = Depends(get_current_user)):
-    async with shared_client() as client:
-        await send_web_push(client, [user["user_id"]], "VCMS test",
-                            "Phone notifications are working.", "home.html")
-    return {"ok": True}
-
-
-class BroadcastIn(BaseModel):
-    title: str
-    body: str | None = ""
-    target: str = "all"           # all | role | site
-    roles: list[str] | None = None
-    site_ids: list[str] | None = None
-    link: str | None = None
-
-
-@app.post("/api/v1/push/broadcast")
-async def push_broadcast(body: BroadcastIn, user: dict = Depends(get_current_user)):
-    """Admin-only: send a custom notification (bell + phone push) to everyone,
-    to selected roles, or to the supervisors of selected sites."""
-    if user["role"] not in FULL_ROLES:
-        raise HTTPException(status_code=403, detail="Only administrators can send notifications.")
-    title = (body.title or "").strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="Message title is required.")
-    if not SUPABASE_SERVICE_KEY:
-        raise HTTPException(status_code=503, detail="Service role not configured.")
-    async with shared_client() as client:
-        ids = set()
-        if body.target == "role" and body.roles:
-            ids.update(await _svc_user_ids(client, {"role": f"in.({','.join(body.roles)})"}))
-        elif body.target == "site" and body.site_ids:
-            r = await client.get(f"{REST}/site_supervisors",
-                                 params={"site_id": f"in.({','.join(body.site_ids)})",
-                                         "select": "user_id"},
-                                 headers=service_headers())
-            ids.update(u["user_id"] for u in (r.json() if r.status_code == 200 else []))
-        else:
-            ids.update(await _svc_user_ids(client, {}))   # all active users
-        ids = [i for i in ids if i]
-        if not ids:
-            return {"ok": True, "recipients": 0}
-        link = body.link or "home.html"
-        text = (body.body or "").strip()
-        rows = [{"user_id": uid, "kind": "broadcast", "title": title,
-                 "body": text, "link": link} for uid in ids]
-        await client.post(f"{REST}/notifications",
-                          headers={**service_headers(), "Prefer": "return=minimal"},
-                          json=rows)
-        await send_web_push(client, ids, title, text, link)
-        return {"ok": True, "recipients": len(ids)}
-
-
-# ================= Scheduled reminders (cron → push) =================
-REMINDER_TOKEN = os.environ.get("REMINDER_TOKEN", "").strip()
-
-
-def _sgt_today():
-    return (datetime.now(timezone.utc) + timedelta(hours=8)).date().isoformat()
-
-
-async def _pending_sites(client, mode: str):
-    """Site IDs with outstanding submissions today (mode: 'attendance' | 'endtime')."""
-    today = _sgt_today()
-    r = await client.get(
-        f"{REST}/allocations",
-        params={"work_date": f"eq.{today}", "status": "eq.allocated",
-                "select": "site_id,attendance(present,end_time,submitted_at)"},
-        headers=service_headers())
-    rows = r.json() if r.status_code == 200 else []
-    bad = set()
-    for a in rows:
-        sid = a.get("site_id")
-        att = a.get("attendance")
-        if isinstance(att, list):
-            att = att[0] if att else None
-        if mode == "attendance":
-            if not att or not att.get("submitted_at"):
-                bad.add(sid)
-        else:  # endtime
-            if not att or not att.get("submitted_at"):
-                bad.add(sid)
-            elif att.get("present") and not att.get("end_time"):
-                bad.add(sid)
-    bad.discard(None)
-    return bad
-
-
-async def _remind_sites(client, site_ids, title, body, link):
-    if not site_ids:
-        return
-    sites = {}
-    try:
-        r = await client.get(f"{REST}/sites",
-                             params={"id": f"in.({','.join(site_ids)})", "select": "id,site_name"},
-                             headers=service_headers())
-        sites = {s["id"]: s["site_name"] for s in (r.json() if r.status_code == 200 else [])}
-    except Exception:
-        pass
-    for sid in site_ids:
-        nm = sites.get(sid, "your site")
-        await notify_site_supervisors(client, [sid], "reminder", title, f"{body} — {nm}", link)
-
-
-@app.post("/api/v1/reminders/attendance")
-async def remind_attendance(request: Request):
-    if not REMINDER_TOKEN or request.headers.get("x-cron-token") != REMINDER_TOKEN:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    async with shared_client() as client:
-        sids = await _pending_sites(client, "attendance")
-        await _remind_sites(client, sids, "Attendance reminder",
-                            "Please mark & submit this morning's attendance", "attendance.html")
-    return {"reminded_sites": len(sids)}
-
-
-@app.post("/api/v1/reminders/endtime")
-async def remind_endtime(request: Request):
-    if not REMINDER_TOKEN or request.headers.get("x-cron-token") != REMINDER_TOKEN:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    async with shared_client() as client:
-        sids = await _pending_sites(client, "endtime")
-        await _remind_sites(client, sids, "End-time reminder",
-                            "Please submit today's end-times", "attendance.html")
-    return {"reminded_sites": len(sids)}
 
 
 # ================= Daily Progress Report (Daily Work Record) =================
@@ -4139,196 +3738,6 @@ async def todos_delete(todo_id: str, user: dict = Depends(get_current_user)):
             headers=supabase_headers(user["token"]))
         if r.status_code not in (200, 204):
             raise HTTPException(status_code=500, detail="Could not delete task")
-        return {"ok": True}
-
-
-# ---------------- Worker Cards / Training documents ----------------
-# Everyone except Operation Manager and General Manager maintains worker cards.
-CARD_ROLES = ()  # Feature retired: worker cards/certificates are not accessible
-
-
-class CardIn(BaseModel):
-    worker_id: str
-    category: str = "course"          # work_permit | visit_pass | course | other
-    label: str | None = None
-    image_path: str                   # front image (public R2/Supabase URL)
-    back_image_path: str | None = None
-    issued_date: str | None = None    # YYYY-MM-DD
-    expiry_date: str | None = None
-    institute: str | None = None
-    cert_no: str | None = None
-    position: int | None = None
-
-
-class CardPatch(BaseModel):
-    category: str | None = None
-    label: str | None = None
-    issued_date: str | None = None
-    expiry_date: str | None = None
-    institute: str | None = None
-    cert_no: str | None = None
-    position: int | None = None
-    image_path: str | None = None
-    back_image_path: str | None = None
-
-
-@app.get("/api/v1/worker-cards/expiring")
-async def worker_cards_expiring(days: int = 90, user: dict = Depends(get_current_user)):
-    """Cards that expire within `days` (for the compliance / renewal view)."""
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    from datetime import date, timedelta
-    until = (date.today() + timedelta(days=max(0, days))).isoformat()
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/worker_cards",
-            params={"select": "id,worker_id,category,label,image_path,issued_date,expiry_date,"
-                              "workers(name,worker_code,fin)",
-                    "expiry_date": f"lte.{until}", "order": "expiry_date.asc"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not load expiring cards")
-        return [x for x in r.json() if x.get("expiry_date")]
-
-
-@app.get("/api/v1/worker-cards/matrix")
-async def worker_cards_matrix(user: dict = Depends(get_current_user)):
-    """All cards with their worker, for the Training Matrix dashboard."""
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/worker_cards",
-            params={"select": "id,worker_id,category,label,issued_date,expiry_date,image_path,"
-                              "workers(name,worker_code,fin,status)",
-                    "order": "created_at.asc"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not load matrix")
-        return r.json()
-
-
-@app.get("/api/v1/worker-cards")
-async def list_worker_cards(worker_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/worker_cards",
-            params={"worker_id": f"eq.{worker_id}",
-                    "select": "id,worker_id,category,label,image_path,back_image_path,issued_date,expiry_date,institute,cert_no,position",
-                    "order": "position.asc,created_at.asc"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not load cards")
-        return r.json()
-
-
-@app.post("/api/v1/worker-cards", status_code=201)
-async def add_worker_card(body: CardIn, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    rec = {"worker_id": body.worker_id, "category": (body.category or "course"),
-           "label": (body.label or None), "image_path": body.image_path,
-           "back_image_path": body.back_image_path or None,
-           "issued_date": body.issued_date or None, "expiry_date": body.expiry_date or None,
-           "institute": body.institute or None, "cert_no": body.cert_no or None,
-           "position": body.position or 0, "uploaded_by": user["user_id"]}
-    async with shared_client() as client:
-        r = await client.post(
-            f"{REST}/worker_cards",
-            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json=rec)
-        if r.status_code not in (200, 201) or not r.json():
-            raise HTTPException(status_code=500, detail="Could not save card")
-        return r.json()[0]
-
-
-@app.patch("/api/v1/worker-cards/{card_id}")
-async def patch_worker_card(card_id: str, body: CardPatch, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    ch = {}
-    for f in ("category", "label", "issued_date", "expiry_date", "institute", "cert_no", "position", "image_path", "back_image_path"):
-        v = getattr(body, f)
-        if v is not None:
-            ch[f] = (v or None) if f in ("label", "issued_date", "expiry_date", "institute", "cert_no", "back_image_path") else v
-    if not ch:
-        raise HTTPException(status_code=400, detail="Nothing to update")
-    async with shared_client() as client:
-        r = await client.patch(
-            f"{REST}/worker_cards", params={"id": f"eq.{card_id}"},
-            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json=ch)
-        if r.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not update card")
-        return (r.json() or [{}])[0]
-
-
-@app.delete("/api/v1/worker-cards/{card_id}")
-async def delete_worker_card(card_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    async with shared_client() as client:
-        r = await client.delete(
-            f"{REST}/worker_cards", params={"id": f"eq.{card_id}"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code not in (200, 204):
-            raise HTTPException(status_code=500, detail="Could not delete card")
-        return {"ok": True}
-
-
-# ---------------- Worker Certificates (full A4 documents) ----------------
-class CertIn(BaseModel):
-    worker_id: str
-    title: str | None = None
-    file_path: str
-    file_type: str = "image"   # 'pdf' | 'image'
-
-
-@app.get("/api/v1/worker-certificates")
-async def list_worker_certs(worker_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    async with shared_client() as client:
-        r = await client.get(
-            f"{REST}/worker_certificates",
-            params={"worker_id": f"eq.{worker_id}",
-                    "select": "id,worker_id,title,file_path,file_type,created_at",
-                    "order": "created_at.desc"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code != 200:
-            raise HTTPException(status_code=500, detail="Could not load certificates")
-        return r.json()
-
-
-@app.post("/api/v1/worker-certificates", status_code=201)
-async def add_worker_cert(body: CertIn, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    rec = {"worker_id": body.worker_id, "title": (body.title or None),
-           "file_path": body.file_path, "file_type": (body.file_type or "image"),
-           "uploaded_by": user["user_id"]}
-    async with shared_client() as client:
-        r = await client.post(
-            f"{REST}/worker_certificates",
-            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json=rec)
-        if r.status_code not in (200, 201) or not r.json():
-            raise HTTPException(status_code=500, detail="Could not save certificate")
-        return r.json()[0]
-
-
-@app.delete("/api/v1/worker-certificates/{cert_id}")
-async def delete_worker_cert(cert_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] not in CARD_ROLES:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    async with shared_client() as client:
-        r = await client.delete(
-            f"{REST}/worker_certificates", params={"id": f"eq.{cert_id}"},
-            headers=supabase_headers(user["token"]))
-        if r.status_code not in (200, 204):
-            raise HTTPException(status_code=500, detail="Could not delete certificate")
         return {"ok": True}
 
 
