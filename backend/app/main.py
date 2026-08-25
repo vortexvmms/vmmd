@@ -2229,11 +2229,19 @@ async def list_settings(user: dict = Depends(get_current_user)):
 
 
 class AppearanceBody(BaseModel):
-    preset: str = "vortex"
-    primary: str = "#C00000"
+    preset: str = "executive"
+    primary: str = "#B42318"
+    secondary: str = "#273142"
+    accent: str = "#D6A32F"
+    page: str = "#F2F4F7"
+    surface: str = "#FFFFFF"
+    ink: str = "#182230"
 
 
 APPEARANCE_PRESETS = {
+    "executive": {"primary": "#B42318", "secondary": "#273142", "accent": "#D6A32F", "page": "#F2F4F7", "surface": "#FFFFFF", "ink": "#182230"},
+    "industrial": {"primary": "#175CD3", "secondary": "#202B3C", "accent": "#00A3A3", "page": "#EEF3F8", "surface": "#FFFFFF", "ink": "#172B4D"},
+    "construction": {"primary": "#C76A00", "secondary": "#29313D", "accent": "#1E6F68", "page": "#F7F3ED", "surface": "#FFFFFF", "ink": "#252A32"},
     "vortex": "#C00000", "blue": "#1565C0", "orange": "#C2410C",
     "navy": "#1E3A5F", "emerald": "#047857", "custom": None,
 }
@@ -2251,7 +2259,7 @@ async def get_appearance(user: dict = Depends(get_current_user)):
         rows = r.json() if r.status_code == 200 else []
         value = rows[0].get("value") if rows else None
         if not isinstance(value, dict):
-            value = {"preset": "vortex", "primary": "#C00000"}
+            value = {"preset": "executive", **APPEARANCE_PRESETS["executive"]}
         return value
 
 
@@ -2264,10 +2272,17 @@ async def update_appearance(body: AppearanceBody,
     preset = body.preset.strip().lower()
     if preset not in APPEARANCE_PRESETS:
         raise HTTPException(status_code=400, detail="Choose an approved colour preset")
-    primary = APPEARANCE_PRESETS[preset] or body.primary.strip().upper()
-    if not re.fullmatch(r"#[0-9A-F]{6}", primary):
-        raise HTTPException(status_code=400, detail="Choose a valid six-digit colour")
-    value = {"preset": preset, "primary": primary}
+    selected = APPEARANCE_PRESETS[preset]
+    if isinstance(selected, dict):
+        value = {"preset": preset, **selected}
+    else:
+        primary = selected or body.primary.strip().upper()
+        value = {"preset": preset, "primary": primary, "secondary": body.secondary.strip().upper(),
+                 "accent": body.accent.strip().upper(), "page": body.page.strip().upper(),
+                 "surface": body.surface.strip().upper(), "ink": body.ink.strip().upper()}
+    if any(not re.fullmatch(r"#[0-9A-F]{6}", str(value.get(k, "")))
+           for k in ("primary", "secondary", "accent", "page", "surface", "ink")):
+        raise HTTPException(status_code=400, detail="Choose valid six-digit theme colours")
     async with shared_client() as client:
         r = await client.post(
             f"{REST}/settings",
@@ -3779,7 +3794,12 @@ class TodoPatch(BaseModel):
 async def todos_list(user: dict = Depends(get_current_user)):
     # Reconcile automatic DPR tasks before returning the list. This guarantees
     # stale tasks disappear even when the user opens To-do directly.
-    await dpr_missing(days=30, user=user)
+    # A reminder scan must never make the user's normal to-do list disappear.
+    # It is best-effort and bounded because it can inspect several sites/dates.
+    try:
+        await asyncio.wait_for(dpr_missing(days=30, user=user), timeout=8.0)
+    except Exception:
+        pass
     async with shared_client() as client:
         r = await client.get(f"{REST}/todos",
             params={"user_id": f"eq.{user['user_id']}", "order": "created_at.asc",

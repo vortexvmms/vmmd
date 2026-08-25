@@ -15,8 +15,14 @@ window.esc = function (v) {
 // VCMS appearance foundation: company brand + personal display mode.
 (function () {
   var PRESETS = {
-    vortex: "#C00000", blue: "#1565C0", orange: "#C2410C",
-    navy: "#1E3A5F", emerald: "#047857"
+    executive:{primary:"#B42318",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"},
+    industrial:{primary:"#175CD3",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    construction:{primary:"#C76A00",secondary:"#29313D",accent:"#1E6F68",page:"#F7F3ED",surface:"#FFFFFF",ink:"#252A32"},
+    vortex:{primary:"#C00000",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"},
+    blue:{primary:"#1565C0",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    orange:{primary:"#C2410C",secondary:"#29313D",accent:"#1E6F68",page:"#F7F3ED",surface:"#FFFFFF",ink:"#252A32"},
+    navy:{primary:"#1E3A5F",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    emerald:{primary:"#047857",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"}
   };
   var MODE_KEY = "vcms_mode", BRAND_KEY = "vcms_company_appearance_v1";
 
@@ -36,12 +42,19 @@ window.esc = function (v) {
     var c=rgb(hex), y=(c[0]*299+c[1]*587+c[2]*114)/1000;
     return y >= 155 ? "#111827" : "#FFFFFF";
   }
+  function normalise(value) {
+    value=value||{}; var base=PRESETS[value.preset]||PRESETS.executive;
+    return {preset:value.preset||"executive",primary:cleanHex(value.primary,base.primary),
+      secondary:cleanHex(value.secondary,base.secondary),accent:cleanHex(value.accent,base.accent),
+      page:cleanHex(value.page,base.page),surface:cleanHex(value.surface,base.surface),
+      ink:cleanHex(value.ink,base.ink),t:value.t||0};
+  }
   function readBrand() {
     try {
       var hit=JSON.parse(localStorage.getItem(BRAND_KEY)||"null");
-      if(hit && hit.primary) return {preset:hit.preset||"custom",primary:cleanHex(hit.primary,"#C00000"),t:hit.t||0};
+      if(hit && hit.primary) return normalise(hit);
     } catch (_) {}
-    return {preset:"vortex",primary:"#C00000",t:0};
+    return normalise({preset:"executive",t:0});
   }
   function readMode() {
     var mode=localStorage.getItem(MODE_KEY), old=localStorage.getItem("vcms_theme");
@@ -49,7 +62,7 @@ window.esc = function (v) {
     return /^(light|dark|contrast)$/.test(mode||"") ? mode : "light";
   }
   function applyBrand(value) {
-    value=value||readBrand(); var primary=cleanHex(value.primary,PRESETS[value.preset]||"#C00000");
+    value=normalise(value||readBrand()); var primary=value.primary;
     var root=document.documentElement.style;
     root.setProperty("--vcms-brand",primary);
     root.setProperty("--vcms-brand-dark",mix(primary,"#000000",.22));
@@ -57,6 +70,13 @@ window.esc = function (v) {
     root.setProperty("--vcms-brand-soft",mix(primary,"#FFFFFF",.90));
     root.setProperty("--vcms-brand-border",mix(primary,"#FFFFFF",.62));
     root.setProperty("--vcms-on-brand",readable(primary));
+    root.setProperty("--vcms-secondary",value.secondary);
+    root.setProperty("--vcms-accent",value.accent);
+    root.setProperty("--vcms-page",value.page);
+    root.setProperty("--vcms-surface",value.surface);
+    root.setProperty("--vcms-ink",value.ink);
+    root.setProperty("--brand",primary);root.setProperty("--brand2",mix(primary,"#000000",.22));
+    root.setProperty("--bg",value.page);root.setProperty("--ink",value.ink);root.setProperty("--line",mix(value.secondary,"#FFFFFF",.82));
     document.documentElement.setAttribute("data-brand",value.preset||"custom");
     var meta=document.querySelector('meta[name="theme-color"]'); if(meta)meta.content=mix(primary,"#000000",.22);
     window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:value,mode:readMode()}}));
@@ -67,7 +87,7 @@ window.esc = function (v) {
     window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:readBrand(),mode:mode}}));
   }
   function setBrand(value) {
-    var saved={preset:value.preset||"custom",primary:cleanHex(value.primary,"#C00000"),t:Date.now()};
+    var saved=normalise(value);saved.t=Date.now();
     localStorage.setItem(BRAND_KEY,JSON.stringify(saved)); applyBrand(saved); return saved;
   }
   function setMode(mode) { localStorage.setItem(MODE_KEY,mode); applyMode(mode); }
@@ -95,6 +115,7 @@ window.esc = function (v) {
     :root{
       --vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-brand-hover:#A70000;
       --vcms-brand-soft:#F9E6E6;--vcms-brand-border:#E6A3A3;--vcms-on-brand:#fff;
+      --vcms-secondary:#273142;--vcms-accent:#D6A32F;
       --vcms-success:#15803D;--vcms-success-soft:#ECFDF3;
       --vcms-warning:#B45309;--vcms-warning-soft:#FFFBEB;
       --vcms-danger:#B91C1C;--vcms-danger-soft:#FEF2F2;
@@ -104,6 +125,7 @@ window.esc = function (v) {
     :root[data-theme="dark"]{--vcms-ink:#F3F4F6;--vcms-muted:#AAB3C0;--vcms-surface:#1B2028;--vcms-page:#0F1216;--vcms-line:#353D49}
     :root[data-theme="contrast"]{font-size:17px;--vcms-ink:#000;--vcms-muted:#111;--vcms-surface:#fff;--vcms-page:#fff;--vcms-line:#111}
     body{color:var(--vcms-ink)}
+    body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease}
     .bg-red-600,.bg-red-700{background-color:var(--vcms-brand)!important;color:var(--vcms-on-brand)!important}
     header.bg-red-700,.bg-red-800{background-color:var(--vcms-brand-dark)!important;color:var(--vcms-on-brand)!important}
     .text-red-600,.text-red-700{color:var(--vcms-brand)!important}.border-red-600,.border-red-700{border-color:var(--vcms-brand)!important}
@@ -139,6 +161,7 @@ window.esc = function (v) {
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
     @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
+    @media(prefers-reduced-motion:reduce){body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:none!important}}
   }
   @media print{
     :root{--vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-on-brand:#fff;--vcms-success:#15803D;--vcms-warning:#B45309;--vcms-danger:#B91C1C}
@@ -183,7 +206,7 @@ window.esc = function (v) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260825-ui4', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260825-ui5', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}

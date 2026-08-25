@@ -1,8 +1,14 @@
 // VCMS appearance foundation: company brand + personal display mode.
 (function () {
   var PRESETS = {
-    vortex: "#C00000", blue: "#1565C0", orange: "#C2410C",
-    navy: "#1E3A5F", emerald: "#047857"
+    executive:{primary:"#B42318",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"},
+    industrial:{primary:"#175CD3",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    construction:{primary:"#C76A00",secondary:"#29313D",accent:"#1E6F68",page:"#F7F3ED",surface:"#FFFFFF",ink:"#252A32"},
+    vortex:{primary:"#C00000",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"},
+    blue:{primary:"#1565C0",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    orange:{primary:"#C2410C",secondary:"#29313D",accent:"#1E6F68",page:"#F7F3ED",surface:"#FFFFFF",ink:"#252A32"},
+    navy:{primary:"#1E3A5F",secondary:"#202B3C",accent:"#00A3A3",page:"#EEF3F8",surface:"#FFFFFF",ink:"#172B4D"},
+    emerald:{primary:"#047857",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"}
   };
   var MODE_KEY = "vcms_mode", BRAND_KEY = "vcms_company_appearance_v1";
 
@@ -22,12 +28,19 @@
     var c=rgb(hex), y=(c[0]*299+c[1]*587+c[2]*114)/1000;
     return y >= 155 ? "#111827" : "#FFFFFF";
   }
+  function normalise(value) {
+    value=value||{}; var base=PRESETS[value.preset]||PRESETS.executive;
+    return {preset:value.preset||"executive",primary:cleanHex(value.primary,base.primary),
+      secondary:cleanHex(value.secondary,base.secondary),accent:cleanHex(value.accent,base.accent),
+      page:cleanHex(value.page,base.page),surface:cleanHex(value.surface,base.surface),
+      ink:cleanHex(value.ink,base.ink),t:value.t||0};
+  }
   function readBrand() {
     try {
       var hit=JSON.parse(localStorage.getItem(BRAND_KEY)||"null");
-      if(hit && hit.primary) return {preset:hit.preset||"custom",primary:cleanHex(hit.primary,"#C00000"),t:hit.t||0};
+      if(hit && hit.primary) return normalise(hit);
     } catch (_) {}
-    return {preset:"vortex",primary:"#C00000",t:0};
+    return normalise({preset:"executive",t:0});
   }
   function readMode() {
     var mode=localStorage.getItem(MODE_KEY), old=localStorage.getItem("vcms_theme");
@@ -35,7 +48,7 @@
     return /^(light|dark|contrast)$/.test(mode||"") ? mode : "light";
   }
   function applyBrand(value) {
-    value=value||readBrand(); var primary=cleanHex(value.primary,PRESETS[value.preset]||"#C00000");
+    value=normalise(value||readBrand()); var primary=value.primary;
     var root=document.documentElement.style;
     root.setProperty("--vcms-brand",primary);
     root.setProperty("--vcms-brand-dark",mix(primary,"#000000",.22));
@@ -43,6 +56,13 @@
     root.setProperty("--vcms-brand-soft",mix(primary,"#FFFFFF",.90));
     root.setProperty("--vcms-brand-border",mix(primary,"#FFFFFF",.62));
     root.setProperty("--vcms-on-brand",readable(primary));
+    root.setProperty("--vcms-secondary",value.secondary);
+    root.setProperty("--vcms-accent",value.accent);
+    root.setProperty("--vcms-page",value.page);
+    root.setProperty("--vcms-surface",value.surface);
+    root.setProperty("--vcms-ink",value.ink);
+    root.setProperty("--brand",primary);root.setProperty("--brand2",mix(primary,"#000000",.22));
+    root.setProperty("--bg",value.page);root.setProperty("--ink",value.ink);root.setProperty("--line",mix(value.secondary,"#FFFFFF",.82));
     document.documentElement.setAttribute("data-brand",value.preset||"custom");
     var meta=document.querySelector('meta[name="theme-color"]'); if(meta)meta.content=mix(primary,"#000000",.22);
     window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:value,mode:readMode()}}));
@@ -53,7 +73,7 @@
     window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:readBrand(),mode:mode}}));
   }
   function setBrand(value) {
-    var saved={preset:value.preset||"custom",primary:cleanHex(value.primary,"#C00000"),t:Date.now()};
+    var saved=normalise(value);saved.t=Date.now();
     localStorage.setItem(BRAND_KEY,JSON.stringify(saved)); applyBrand(saved); return saved;
   }
   function setMode(mode) { localStorage.setItem(MODE_KEY,mode); applyMode(mode); }

@@ -17,8 +17,8 @@ def test_management_page_progressive_ui_contract():
 
 
 def test_quality_release_and_webkit_ci_contract():
-    assert "20260825-ui4" in read("frontend/js/core/pwa.js")
-    assert "vcms-v43-management-quality" in read("frontend/sw.js")
+    assert "20260825-ui5" in read("frontend/js/core/pwa.js")
+    assert "vcms-v44-themes-tasks" in read("frontend/sw.js")
     assert "playwright install --with-deps chromium webkit" in read(".github/workflows/test.yml")
 
 

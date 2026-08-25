@@ -7,6 +7,7 @@
     :root{
       --vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-brand-hover:#A70000;
       --vcms-brand-soft:#F9E6E6;--vcms-brand-border:#E6A3A3;--vcms-on-brand:#fff;
+      --vcms-secondary:#273142;--vcms-accent:#D6A32F;
       --vcms-success:#15803D;--vcms-success-soft:#ECFDF3;
       --vcms-warning:#B45309;--vcms-warning-soft:#FFFBEB;
       --vcms-danger:#B91C1C;--vcms-danger-soft:#FEF2F2;
@@ -16,6 +17,7 @@
     :root[data-theme="dark"]{--vcms-ink:#F3F4F6;--vcms-muted:#AAB3C0;--vcms-surface:#1B2028;--vcms-page:#0F1216;--vcms-line:#353D49}
     :root[data-theme="contrast"]{font-size:17px;--vcms-ink:#000;--vcms-muted:#111;--vcms-surface:#fff;--vcms-page:#fff;--vcms-line:#111}
     body{color:var(--vcms-ink)}
+    body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease}
     .bg-red-600,.bg-red-700{background-color:var(--vcms-brand)!important;color:var(--vcms-on-brand)!important}
     header.bg-red-700,.bg-red-800{background-color:var(--vcms-brand-dark)!important;color:var(--vcms-on-brand)!important}
     .text-red-600,.text-red-700{color:var(--vcms-brand)!important}.border-red-600,.border-red-700{border-color:var(--vcms-brand)!important}
@@ -51,6 +53,7 @@
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
     @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
+    @media(prefers-reduced-motion:reduce){body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:none!important}}
   }
   @media print{
     :root{--vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-on-brand:#fff;--vcms-success:#15803D;--vcms-warning:#B45309;--vcms-danger:#B91C1C}
