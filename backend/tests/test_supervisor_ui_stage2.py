@@ -16,7 +16,7 @@ def test_critical_supervisor_pages_use_shared_header_and_release():
         assert "vcms-page-header__row" in html
         assert "vcms-page-toolbar" in html
         assert "vcms-control" in html
-        assert "20260825-ui2" in html
+        assert "20260825-ui4" in html
 
 
 def test_critical_workflows_use_shared_mobile_actions_and_toast():
@@ -35,7 +35,7 @@ def test_supervisor_home_remains_reduced_to_daily_work_and_support():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v41-supervisor-ui" in page("sw.js")
+    assert "vcms-v43-management-quality" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
@@ -46,4 +46,3 @@ def test_stage_two_cache_and_component_contract():
         ".vcms-supervisor-main",
     ):
         assert class_name in css
-

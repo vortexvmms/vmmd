@@ -2340,6 +2340,7 @@ class DailyReport(BaseModel):
     manpower: list[dict] = []
     equipment: list[dict] = []
     materials: list[dict] = []
+    activity_progress: list[dict] = []
     photos: list[dict] = []
     signature_url: str | None = None
     prepared_by_name: str | None = None
@@ -2426,6 +2427,7 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
         "manpower": body.manpower or [],
         "equipment": body.equipment or [],
         "materials": body.materials or [],
+        "activity_progress": body.activity_progress or [],
         "photos": body.photos or [],
         "signature_url": body.signature_url,
         "prepared_by_name": body.prepared_by_name or user.get("name"),
@@ -2445,7 +2447,45 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=500,
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
-        return rows[0] if rows else {"ok": True}
+        saved = rows[0] if rows else {"ok": True}
+
+        # A DPR progress row is also a dated schedule progress update. Validate
+        # the project against the selected site before calling the database RPC;
+        # this prevents a crafted request from updating another project.
+        if body.activity_progress and saved.get("id"):
+            site_r = await client.get(
+                f"{REST}/sites",
+                params={"id": f"eq.{body.site_id}", "select": "project_id", "limit": "1"},
+                headers=supabase_headers(user["token"]),
+            )
+            site_rows = site_r.json() if site_r.status_code == 200 else []
+            site_project = str((site_rows[0] if site_rows else {}).get("project_id") or "")
+            for activity in body.activity_progress:
+                if str(activity.get("project_id") or "") != site_project:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Activity progress must belong to the selected site's project",
+                    )
+                values = {
+                    "project_id": site_project,
+                    "activity_id": activity.get("activity_id"),
+                    "progress_date": body.report_date,
+                    "percent_complete": activity.get("percent_complete"),
+                    "actual_start": activity.get("actual_start"),
+                    "actual_finish": activity.get("actual_finish"),
+                    "quantity_completed": activity.get("quantity_completed"),
+                    "remarks": activity.get("remarks"),
+                    "source": "dpr",
+                    "dpr_report_id": saved["id"],
+                }
+                progress_r = await client.post(
+                    f"{REST}/rpc/record_activity_progress",
+                    headers=supabase_headers(user["token"]),
+                    json={f"p_{key}": value for key, value in values.items()},
+                )
+                if progress_r.status_code != 200:
+                    raise HTTPException(status_code=500, detail="DPR saved but schedule progress could not be updated")
+        return saved
 
 
 def _rs_clean(v):

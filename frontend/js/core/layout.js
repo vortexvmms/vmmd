@@ -33,6 +33,51 @@
   (document.head||document.documentElement).appendChild(s);
 })();
 
+// ---- Stage 3: progressively standardise management and report pages ----
+// The decorator only adds shared classes; IDs, inline handlers and page-specific
+// classes remain untouched, so operational behaviour is unchanged.
+(function () {
+  var excluded={login:1,index:1,home:1,home2:1,request:1,attendance:1,allocation:1,whatsapp:1,camera:1};
+  function apply(){
+    var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"");
+    if(excluded[slug]||!document.body)return;
+    document.body.classList.add("vcms-standard-page");
+    var header=document.querySelector("body>header");
+    if(header){
+      header.classList.add("vcms-legacy-header");
+      var title=header.querySelector("h1"); if(title)title.classList.add("vcms-legacy-title");
+      var back=header.querySelector('a[href="home.html"]'); if(back){back.classList.add("vcms-page-header__back");back.setAttribute("aria-label","Back to home")}
+    }
+    document.querySelectorAll('main input:not([type]),main input[type="text"],main input[type="search"],main input[type="email"],main input[type="password"],main input[type="number"],main input[type="date"],main input[type="time"],main input[type="tel"],main input[type="url"],main select,main textarea').forEach(function(el){
+      if(!el.classList.contains("vcms-control"))el.classList.add("vcms-control");
+    });
+    document.querySelectorAll("button").forEach(function(btn){
+      if(btn.closest(".grp-items,.nav,.schedule-tabs")||btn.classList.contains("vcms-btn"))return;
+      var c=btn.className||"";
+      if(/bg-red-(600|700|800)|bg-green-(600|700)/.test(c))btn.classList.add("vcms-btn",/bg-green/.test(c)?"vcms-btn-success":"vcms-btn-primary");
+      else if(/border-red-(600|700)|text-red-(600|700)/.test(c))btn.classList.add("vcms-btn","vcms-btn-tertiary");
+    });
+    document.querySelectorAll('#toast,[role="status"][class*="fixed"]').forEach(function(el){el.classList.add("vcms-toast")});
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
+})();
+
+// ---- Stage 4: accessibility and resilient interaction defaults ----
+(function(){
+  function apply(){
+    document.querySelectorAll("button:not([type])").forEach(function(b){if(!b.closest("form"))b.type="button"});
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!el.getAttribute("aria-label")&&!el.getAttribute("aria-labelledby")){
+        var label=el.closest("label"), text=label&&label.textContent.trim();
+        if(text)el.setAttribute("aria-label",text.slice(0,100));
+        else if(el.placeholder)el.setAttribute("aria-label",el.placeholder);
+      }
+    });
+    var main=document.querySelector("main");if(main&&!main.id)main.id="main-content";
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
+})();
+
 // ---- Light global polish (safe, non-breaking): crisper type + nicer scrollbars ----
 (function () {
   if (document.getElementById("vcms-polish")) return;
@@ -56,4 +101,3 @@
   var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-8"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
-

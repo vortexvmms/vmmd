@@ -2,7 +2,7 @@
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260825-ui2', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260825-ui4', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}

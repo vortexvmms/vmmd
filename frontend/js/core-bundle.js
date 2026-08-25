@@ -127,6 +127,9 @@ window.esc = function (v) {
     .vcms-mobile-actions__inner{width:100%;max-width:1152px;margin:0 auto;display:flex;align-items:center;gap:10px}.vcms-mobile-actions .vcms-btn{min-height:50px}
     .vcms-toast{position:fixed;left:50%;bottom:88px;z-index:50;max-width:min(92%,520px);transform:translateX(-50%);border-radius:999px;padding:10px 15px;background:#202631;color:#fff;font-size:13px;font-weight:700;text-align:center;box-shadow:0 8px 24px rgba(15,23,42,.24)}
     .vcms-supervisor-main{width:100%;max-width:1152px;margin:0 auto;padding:14px 16px 112px}
+    .vcms-legacy-header{background:var(--vcms-brand-dark)!important;color:var(--vcms-on-brand)!important;min-height:60px;border-color:transparent!important}.vcms-legacy-title{font-size:18px!important;font-weight:800!important;line-height:1.2!important}
+    .vcms-standard-page main{color:var(--vcms-ink)}.vcms-standard-page main>.bg-gray-100,.vcms-standard-page main>.bg-white,.vcms-standard-page .panel{border-color:var(--vcms-line)!important}
+    :where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid var(--vcms-brand-border)!important;outline-offset:2px!important}
     .vcms-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.vcms-status-success{color:var(--vcms-success);background:var(--vcms-success-soft)}.vcms-status-warning{color:var(--vcms-warning);background:var(--vcms-warning-soft)}.vcms-status-danger{color:var(--vcms-danger);background:var(--vcms-danger-soft)}.vcms-status-neutral{color:#475467;background:#F2F4F7}
     :root[data-theme="dark"] body,:root[data-theme="dark"] .bg-gray-100,:root[data-theme="dark"] .bg-gray-50{background:var(--vcms-page)!important;color:var(--vcms-ink)!important}
     :root[data-theme="dark"] .bg-white,:root[data-theme="dark"] .panel{background:var(--vcms-surface)!important;color:var(--vcms-ink)!important;border-color:var(--vcms-line)!important}
@@ -134,7 +137,7 @@ window.esc = function (v) {
     :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
     :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
-    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}}
+    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
   }
   @media print{
@@ -180,7 +183,7 @@ window.esc = function (v) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260825-ui2', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260825-ui4', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -241,6 +244,51 @@ window.esc = function (v) {
   (document.head||document.documentElement).appendChild(s);
 })();
 
+// ---- Stage 3: progressively standardise management and report pages ----
+// The decorator only adds shared classes; IDs, inline handlers and page-specific
+// classes remain untouched, so operational behaviour is unchanged.
+(function () {
+  var excluded={login:1,index:1,home:1,home2:1,request:1,attendance:1,allocation:1,whatsapp:1,camera:1};
+  function apply(){
+    var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"");
+    if(excluded[slug]||!document.body)return;
+    document.body.classList.add("vcms-standard-page");
+    var header=document.querySelector("body>header");
+    if(header){
+      header.classList.add("vcms-legacy-header");
+      var title=header.querySelector("h1"); if(title)title.classList.add("vcms-legacy-title");
+      var back=header.querySelector('a[href="home.html"]'); if(back){back.classList.add("vcms-page-header__back");back.setAttribute("aria-label","Back to home")}
+    }
+    document.querySelectorAll('main input:not([type]),main input[type="text"],main input[type="search"],main input[type="email"],main input[type="password"],main input[type="number"],main input[type="date"],main input[type="time"],main input[type="tel"],main input[type="url"],main select,main textarea').forEach(function(el){
+      if(!el.classList.contains("vcms-control"))el.classList.add("vcms-control");
+    });
+    document.querySelectorAll("button").forEach(function(btn){
+      if(btn.closest(".grp-items,.nav,.schedule-tabs")||btn.classList.contains("vcms-btn"))return;
+      var c=btn.className||"";
+      if(/bg-red-(600|700|800)|bg-green-(600|700)/.test(c))btn.classList.add("vcms-btn",/bg-green/.test(c)?"vcms-btn-success":"vcms-btn-primary");
+      else if(/border-red-(600|700)|text-red-(600|700)/.test(c))btn.classList.add("vcms-btn","vcms-btn-tertiary");
+    });
+    document.querySelectorAll('#toast,[role="status"][class*="fixed"]').forEach(function(el){el.classList.add("vcms-toast")});
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
+})();
+
+// ---- Stage 4: accessibility and resilient interaction defaults ----
+(function(){
+  function apply(){
+    document.querySelectorAll("button:not([type])").forEach(function(b){if(!b.closest("form"))b.type="button"});
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!el.getAttribute("aria-label")&&!el.getAttribute("aria-labelledby")){
+        var label=el.closest("label"), text=label&&label.textContent.trim();
+        if(text)el.setAttribute("aria-label",text.slice(0,100));
+        else if(el.placeholder)el.setAttribute("aria-label",el.placeholder);
+      }
+    });
+    var main=document.querySelector("main");if(main&&!main.id)main.id="main-content";
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
+})();
+
 // ---- Light global polish (safe, non-breaking): crisper type + nicer scrollbars ----
 (function () {
   if (document.getElementById("vcms-polish")) return;
@@ -264,7 +312,6 @@ window.esc = function (v) {
   var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-8"; sh.defer = true;
   (document.head || document.documentElement).appendChild(sh);
 })();
-
 
 // source: js/core/app-config.js
 // ---- Role tiers (Rev 6) — shared by all pages ----

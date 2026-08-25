@@ -11,5 +11,5 @@ def test_progress_schedule_and_dpr_ui_api_contract():
     assert '"/api/v1/schedule/progress"' in progress and "js/schedule-progress.js" in gantt
     assert '@router.get("/progress")' in router and '@router.post("/progress"' in router
     assert 'id="schedule-progress"' in dpr and "activity_progress:readScheduleProgress()" in dpr
-    assert '"p_source": "dpr"' in main and "activity_progress: list[dict]" in main
+    assert '"source": "dpr"' in main and "activity_progress: list[dict]" in main
     assert "Activity progress must belong to the selected site's project" in main

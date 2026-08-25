@@ -39,6 +39,9 @@
     .vcms-mobile-actions__inner{width:100%;max-width:1152px;margin:0 auto;display:flex;align-items:center;gap:10px}.vcms-mobile-actions .vcms-btn{min-height:50px}
     .vcms-toast{position:fixed;left:50%;bottom:88px;z-index:50;max-width:min(92%,520px);transform:translateX(-50%);border-radius:999px;padding:10px 15px;background:#202631;color:#fff;font-size:13px;font-weight:700;text-align:center;box-shadow:0 8px 24px rgba(15,23,42,.24)}
     .vcms-supervisor-main{width:100%;max-width:1152px;margin:0 auto;padding:14px 16px 112px}
+    .vcms-legacy-header{background:var(--vcms-brand-dark)!important;color:var(--vcms-on-brand)!important;min-height:60px;border-color:transparent!important}.vcms-legacy-title{font-size:18px!important;font-weight:800!important;line-height:1.2!important}
+    .vcms-standard-page main{color:var(--vcms-ink)}.vcms-standard-page main>.bg-gray-100,.vcms-standard-page main>.bg-white,.vcms-standard-page .panel{border-color:var(--vcms-line)!important}
+    :where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid var(--vcms-brand-border)!important;outline-offset:2px!important}
     .vcms-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.vcms-status-success{color:var(--vcms-success);background:var(--vcms-success-soft)}.vcms-status-warning{color:var(--vcms-warning);background:var(--vcms-warning-soft)}.vcms-status-danger{color:var(--vcms-danger);background:var(--vcms-danger-soft)}.vcms-status-neutral{color:#475467;background:#F2F4F7}
     :root[data-theme="dark"] body,:root[data-theme="dark"] .bg-gray-100,:root[data-theme="dark"] .bg-gray-50{background:var(--vcms-page)!important;color:var(--vcms-ink)!important}
     :root[data-theme="dark"] .bg-white,:root[data-theme="dark"] .panel{background:var(--vcms-surface)!important;color:var(--vcms-ink)!important;border-color:var(--vcms-line)!important}
@@ -46,7 +49,7 @@
     :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
     :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
-    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}}
+    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
   }
   @media print{
