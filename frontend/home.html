@@ -246,7 +246,10 @@
         { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]] },
         { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
         { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
-      if(role==="admin") nav.splice(nav.length-1,0,{grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
+      if(role==="admin") {
+        nav.splice(2,0,{grp:"Planning",items:[["Programme","planning.html","cal"]]});
+        nav.splice(nav.length-1,0,{grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
+      }
       if(role==="admin") nav[1].items.unshift(["Request manpower","request.html","cal"]);
       if(t==="manager") nav[1].items.unshift(["Request manpower","request.html","cal"]);
       return nav;

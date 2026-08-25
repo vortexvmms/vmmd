@@ -45,7 +45,10 @@
           {grp:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
           {grp:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
           {grp:"More",items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]]} ];
-        if (rl === "admin") full.splice(full.length-1, 0, {grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
+        if (rl === "admin") {
+          full.splice(2, 0, {grp:"Planning",items:[["Programme","planning.html","cal"]]});
+          full.splice(full.length-1, 0, {grp:"Admin",items:[["Users","users.html","shield"],["Audit log","audit-log.html","list"]]});
+        }
         var allow = ALLOW[t];
         var out = full.map(function(s){ return {grp:s.grp, items:s.items.filter(function(it){ return !allow || allow.has(it[1]); })}; }).filter(function(s){ return s.items.length; });
         // Admin and managers sometimes submit the manpower request themselves.

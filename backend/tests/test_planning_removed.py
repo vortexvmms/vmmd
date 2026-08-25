@@ -11,8 +11,12 @@ def test_old_planning_is_not_exposed_in_navigation():
     for source in (home, shell, users):
         assert "schedule.html" not in source
         assert "reports.html" not in source
-    assert 'grp:"Planning"' not in home
-    assert 'grp:"Planning"' not in shell
+    # The obsolete schedule/reports implementation stays removed. Planning V2.1
+    # is a new administrator-only page with a different route and contracts.
+    assert 'grp:"Planning"' in home
+    assert '"planning.html"' in home
+    assert 'grp:"Planning"' in shell
+    assert '"planning.html"' in shell
 
 
 def test_old_planning_pages_and_backend_module_are_removed():
@@ -20,6 +24,7 @@ def test_old_planning_pages_and_backend_module_are_removed():
     assert not (ROOT / "backend" / "app" / "modules" / "schedule").exists()
     main = (ROOT / "backend" / "app" / "main.py").read_text()
     assert '"/api/v1/schedule' not in main
+    assert 'build_planning_router' in main
 
 
 def test_dpr_no_longer_reads_or_writes_schedule_progress():

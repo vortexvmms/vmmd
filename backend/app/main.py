@@ -40,6 +40,8 @@ from .settings import (
 )
 from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
+from .modules.planning.router import PlanningContext, build_planning_router
+from .modules.projects.router import ProjectModuleContext, build_projects_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
@@ -54,6 +56,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 @app.middleware("http")
@@ -88,6 +91,16 @@ async def audit(client: httpx.AsyncClient, user: dict, action: str, entity: str,
             "new_value": new_value,
         },
     )
+
+
+app.include_router(build_projects_router(ProjectModuleContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit,
+)))
+app.include_router(build_planning_router(PlanningContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit,
+)))
 
 
 @app.get("/api/v1/audit-log")
