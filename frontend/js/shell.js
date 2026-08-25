@@ -4,6 +4,11 @@
    skips login, index, and the home page (which carries its own shell). Mobile is
    left unchanged. */
 (function () {
+  // core-bundle loads this file automatically. A few older pages also include
+  // shell.js directly, so both copies can start before either has added the
+  // desktop header. Lock immediately to prevent duplicate headers/sidebars.
+  if (window.__VCMS_SHELL_LOADING__) return;
+  window.__VCMS_SHELL_LOADING__ = true;
   function ready(fn){ if(document.readyState!=="loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
   ready(async function () {
     try {
