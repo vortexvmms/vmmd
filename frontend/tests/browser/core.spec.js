@@ -11,7 +11,7 @@ async function signedIn(page) {
 
 test('login has no horizontal overflow', async ({ page }) => {
   await page.goto('/login.html');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
 test('shared UI presents consistent connection errors', async ({ page }) => {
@@ -35,7 +35,7 @@ test('attendance header remains aligned without horizontal overflow', async ({ p
   await expect(controls).toHaveCount(2);
   const heights = await controls.evaluateAll(nodes => nodes.map(n => Math.round(n.getBoundingClientRect().height)));
   expect(Math.abs(heights[0] - heights[1])).toBeLessThanOrEqual(2);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
 test('retired worker-card pages are not published', async ({ request }) => {
@@ -67,7 +67,7 @@ test('management pages receive the shared desktop system', async ({ page }) => {
   await page.goto('/workers.html');
   await expect(page.locator('body')).toHaveClass(/vcms-standard-page/);
   await expect(page.locator('body > header.vcms-legacy-header')).toHaveCount(1);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
 test('all visible form controls have an accessible name', async ({ page }) => {
