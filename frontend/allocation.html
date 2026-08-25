@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-ui1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui2"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui2"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     .alloc-kpis,.alloc-side{display:none}
@@ -39,17 +39,17 @@
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1">
-        <h1 class="text-lg font-bold">Daily Allocation</h1>
-        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+  <header class="vcms-page-header">
+    <div class="vcms-page-header__row max-w-6xl mx-auto w-full">
+      <a href="home.html" class="vcms-page-header__back" aria-label="Back to home">‹</a>
+      <div class="vcms-page-header__title">
+        <h1>Daily Allocation</h1>
+        <p id="summary">Loading…</p>
       </div>
     </div>
 
     <!-- View toggle -->
-    <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
+    <div class="vcms-segmented mx-4 md:mx-6 max-w-6xl md:mx-auto" id="allocation-tabs">
       <button id="tab-requests" onclick="setMode('requests')"
               class="flex-1 rounded-lg py-2 text-sm font-bold">Requests</button>
       <button id="tab-worker" onclick="setMode('worker')"
@@ -58,14 +58,14 @@
               class="flex-1 rounded-lg py-2 text-sm font-bold">By Site</button>
     </div>
 
-    <div class="flex gap-2 mt-2 max-w-6xl mx-auto w-full">
+    <div class="vcms-page-toolbar max-w-6xl mx-auto w-full mt-2">
       <input id="date" type="date"
-             class="flex-1 md:max-w-xs rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="hidden flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+             class="vcms-control">
+      <select id="site" class="hidden vcms-control"></select>
     </div>
   </header>
 
-  <main id="alloc-main" class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
+  <main id="alloc-main" class="vcms-supervisor-main flex-1 max-w-md md:max-w-6xl">
     <div id="alloc-kpis" class="alloc-kpis"></div>
     <div class="alloc-workspace"><div class="alloc-centre">
     <!-- Primary day status remains first; Admin recovery tools are secondary. -->
@@ -103,16 +103,16 @@
     </div><aside class="alloc-side"><h2>Allocation exceptions</h2><div id="alloc-exceptions"></div></aside></div>
   </main>
 
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md md:max-w-6xl mx-auto flex items-center gap-3">
+  <div class="vcms-mobile-actions">
+    <div class="vcms-mobile-actions__inner max-w-md md:max-w-6xl">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 selected</p>
-      <button id="save" onclick="save()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
+      <button id="save" onclick="save()" class="vcms-btn vcms-btn-primary">
         Save All
       </button>
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="toast" class="vcms-toast hidden"></div>
 
   <script>
     requireLogin();
@@ -175,6 +175,8 @@
       document.getElementById("tab-worker").className = cls("worker");
       document.getElementById("tab-site").className   = cls("site");
       document.getElementById("tab-requests").className = cls("requests");
+      [["tab-requests","requests"],["tab-worker","worker"],["tab-site","site"]].forEach(([id,mode])=>
+        document.getElementById(id).setAttribute("aria-selected", String(MODE === mode)));
       document.getElementById("site").classList.toggle("hidden", MODE !== "site");
       document.getElementById("filterbar").classList.toggle("hidden", MODE === "requests");
       // Save stays visible everywhere — in Requests it saves the multi-site decisions

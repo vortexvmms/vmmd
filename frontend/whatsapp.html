@@ -8,34 +8,34 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-ui1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui2"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui2"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1">
-        <h1 class="text-lg font-bold">WhatsApp Message</h1>
-        <p class="text-red-100 text-xs" id="hint">Choose type and date, then Generate</p>
+  <header class="vcms-page-header">
+    <div class="vcms-page-header__row max-w-6xl mx-auto w-full">
+      <a href="home.html" class="vcms-page-header__back" aria-label="Back to home">‹</a>
+      <div class="vcms-page-header__title">
+        <h1>WhatsApp Message</h1>
+        <p id="hint">Choose type and date, then Generate</p>
       </div>
     </div>
-    <div class="flex flex-wrap gap-2 mt-3" id="type-row">
+    <div class="vcms-segmented mx-3 md:mx-auto max-w-6xl" id="type-row">
       <button id="t-alloc" class="flex-1 bg-white text-red-700 font-bold rounded-lg p-2 text-sm">Allocation</button>
       <button id="t-request" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Request</button>
       <button id="t-update" class="flex-1 bg-red-900 text-white font-bold rounded-lg p-2 text-sm">Site Update</button>
     </div>
-    <div class="flex gap-2 mt-2">
-      <input id="date" type="date" class="flex-1 rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white hidden"></select>
+    <div class="vcms-page-toolbar max-w-6xl mx-auto w-full mt-2">
+      <input id="date" type="date" class="vcms-control">
+      <select id="site" class="vcms-control hidden"></select>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md mx-auto w-full pb-32">
+  <main class="vcms-supervisor-main flex-1 max-w-md">
     <button onclick="generate()" id="gen"
-            class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg text-base mb-3">
+            class="vcms-btn vcms-btn-primary w-full mb-3">
       Generate Message
     </button>
 
@@ -45,18 +45,18 @@
               class="w-full border border-gray-300 rounded-xl p-3 text-sm font-mono bg-white hidden"></textarea>
   </main>
 
-  <div id="actionbar" class="hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md mx-auto flex gap-3">
-      <button onclick="copyMsg()" class="flex-1 border-2 border-red-700 text-red-700 font-bold py-3 rounded-lg">
+  <div id="actionbar" class="vcms-mobile-actions hidden">
+    <div class="vcms-mobile-actions__inner max-w-md">
+      <button onclick="copyMsg()" class="vcms-btn vcms-btn-tertiary flex-1">
         Copy
       </button>
-      <button onclick="shareMsg()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg">
+      <button onclick="shareMsg()" class="vcms-btn vcms-btn-success flex-1">
         Share to WhatsApp
       </button>
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="toast" class="vcms-toast hidden"></div>
 
   <script>
     requireLogin();
@@ -79,6 +79,8 @@
       document.getElementById("t-alloc").className   = btnCls(t === "alloc");
       document.getElementById("t-request").className = btnCls(t === "request");
       document.getElementById("t-update").className  = btnCls(t === "update");
+      [["t-alloc","alloc"],["t-request","request"],["t-update","update"]].forEach(([id,type])=>
+        document.getElementById(id).setAttribute("aria-selected", String(t === type)));
       document.getElementById("site").classList.toggle("hidden", t !== "update");
       // allocation + request are for TOMORROW; update is for TODAY
       document.getElementById("date").value =

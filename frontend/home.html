@@ -9,8 +9,8 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-ui1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui2"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui2"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||["main_sup","wshc_lead"].indexOf(r)!==-1};</script>
   <style>
     :root{ --brand:#C00000; --brand2:#A50E0E; --ink:#1F2328; --muted:#6B7280; --line:#E5E7EB; --bg:#E4E7EC; }
@@ -128,6 +128,8 @@
       .home-wrap{ gap:12px; }
       body.sup-mobile .overviewbar,body.sup-mobile .kpis,body.sup-mobile .mobile-updates,body.sup-mobile .panel,body.sup-mobile .home-wrap>div:nth-child(2),body.sup-mobile .home-wrap>div:first-child>.SECT{display:none!important}
       body.sup-mobile .home-wrap{display:block}body.sup-mobile .mnav{margin-top:4px}body.sup-mobile .mnav .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))}body.sup-mobile .mnav a{min-height:92px;justify-content:center;font-size:14px;box-shadow:0 4px 12px rgba(15,23,42,.06)}
+      body.sup-mobile .brand{height:58px;padding-left:14px}body.sup-mobile .brand .logo{display:none}body.sup-mobile .brand .bt{font-size:18px}body.sup-mobile .logout{font-size:12px;height:38px;padding:0 11px}
+      body.sup-mobile .content{padding:12px}body.sup-mobile .mgreet{margin-bottom:10px!important;padding:12px 14px!important}body.sup-mobile .mnav .msec{margin:12px 2px 7px}body.sup-mobile .mnav a{border-color:var(--vcms-line);color:var(--vcms-ink)}body.sup-mobile .mnav a svg{color:var(--vcms-brand)}
     }
   </style>
 </head>

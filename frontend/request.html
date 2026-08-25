@@ -8,29 +8,29 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-ui1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui2"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui2"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>@media(max-width:899px){#request-helper{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}#request-helper>p{width:100%!important;margin:0!important;line-height:1.45!important}#request-helper>.request-copy-tools{width:100%!important;justify-content:flex-start!important;flex-wrap:nowrap!important}#copyfrom{flex:1 1 auto!important;min-width:0!important}#copylast{flex:0 0 auto!important}}</style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3 max-w-6xl mx-auto w-full">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1">
-        <h1 class="text-lg font-bold">Request Manpower</h1>
-        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+  <header class="vcms-page-header">
+    <div class="vcms-page-header__row max-w-6xl mx-auto w-full">
+      <a href="home.html" class="vcms-page-header__back" aria-label="Back to home">‹</a>
+      <div class="vcms-page-header__title">
+        <h1>Request Manpower</h1>
+        <p id="summary">Loading…</p>
       </div>
     </div>
-    <div class="flex gap-2 mt-3 max-w-6xl mx-auto w-full">
+    <div class="vcms-page-toolbar max-w-6xl mx-auto w-full">
       <input id="date" type="date"
-             class="flex-1 md:max-w-xs rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="flex-1 md:max-w-sm rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+             class="vcms-control">
+      <select id="site" class="vcms-control"></select>
     </div>
   </header>
 
-  <main class="flex-1 p-4 max-w-md md:max-w-6xl mx-auto w-full pb-32">
+  <main class="vcms-supervisor-main flex-1 max-w-md md:max-w-6xl">
     <div id="request-helper" class="flex items-center justify-between gap-3 mb-3">
       <p class="text-xs text-gray-500">
         Tick the workers you want at your site for the chosen day, then Send Request.
@@ -46,8 +46,7 @@
     <div id="siteoffbar" class="mb-3"></div>
     <div id="reqstatus" class="hidden rounded-xl p-3 mb-3 text-sm"></div>
 
-    <input id="search" type="search" placeholder="Search worker…"
-           class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-red-600">
+    <input id="search" type="search" placeholder="Search worker…" class="vcms-control mb-3">
 
     <label class="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3 whitespace-nowrap">
       <input id="only-sel" type="checkbox" class="accent-red-700">
@@ -58,16 +57,16 @@
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
   </main>
 
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md md:max-w-6xl mx-auto flex items-center gap-3">
+  <div class="vcms-mobile-actions">
+    <div class="vcms-mobile-actions__inner max-w-md md:max-w-6xl">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 requested</p>
-      <button id="save" onclick="save()" class="bg-red-700 hover:bg-red-800 text-white font-bold px-6 py-3 rounded-lg disabled:opacity-50">
+      <button id="save" onclick="save()" class="vcms-btn vcms-btn-primary">
         Send Request
       </button>
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="toast" class="vcms-toast hidden"></div>
 
   <script>
     requireLogin();

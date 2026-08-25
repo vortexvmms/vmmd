@@ -32,6 +32,13 @@
     .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:28px;min-height:40px;display:grid;place-items:center;font-size:25px;font-weight:800}
     .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .vcms-page-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 12px}.vcms-page-toolbar>*{min-width:0}
+    .vcms-segmented{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:rgba(15,23,42,.18);border-radius:12px}.vcms-segmented button{min-height:42px;border-radius:9px;padding:0 10px;font-size:13px;font-weight:800;color:var(--vcms-on-brand)}.vcms-segmented button[aria-selected="true"],.vcms-segmented .is-active{background:var(--vcms-surface);color:var(--vcms-brand-dark);box-shadow:0 1px 4px rgba(15,23,42,.16)}
+    .vcms-section-card{background:var(--vcms-surface);border:1px solid var(--vcms-line);border-radius:14px;padding:14px;box-shadow:0 4px 14px rgba(15,23,42,.06)}
+    .vcms-filter-row{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none}.vcms-filter-row::-webkit-scrollbar{display:none}.vcms-filter-row>*{flex:none}
+    .vcms-mobile-actions{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--vcms-surface);border-top:1px solid var(--vcms-line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(15,23,42,.10)}
+    .vcms-mobile-actions__inner{width:100%;max-width:1152px;margin:0 auto;display:flex;align-items:center;gap:10px}.vcms-mobile-actions .vcms-btn{min-height:50px}
+    .vcms-toast{position:fixed;left:50%;bottom:88px;z-index:50;max-width:min(92%,520px);transform:translateX(-50%);border-radius:999px;padding:10px 15px;background:#202631;color:#fff;font-size:13px;font-weight:700;text-align:center;box-shadow:0 8px 24px rgba(15,23,42,.24)}
+    .vcms-supervisor-main{width:100%;max-width:1152px;margin:0 auto;padding:14px 16px 112px}
     .vcms-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.vcms-status-success{color:var(--vcms-success);background:var(--vcms-success-soft)}.vcms-status-warning{color:var(--vcms-warning);background:var(--vcms-warning-soft)}.vcms-status-danger{color:var(--vcms-danger);background:var(--vcms-danger-soft)}.vcms-status-neutral{color:#475467;background:#F2F4F7}
     :root[data-theme="dark"] body,:root[data-theme="dark"] .bg-gray-100,:root[data-theme="dark"] .bg-gray-50{background:var(--vcms-page)!important;color:var(--vcms-ink)!important}
     :root[data-theme="dark"] .bg-white,:root[data-theme="dark"] .panel{background:var(--vcms-surface)!important;color:var(--vcms-ink)!important;border-color:var(--vcms-line)!important}
@@ -39,7 +46,8 @@
     :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
     :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
-    @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}}
+    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}}
+    @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
   }
   @media print{
     :root{--vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-on-brand:#fff;--vcms-success:#15803D;--vcms-warning:#B45309;--vcms-danger:#B91C1C}

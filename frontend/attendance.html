@@ -8,8 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-ui1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui2"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui2"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     #att-kpis{display:none}
@@ -52,21 +52,21 @@
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1">
-        <h1 class="text-lg font-bold">Attendance</h1>
-        <p class="text-red-100 text-xs" id="summary">Loading…</p>
+  <header class="vcms-page-header">
+    <div class="vcms-page-header__row">
+      <a href="home.html" class="vcms-page-header__back" aria-label="Back to home">‹</a>
+      <div class="vcms-page-header__title">
+        <h1>Attendance</h1>
+        <p id="summary">Loading…</p>
       </div>
     </div>
-    <div class="flex gap-2 mt-3">
-      <input id="date" type="date" class="flex-1 rounded-lg p-2 text-gray-800 text-base">
-      <select id="site" class="flex-1 rounded-lg p-2 text-gray-800 text-base bg-white"></select>
+    <div class="vcms-page-toolbar">
+      <input id="date" type="date" class="vcms-control">
+      <select id="site" class="vcms-control"></select>
     </div>
   </header>
 
-  <main id="att-main" class="flex-1 p-4 max-w-md mx-auto w-full pb-36">
+  <main id="att-main" class="vcms-supervisor-main flex-1 max-w-md">
     <div id="banner" class="hidden rounded-xl p-3 mb-3 text-sm font-medium text-center"></div>
     <div id="submit-checklist"></div>
     <div id="att-kpis"></div>
@@ -123,14 +123,14 @@
     </div>
   </div>
 
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 z-10">
-    <div class="max-w-md mx-auto">
+  <div class="vcms-mobile-actions">
+    <div class="max-w-md mx-auto w-full">
       <p class="text-sm text-gray-600 mb-2 text-center" id="hours-total">—</p>
       <div class="flex items-center gap-3">
-        <button id="morning-btn" onclick="submitDay('morning')" class="flex-1 border-2 border-red-700 text-red-700 font-bold px-3 py-3 rounded-lg disabled:opacity-40">
+        <button id="morning-btn" onclick="submitDay('morning')" class="vcms-btn vcms-btn-tertiary flex-1">
           Submit Morning
         </button>
-        <button id="submit-btn" onclick="submitDay('evening')" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold px-3 py-3 rounded-lg disabled:opacity-40">
+        <button id="submit-btn" onclick="submitDay('evening')" class="vcms-btn vcms-btn-primary flex-1">
           Submit End Times
         </button>
       </div>
@@ -151,7 +151,7 @@
     </div>
   </div>
 
-  <div id="toast" class="hidden fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow max-w-[90%] text-center"></div>
+  <div id="toast" class="vcms-toast hidden"></div>
   <div id="sync-state" class="hidden" aria-live="polite"></div>
 
   <script>
