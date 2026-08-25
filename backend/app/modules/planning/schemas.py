@@ -44,3 +44,21 @@ class ActivityPatch(BaseModel):
         if self.status is not None and self.status not in {"not_started","in_progress","complete"}:
             raise ValueError("Invalid activity status")
         return self
+
+
+class ActivityTargetIn(BaseModel):
+    target_quantity: float = Field(gt=0, le=1_000_000_000)
+    unit: str = Field(min_length=1, max_length=30)
+
+
+class ActivityMappingIn(BaseModel):
+    site_id: str
+    item_of_work: str | None = Field(default=None, max_length=220)
+    effective_from: date
+    effective_to: date | None = None
+
+    @model_validator(mode="after")
+    def valid_dates(self):
+        if self.effective_to and self.effective_to < self.effective_from:
+            raise ValueError("effective_to cannot be before effective_from")
+        return self

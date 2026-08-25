@@ -151,6 +151,11 @@
       </div>
     </div>
 
+    <section id="planning-progress-panel" class="hidden mt-5">
+      <div class="flex items-center justify-between"><h2 class="sect" style="margin:0">Planning progress</h2><span class="text-xs text-gray-500">Admin only · updates programme actuals</span></div>
+      <div class="panel p-3 mt-2"><div id="planning-progress-list" class="text-sm text-gray-500">Choose a mapped project activity.</div></div>
+    </section>
+
     <div class="flex items-center justify-between mt-5">
       <h2 class="sect" style="margin:0">Manpower</h2>
       <button onclick="prefill()" class="text-xs font-bold text-white bg-red-700 rounded-lg px-3 py-2">⟳ Auto-fill from attendance</button>
@@ -261,7 +266,7 @@
 
   <script>
     requireLogin();
-    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", CAMLIB=[];
+    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", CAMLIB=[], PLANNING_PROGRESS=[];
     const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     const SIG_KEY="vcms_my_signature";   // saved default signature URL (this browser)
     // Role / Trade list — position-wise (management → engineers → supervisors → safety → operators → trades → worker)
@@ -398,6 +403,16 @@
         if(any) out.push(o); });
       return out;
     }
+    async function loadPlanningProgress(){
+      const panel=document.getElementById("planning-progress-panel"),box=document.getElementById("planning-progress-list");
+      if(!ME||ME.role!=="admin"||!siteVal()||!dateVal()){panel.classList.add("hidden");PLANNING_PROGRESS=[];return;}
+      panel.classList.remove("hidden");box.innerHTML='<span class="text-gray-400">Loading mapped activities…</span>';
+      try{const r=await vmmsApi(`/api/v1/planning/dpr-options?site_id=${encodeURIComponent(siteVal())}&date=${encodeURIComponent(dateVal())}`);if(!r.ok)throw Error("load");PLANNING_PROGRESS=await r.json();
+        if(!PLANNING_PROGRESS.length){box.innerHTML='<div class="text-amber-700">No planning activity is mapped to this site and date. Configure the activity from Planning.</div>';return;}
+        box.innerHTML=PLANNING_PROGRESS.map((x,i)=>{const a=x.schedule_activities||{},s=x.saved_progress||{};return `<div style="display:grid;grid-template-columns:minmax(180px,1fr) 130px minmax(140px,1fr);gap:8px;align-items:end;padding:9px 0;border-bottom:1px solid #e5e7eb"><div><b>${esc(a.code||"")} · ${esc(a.name||"")}</b><div class="text-xs text-gray-500">Target ${a.target_quantity??"—"} ${esc(a.unit||"")} · ${a.percent_complete||0}% complete</div></div><label class="lbl" style="margin:0">Completed today<input class="fld planning-qty" data-i="${i}" type="number" min="0" step="0.001" value="${s.quantity_completed??""}" placeholder="0"></label><label class="lbl" style="margin:0">Note<input class="fld planning-note" data-i="${i}" value="${esc(s.note||"")}" placeholder="Optional"></label></div>`}).join("");
+      }catch(e){box.innerHTML='<div class="text-red-700">Could not load planning activities.</div>';}
+    }
+    function collectPlanningProgress(){if(!ME||ME.role!=="admin")return[];return [...document.querySelectorAll(".planning-qty")].map(el=>{const x=PLANNING_PROGRESS[+el.dataset.i],note=document.querySelector(`.planning-note[data-i="${el.dataset.i}"]`);return {activity_id:x.activity_id,quantity_completed:parseFloat(el.value||0),note:note?note.value.trim():""}}).filter(x=>x.quantity_completed>0||x.note);}
 
     // ---- photos ----
     function renderPhotos(){
@@ -548,6 +563,7 @@
         await prefill(true);
       }
       updateDprReadiness();
+      await loadPlanningProgress();
       if(ME && ME.dpr_reminders) loadMissingDprs();
     }
     async function loadMissingDprs(){
@@ -611,7 +627,7 @@
         manpower:readTable("mp",["name","role","no","from","to","total","remarks"]),
         equipment:readTable("eq",["name","no","from","to","total","remarks"]),
         materials:readTable("mt",["name","qty","unit","remarks"]),
-        photos:PHOTOS, signature_url:SIGNATURE_URL||null,
+        photos:PHOTOS, signature_url:SIGNATURE_URL||null, planning_progress:collectPlanningProgress(),
         prepared_by_name:val("f-prep"), conformed_by_party:val("f-conf"), status:"submitted" };
     }
     async function save(){

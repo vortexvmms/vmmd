@@ -2373,6 +2373,7 @@ class DailyReport(BaseModel):
     prepared_by_name: str | None = None
     conformed_by_party: str | None = None
     status: str | None = "submitted"
+    planning_progress: list[dict] = []
 
 
 def _nz_date(v):
@@ -2441,6 +2442,8 @@ async def dpr_prefill(date: str, site_id: str, user: dict = Depends(get_current_
 async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
+    if body.planning_progress and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the administrator can update planning progress")
     payload = {
         "site_id": body.site_id,
         "report_date": body.report_date,
@@ -2474,6 +2477,24 @@ async def save_dpr(body: DailyReport, user: dict = Depends(get_current_user)):
                 detail=f"Could not save the report (db {r.status_code}: {r.text[:160]})")
         rows = r.json()
         saved = rows[0] if rows else {"ok": True}
+
+        if body.planning_progress:
+            progress = []
+            for item in body.planning_progress[:100]:
+                try:
+                    qty = float(item.get("quantity_completed") or 0)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail="Invalid planning progress quantity")
+                if qty < 0 or not item.get("activity_id"):
+                    raise HTTPException(status_code=400, detail="Invalid planning progress entry")
+                progress.append({"activity_id": item["activity_id"], "quantity_completed": qty,
+                                 "note": str(item.get("note") or "")[:500]})
+            pr = await client.post(f"{REST}/rpc/record_planning_dpr_progress",
+                headers=supabase_headers(user["token"]),
+                json={"p_dpr_id": saved.get("id"), "p_entries": progress})
+            if pr.status_code not in (200, 204):
+                raise HTTPException(status_code=409,
+                    detail="DPR saved, but planning progress was not confirmed. Reopen the DPR and retry progress.")
 
         return saved
 

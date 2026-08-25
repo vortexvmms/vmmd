@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException
 
-from .schemas import ActivityIn, ActivityPatch, SetupIn, WbsIn
+from .schemas import ActivityIn, ActivityMappingIn, ActivityPatch, ActivityTargetIn, SetupIn, WbsIn
 
 
 @dataclass(frozen=True)
@@ -113,5 +113,54 @@ def build_planning_router(c: PlanningContext) -> APIRouter:
             if body.selected_dates is not None: await replace_dates(client,user,activity_id,project_id,body.selected_dates)
             await c.audit(client,user,"update","planning_activity",activity_id,None,body.model_dump(mode="json",exclude_unset=True))
             return {"ok":True}
+
+    @router.patch("/projects/{project_id}/activities/{activity_id}/target")
+    async def set_target(project_id: str, activity_id: str, body: ActivityTargetIn,
+                         user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            r=await client.patch(f"{c.rest_url}/schedule_activities",
+                params={"id":f"eq.{activity_id}","project_id":f"eq.{project_id}"},
+                headers=headers(user,True),json={"target_quantity":body.target_quantity,
+                "unit":body.unit.strip(),"updated_by":user["user_id"]})
+            if r.status_code!=200 or not r.json(): raise HTTPException(404,"Activity not found")
+            return r.json()[0]
+
+    @router.post("/projects/{project_id}/activities/{activity_id}/mapping", status_code=201)
+    async def map_activity(project_id: str, activity_id: str, body: ActivityMappingIn,
+                           user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_activity_site_mappings",
+                headers=headers(user,True),json={"activity_id":activity_id,"project_id":project_id,
+                "site_id":body.site_id,"item_of_work":body.item_of_work,
+                "effective_from":body.effective_from.isoformat(),
+                "effective_to":body.effective_to.isoformat() if body.effective_to else None,
+                "created_by":user["user_id"]})
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not map activity to site")
+            return r.json()[0]
+
+    @router.get("/dpr-options")
+    async def dpr_options(site_id: str, date: str,
+                          user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            r=await client.get(f"{c.rest_url}/planning_activity_site_mappings",params={
+                "site_id":f"eq.{site_id}","is_active":"eq.true",
+                "effective_from":f"lte.{date}","or":f"(effective_to.is.null,effective_to.gte.{date})",
+                "select":"activity_id,item_of_work,schedule_activities(id,code,name,target_quantity,unit,percent_complete,status)",
+                "order":"created_at.asc"},headers=headers(user))
+            if r.status_code!=200: raise HTTPException(500,"Could not load mapped planning activities")
+            rows=r.json()
+            dr=await client.get(f"{c.rest_url}/daily_reports",params={"site_id":f"eq.{site_id}",
+                "report_date":f"eq.{date}","select":"id","limit":"1"},headers=headers(user))
+            saved={}
+            if dr.status_code==200 and dr.json():
+                pr=await client.get(f"{c.rest_url}/planning_dpr_progress_entries",params={
+                    "daily_report_id":f"eq.{dr.json()[0]['id']}",
+                    "select":"activity_id,quantity_completed,note"},headers=headers(user))
+                if pr.status_code==200: saved={x["activity_id"]:x for x in pr.json()}
+            for row in rows: row["saved_progress"]=saved.get(row["activity_id"])
+            return rows
 
     return router
