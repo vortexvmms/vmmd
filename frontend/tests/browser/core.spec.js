@@ -66,13 +66,20 @@ test('management pages receive the shared desktop system', async ({ page }) => {
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/allocations*', r => r.fulfill({ json: [] }));
   await page.goto('/workers.html');
   await expect(page.locator('body')).toHaveClass(/vcms-standard-page/);
-  await expect(page.locator('body > header')).toHaveClass(/vcms-legacy-header/);
+  await expect(page.locator('body > header.vcms-legacy-header')).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
 test('all visible form controls have an accessible name', async ({ page }) => {
   await page.goto('/login.html');
   const unnamed = await page.locator('input:visible,select:visible,textarea:visible').evaluateAll(nodes =>
-    nodes.filter(n => !n.getAttribute('aria-label') && !n.getAttribute('aria-labelledby') && !n.closest('label')).length);
+    nodes.filter(n => {
+      const id = n.getAttribute('id');
+      const explicitLabel = id && document.querySelector(`label[for="${CSS.escape(id)}"]`);
+      return !n.getAttribute('aria-label') &&
+        !n.getAttribute('aria-labelledby') &&
+        !n.closest('label') &&
+        !explicitLabel;
+    }).length);
   expect(unnamed).toBe(0);
 });
