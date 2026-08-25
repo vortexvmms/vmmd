@@ -11,8 +11,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="js/core-bundle.js?v=20260825-ui5"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
-  <script src="js/project-context.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     .report-attendance-row > label { display:block; min-width:0; }
     @media (max-width:899px) { .report-attendance-row > label > span { display:none; } }
@@ -29,7 +27,6 @@
       #controls { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:16px; padding:22px 24px; margin-bottom:18px; }
       #controls > * { margin:0 !important; }
       #controls .report-kind { grid-column:1 / 5; }
-      #controls #project-controls { grid-column:5 / 10; }
       #controls .report-date-row { grid-column:5 / 9; }
       #controls .report-attendance-row { grid-column:9 / 13; }
       #controls #wsearch { grid-column:1 / 9; min-height:44px; }
@@ -37,9 +34,7 @@
       #controls .report-attendance-row { align-items:end; }
       #controls .report-attendance-row > label { min-width:0; }
       #controls .report-attendance-row select { width:100%; height:44px; box-sizing:border-box; }
-      #controls .report-date-row input, #controls .report-kind select,
-      #controls #project-controls select { height:44px; box-sizing:border-box; }
-      body.project-report #controls .report-date-row { grid-column:10 / 13; }
+      #controls .report-date-row input, #controls .report-kind select { height:44px; box-sizing:border-box; }
       #monthly-timesheet-link { display:none !important; }
       #actions { max-width:560px; margin-left:auto; }
       #summary { grid-template-columns:repeat(8,minmax(0,1fr)) !important; gap:12px; }
@@ -62,8 +57,7 @@
 
   <main id="reports-main" class="flex-1 p-4 max-w-2xl mx-auto w-full pb-10">
     <div id="controls" class="bg-white rounded-xl shadow p-4 mb-4 space-y-3">
-      <div class="report-kind"><label class="text-xs text-gray-500">Report</label><select id="report-type" class="w-full border border-gray-300 rounded-lg p-2 bg-white"><option value="attendance">Workforce attendance</option><option value="schedule_summary">Schedule summary</option><option value="lookahead">Lookahead</option><option value="critical">Critical activities</option><option value="progress">Progress status</option><option value="overdue">Overdue activities</option><option value="variance">Baseline variance</option><option value="resources">Resource budget</option></select></div>
-      <div id="project-controls" class="hidden flex gap-2"><select id="project" class="flex-1 border border-gray-300 rounded-lg p-2 bg-white"><option value="">Loading projects…</option></select><select id="lookahead-days" class="border border-gray-300 rounded-lg p-2 bg-white"><option value="7">7 days</option><option value="14" selected>14 days</option><option value="21">21 days</option><option value="30">30 days</option></select></div>
+      <div class="report-kind"><label class="text-xs text-gray-500">Report</label><select id="report-type" class="w-full border border-gray-300 rounded-lg p-2 bg-white"><option value="attendance">Workforce attendance</option></select></div>
       <div class="flex gap-2 report-date-row">
         <div class="flex-1">
           <label class="text-xs text-gray-500">From</label>
@@ -123,18 +117,10 @@
           '<option value="">All sites</option>' +
           sites.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       }
-      try { await vcmsProjectContext.init(); const projects=vcmsProjectContext.getAuthorizedProjects(); document.getElementById("project").innerHTML=projects.length?projects.map(p=>`<option value="${p.id}">${esc(vcmsProjectContext.displayName(p))}</option>`).join(""):'<option value="">No active projects</option>'; const active=vcmsProjectContext.getActive(); if(active)document.getElementById("project").value=active.id; } catch(e) { document.getElementById("project").innerHTML='<option value="">Projects unavailable</option>'; }
     }
 
     async function run() {
       const f = document.getElementById("from").value, t = document.getElementById("to").value;
-      const type=document.getElementById("report-type").value;
-      if(type!=="attendance"){
-        const project=document.getElementById("project").value;if(!project){alert("Select a project");return;}
-        const mapped=type==="schedule_summary"?"summary":type,days=document.getElementById("lookahead-days").value;
-        const r=await vmmsApi(`/api/v1/schedule/reports/project-controls?project_id=${encodeURIComponent(project)}&report_type=${mapped}&data_date=${encodeURIComponent(t)}&lookahead_days=${days}`);
-        if(!r.ok){const e=await r.json();alert(e.detail||"Failed");return;}REPORT_META=await r.json();DATA=REPORT_META.rows||[];renderProjectControls(type);return;
-      }
       const sid = document.getElementById("site").value;
       const r = await vmmsApi(`/api/v1/reports/attendance?dfrom=${f}&dto=${t}${sid ? "&site_id=" + sid : ""}`);
       if (!r.ok) { const e = await r.json(); alert(e.detail || "Failed"); return; }
@@ -143,12 +129,6 @@
       const q = document.getElementById("wsearch").value.trim().toLowerCase();
       if (q) DATA = DATA.filter(x => x.worker.toLowerCase().includes(q));
       render();
-    }
-
-    function renderProjectControls(type){
-      const s=REPORT_META.summary||{};document.getElementById("summary").classList.remove("hidden");document.getElementById("summary").innerHTML=[["Overall",s.overall_percent+"%"],["Activities",s.total_activities],["Critical open",s.critical_open],["Overdue",s.overdue],["Not started",s.not_started],["In progress",s.in_progress],["Complete",s.complete],["Budget",Number(s.budgeted_cost||0).toLocaleString("en-SG",{style:"currency",currency:"SGD"})]].map(x=>`<div class="bg-white rounded-xl shadow p-3"><div class="text-xs text-gray-500">${esc(x[0])}</div><div class="font-bold text-lg">${esc(x[1])}</div></div>`).join("");
-      if(type==="resources"){HEADERS=["WBS","Code","Activity","Status","Complete","Budget (SGD)"];ROWS=DATA.map(x=>[x.wbs_code,x.code,x.name,x.status.replace("_"," "),x.percent_complete+"%",Number(x.budgeted_cost).toFixed(2)]);}else{HEADERS=["WBS","Code","Activity","Status","Complete","Current start","Current finish","Critical","Float","Baseline finish","Variance","Actual start","Actual finish"];ROWS=DATA.map(x=>[x.wbs_code,x.code,x.name,x.status.replace("_"," "),x.percent_complete+"%",fmtD(x.current_start),fmtD(x.current_finish),x.is_critical?"Yes":"No",x.total_float??"-",x.baseline_finish?fmtD(x.baseline_finish):"-",x.finish_variance_days==null?"-":(x.finish_variance_days>0?"+":"")+x.finish_variance_days+" d",x.actual_start?fmtD(x.actual_start):"-",x.actual_finish?fmtD(x.actual_finish):"-"]);}
-      renderTable();
     }
 
     function renderTable(){document.getElementById("count").textContent=`${ROWS.length} rows`;document.getElementById("actions").classList.remove("hidden");document.getElementById("tbl").innerHTML="<thead class='bg-gray-50 text-gray-500'><tr>"+HEADERS.map(h=>`<th class="text-left p-2">${esc(h)}</th>`).join("")+"</tr></thead><tbody>"+ROWS.map(r=>"<tr class='border-t border-gray-100'>"+r.map(c=>`<td class="p-2">${esc(c)}</td>`).join("")+"</tr>").join("")+"</tbody>";}

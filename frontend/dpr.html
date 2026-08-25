@@ -193,9 +193,6 @@
       <button class="addbtn" onclick="addMt()">+ Add material row</button>
     </div>
 
-    <h2 class="sect">Schedule activity progress</h2>
-    <div class="panel p-3"><p id="schedule-progress-empty" class="text-sm text-gray-500">No schedule activities are linked to this site project.</p><div class="tblwrap"><table id="schedule-progress-table" class="edt hidden"><thead><tr><th style="min-width:190px">Activity</th><th>Complete %</th><th>Quantity</th><th style="min-width:140px">Remarks</th></tr></thead><tbody id="schedule-progress"></tbody></table></div><p class="text-xs text-gray-400 mt-2">Only enter activities worked on today. Saving the DPR updates the project schedule automatically.</p></div>
-
     <h2 class="sect">Activity photos</h2>
     <div class="panel p-3">
       <div id="dropzone" class="dropzone mb-3">
@@ -264,7 +261,7 @@
 
   <script>
     requireLogin();
-    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", SCHEDULE_ACTIVITIES=[], CAMLIB=[];
+    let ME=null, SITES=[], PROJECTS=[], PHOTOS=[], SIGNATURE_URL="", CAMLIB=[];
     const DPR_SUP_ROLES=["site_sup","safety_sup","wshc","logistics_sup"];  // supervisor tier — scoped to own sites
     const SIG_KEY="vcms_my_signature";   // saved default signature URL (this browser)
     // Role / Trade list — position-wise (management → engineers → supervisors → safety → operators → trades → worker)
@@ -533,7 +530,6 @@
       renderProjOptions();   // re-scope the directory to the selected site
       const r=await vmmsApi(`/api/v1/dpr?date=${dateVal()}&site_id=${siteVal()}`);
       const d=r.ok?await r.json():{};
-      await loadScheduleActivities(Array.isArray(d.activity_progress)?d.activity_progress:[]);
       const banner=document.getElementById("banner");
       if(d && d.id){
         banner.textContent="Saved report loaded — edit and Save to update."; banner.className="panel p-3 mb-3 text-sm text-center"; banner.classList.remove("hidden");
@@ -565,16 +561,6 @@
       }catch(e){ box.innerHTML='<span style="font-size:12px;color:#b45309">Could not check reminders</span>'; }
     }
     function openMissingDpr(day){ setv("date",day); load(); window.scrollTo({top:0,behavior:"smooth"}); }
-    async function loadScheduleActivities(saved){
-      const site=SITES.find(s=>s.id===siteVal()), projectId=site&&site.project_id;
-      SCHEDULE_ACTIVITIES=[];
-      if(projectId){try{const r=await vmmsApi(`/api/v1/schedule/activities?project_id=${encodeURIComponent(projectId)}`);SCHEDULE_ACTIVITIES=r.ok?(await r.json()).activities||[]:[];}catch(e){}}
-      const prior={};(saved||[]).forEach(x=>prior[x.activity_id]=x);
-      document.getElementById("schedule-progress-empty").classList.toggle("hidden",SCHEDULE_ACTIVITIES.length>0);
-      document.getElementById("schedule-progress-table").classList.toggle("hidden",!SCHEDULE_ACTIVITIES.length);
-      document.getElementById("schedule-progress").innerHTML=SCHEDULE_ACTIVITIES.map(a=>{const x=prior[a.id]||{};return `<tr data-activity="${a.id}" data-project="${a.project_id}"><td><b>${esc(a.code)}</b> ${esc(a.name)}<div class="text-xs text-gray-400">Current ${esc(a.percent_complete||0)}%</div></td><td><input data-k="percent_complete" type="number" min="0" max="100" step="0.01" value="${x.percent_complete??""}"></td><td><input data-k="quantity_completed" type="number" min="0" step="0.001" value="${x.quantity_completed??""}"></td><td><input data-k="remarks" value="${esc(x.remarks||"")}"></td></tr>`}).join("");
-    }
-    function readScheduleProgress(){return Array.from(document.querySelectorAll("#schedule-progress tr")).map(tr=>{const get=k=>tr.querySelector(`[data-k="${k}"]`).value;const pc=get("percent_complete");if(pc==="")return null;const n=Number(pc), q=get("quantity_completed");return {project_id:tr.dataset.project,activity_id:tr.dataset.activity,percent_complete:n,actual_start:n>0?dateVal():null,actual_finish:n===100?dateVal():null,quantity_completed:q===""?null:Number(q),remarks:get("remarks")||null}}).filter(Boolean)}
     async function prefill(silent){
       try{
         const r=await vmmsApi(`/api/v1/dpr/prefill?date=${dateVal()}&site_id=${siteVal()}`);
@@ -624,7 +610,7 @@
         description:document.getElementById("f-desc").value,
         manpower:readTable("mp",["name","role","no","from","to","total","remarks"]),
         equipment:readTable("eq",["name","no","from","to","total","remarks"]),
-        materials:readTable("mt",["name","qty","unit","remarks"]), activity_progress:readScheduleProgress(),
+        materials:readTable("mt",["name","qty","unit","remarks"]),
         photos:PHOTOS, signature_url:SIGNATURE_URL||null,
         prepared_by_name:val("f-prep"), conformed_by_party:val("f-conf"), status:"submitted" };
     }
