@@ -8,35 +8,45 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260825-core1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-core1"></script>
+  <script src="js/core-bundle.js?v=20260825-ui1"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui1"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
-    .th-btn{border:1.5px solid #D1D5DB;border-radius:10px;padding:10px 6px;font-size:13px;font-weight:700;
-            background:#fff;color:#374151;cursor:pointer;text-align:center;}
-    .th-btn.sel{border-color:#C00000;background:#C00000;color:#fff;}
-    @media(max-width:899px){main{max-width:100%!important}.flex.gap-2{flex-wrap:wrap}.flex.gap-2>input{min-width:140px}.flex.gap-2>button{min-height:44px}.text-red-600.text-sm.font-bold{min-height:44px;padding:8px 10px}.th-btn{min-height:44px}}
+    .th-btn{border:1.5px solid var(--vcms-line);border-radius:10px;min-height:46px;padding:8px;font-size:13px;font-weight:800;background:var(--vcms-surface);color:var(--vcms-ink);cursor:pointer;text-align:center}
+    .th-btn.sel{border-color:var(--vcms-brand);box-shadow:inset 0 0 0 2px var(--vcms-brand);color:var(--vcms-brand)}
+    .brand-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.brand-choice{min-height:66px;border:1.5px solid var(--vcms-line);border-radius:11px;background:var(--vcms-surface);color:var(--vcms-ink);font-size:12px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}.brand-choice.sel{border-color:var(--vcms-brand);box-shadow:inset 0 0 0 2px var(--vcms-brand)}.brand-dot{width:24px;height:24px;border-radius:50%;box-shadow:0 0 0 3px #fff,0 0 0 4px #d0d5dd}
+    .settings-card{background:var(--vcms-surface);border:1px solid var(--vcms-line);border-radius:14px;padding:16px;box-shadow:var(--vmms-shadow)}
+    @media(max-width:899px){main{max-width:100%!important}.flex.gap-2{flex-wrap:wrap}.flex.gap-2>input{min-width:140px}.flex.gap-2>button{min-height:46px}.text-red-600.text-sm.font-bold{min-height:46px;padding:8px 10px}.brand-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <header class="bg-red-700 text-white p-4 shadow flex items-center gap-3 sticky top-0 z-10">
-    <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-    <h1 class="text-lg font-bold flex-1">Settings</h1>
+  <header class="vcms-page-header bg-red-700">
+    <div class="vcms-page-header__row">
+      <a href="home.html" class="vcms-page-header__back" aria-label="Back">‹</a>
+      <div class="vcms-page-header__title"><h1>Settings</h1><p>Appearance and system preferences</p></div>
+    </div>
   </header>
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-10">
 
     <!-- ============ DISPLAY / THEME (every user) ============ -->
     <h2 class="text-sm font-bold text-gray-500 mb-2">DISPLAY</h2>
-    <div class="bg-white rounded-xl shadow p-4 mb-8">
-      <p class="font-bold text-gray-900 text-sm mb-1">Screen theme</p>
-      <p class="text-xs text-gray-500 mb-3">Saved on this phone. Use <b>Sunlight</b> outdoors — bright, high-contrast, large text. <b>Dark</b> suits night or indoor.</p>
+    <div class="settings-card mb-4">
+      <p class="font-bold text-gray-900 text-sm mb-1">Personal display mode</p>
+      <p class="text-xs text-gray-500 mb-3">Saved on this device. It changes brightness and contrast without changing safety colours.</p>
       <div id="theme-seg" class="grid grid-cols-3 gap-2">
         <button data-th="light"   onclick="setTheme('light')"   class="th-btn">Light</button>
-        <button data-th="sun"     onclick="setTheme('sun')"     class="th-btn">☀ Sunlight</button>
-        <button data-th="dark"    onclick="setTheme('dark')"    class="th-btn">🌙 Dark</button>
+        <button data-th="contrast" onclick="setTheme('contrast')" class="th-btn">High contrast</button>
+        <button data-th="dark"    onclick="setTheme('dark')"    class="th-btn">Dark</button>
       </div>
+    </div>
+    <div id="company-theme" class="settings-card mb-8 hidden">
+      <div class="flex items-start gap-3 mb-3"><div class="flex-1"><p class="font-bold text-gray-900 text-sm">Company colour</p><p class="text-xs text-gray-500 mt-1">Administrator setting applied to all users. Green, amber and error red remain fixed.</p></div><span class="vcms-status vcms-status-neutral">Admin</span></div>
+      <div id="brand-grid" class="brand-grid"></div>
+      <div id="custom-brand" class="hidden mt-3"><label class="vcms-label" for="brand-color">Custom primary colour</label><div class="flex gap-2"><input id="brand-color" type="color" value="#C00000" class="vcms-control" style="width:72px;padding:5px"><input id="brand-hex" class="vcms-control" value="#C00000" maxlength="7" aria-label="Custom colour code"></div></div>
+      <button id="save-brand" onclick="saveCompanyTheme()" class="vcms-btn vcms-btn-primary w-full mt-3">Save company colour</button>
+      <p id="brand-state" class="text-xs font-bold text-gray-500 mt-3">Loading company setting…</p>
     </div>
 
     <!-- ============ PERSONAL WORKFLOW REMINDERS ============ -->
@@ -105,12 +115,44 @@
     function setTheme(t) { if (window.vmmsSetTheme) vmmsSetTheme(t); markTheme(); }
     markTheme();
 
+    const BRAND_CHOICES = [
+      ["vortex","Vortex Red","#C00000"],["blue","Construction Blue","#1565C0"],
+      ["orange","Safety Orange","#C2410C"],["navy","Professional Navy","#1E3A5F"],
+      ["emerald","Emerald Green","#047857"],["custom","Custom","#6B21A8"]
+    ];
+    let COMPANY_BRAND = {preset:"vortex",primary:"#C00000"};
+    function renderBrandChoices(){
+      document.getElementById("brand-grid").innerHTML=BRAND_CHOICES.map(([id,label,color])=>
+        `<button type="button" data-brand="${id}" onclick="selectBrand('${id}','${color}')" class="brand-choice ${COMPANY_BRAND.preset===id?'sel':''}"><span class="brand-dot" style="background:${color}"></span>${label}</button>`).join("");
+      document.getElementById("custom-brand").classList.toggle("hidden",COMPANY_BRAND.preset!=="custom");
+      document.getElementById("brand-color").value=COMPANY_BRAND.primary;
+      document.getElementById("brand-hex").value=COMPANY_BRAND.primary;
+    }
+    function selectBrand(preset,color){COMPANY_BRAND={preset,primary:color};renderBrandChoices();if(window.VCMS_APPEARANCE)VCMS_APPEARANCE.applyBrand(COMPANY_BRAND)}
+    document.getElementById("brand-color").addEventListener("input",e=>{COMPANY_BRAND={preset:"custom",primary:e.target.value.toUpperCase()};document.getElementById("brand-hex").value=COMPANY_BRAND.primary;if(window.VCMS_APPEARANCE)VCMS_APPEARANCE.applyBrand(COMPANY_BRAND)});
+    document.getElementById("brand-hex").addEventListener("change",e=>{const v=e.target.value.trim().toUpperCase();if(/^#[0-9A-F]{6}$/.test(v)){COMPANY_BRAND={preset:"custom",primary:v};renderBrandChoices();if(window.VCMS_APPEARANCE)VCMS_APPEARANCE.applyBrand(COMPANY_BRAND)}else toast("Enter a colour such as #1565C0")});
+    async function loadCompanyTheme(){
+      const r=await vmmsApi("/api/v1/appearance"), d=r.ok?await r.json():null;
+      if(d){COMPANY_BRAND=d;renderBrandChoices();if(window.VCMS_APPEARANCE)VCMS_APPEARANCE.setBrand(d)}
+      document.getElementById("brand-state").textContent="Current company colour: "+COMPANY_BRAND.primary;
+    }
+    async function saveCompanyTheme(){
+      const b=document.getElementById("save-brand"); if(window.VCMS_UI)VCMS_UI.setLoading(b,true,"Saving…");
+      try{const d=await VCMS_UI.requestJSON("/api/v1/appearance",{method:"PATCH",body:JSON.stringify(COMPANY_BRAND)});COMPANY_BRAND=d;VCMS_APPEARANCE.setBrand(d);renderBrandChoices();document.getElementById("brand-state").textContent="Saved for all users · "+d.primary;VCMS_UI.toast("Company colour saved","success")}
+      catch(_){}finally{if(window.VCMS_UI)VCMS_UI.setLoading(b,false)}
+    }
+
     async function boot() {
       const r = await vmmsApi("/api/v1/me");
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
 
       renderDprReminderToggle();
+
+      if (ME.role === "admin") {
+        document.getElementById("company-theme").classList.remove("hidden");
+        await loadCompanyTheme();
+      }
 
       // Holidays + OT rules — coordinators only
       if (isCoordinator(ME.role)) {
@@ -122,7 +164,7 @@
     function renderDprReminderToggle() {
       const on = !!(ME && ME.dpr_reminders), b = document.getElementById("dpr-reminder-toggle"), dot = b.querySelector("span");
       b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.style.background = on ? "#C00000" : "#9ca3af";
+      b.style.background = on ? "var(--vcms-brand)" : "#9ca3af";
       dot.style.transform = on ? "translateX(22px)" : "translateX(0)";
       document.getElementById("dpr-reminder-state").textContent = on ? "On for your profile" : "Off for your profile";
     }
@@ -173,7 +215,7 @@
     }
     async function loadSet() {
       const r = await vmmsApi("/api/v1/settings");
-      const rows = r.ok ? await r.json() : [];
+      const rows = r.ok ? (await r.json()).filter(s=>s.key!=="ui_company_theme") : [];
       document.getElementById("set-list").innerHTML = rows.map(s =>
         `<div class="p-3">
            <p class="text-xs text-gray-400">${esc(s.key)}</p>

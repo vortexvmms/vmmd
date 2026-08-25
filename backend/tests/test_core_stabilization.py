@@ -25,7 +25,7 @@ def test_retired_features_are_not_published_or_callable():
 
 def test_frontend_core_is_split_but_published_as_one_request():
     modules = ROOT / "frontend/js/core"
-    for name in ("security.js", "theme.js", "drafts.js", "pwa.js", "layout.js",
+    for name in ("security.js", "theme.js", "components.js", "drafts.js", "pwa.js", "layout.js",
                  "app-config.js", "ui-theme.js", "export.js", "navigation.js"):
         assert (modules / name).exists()
     for page in (ROOT / "frontend").glob("*.html"):
@@ -33,3 +33,18 @@ def test_frontend_core_is_split_but_published_as_one_request():
         if "js/auth.js" in text:
             assert "js/core-bundle.js" in text
             assert "js/ui.js" in text
+
+
+def test_appearance_foundation_keeps_semantic_colours_separate():
+    main = (ROOT / "backend/app/main.py").read_text()
+    theme = (ROOT / "frontend/js/core/theme.js").read_text()
+    components = (ROOT / "frontend/js/core/components.js").read_text()
+    settings = (ROOT / "frontend/settings.html").read_text()
+    assert '@app.get("/api/v1/appearance")' in main
+    assert '@app.patch("/api/v1/appearance")' in main
+    assert 'user["role"] != "admin"' in main
+    for token in ("--vcms-success", "--vcms-warning", "--vcms-danger", "--vcms-brand"):
+        assert token in components
+    assert "@media print" in components
+    assert "VCMS_APPEARANCE" in theme
+    assert 'id="company-theme"' in settings and 'id="theme-seg"' in settings

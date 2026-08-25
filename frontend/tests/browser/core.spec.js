@@ -43,3 +43,19 @@ test('retired worker-card pages are not published', async ({ request }) => {
     expect((await request.get(path)).status()).toBe(404);
   }
 });
+
+test('appearance variables apply without changing semantic safety colours', async ({ page }) => {
+  await page.goto('/login.html');
+  const values = await page.evaluate(() => {
+    VCMS_APPEARANCE.setBrand({ preset: 'blue', primary: '#1565C0' });
+    const style = getComputedStyle(document.documentElement);
+    return {
+      brand: style.getPropertyValue('--vcms-brand').trim(),
+      danger: style.getPropertyValue('--vcms-danger').trim(),
+      mode: document.documentElement.getAttribute('data-theme')
+    };
+  });
+  expect(values.brand).toBe('#1565C0');
+  expect(values.danger).toBe('#B91C1C');
+  expect(['light','dark','contrast']).toContain(values.mode);
+});

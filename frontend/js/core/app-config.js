@@ -38,12 +38,3 @@ if (window.tailwind) {
     } } } }
   };
 }
-
-// Header bars sit one shade darker than the brand buttons, for hierarchy.
-// (Higher specificity than the utility class, so no !important needed.)
-(function () {
-  var s = document.createElement("style");
-  s.textContent = "header.bg-red-700{background-color:#A00000}";
-  document.head.appendChild(s);
-})();
-

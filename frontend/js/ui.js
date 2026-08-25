@@ -68,5 +68,25 @@
     return response.json();
   }
 
-  window.VCMS_UI = { toast, errorMessage, setLoading, requestJSON };
+  function pageHeader(options) {
+    options = options || {};
+    const header = document.createElement("header");
+    header.className = "vcms-page-header " + (options.className || "");
+    const action = options.actionHTML || "";
+    const toolbar = options.toolbarHTML ? `<div class="vcms-page-toolbar">${options.toolbarHTML}</div>` : "";
+    header.innerHTML = `<div class="vcms-page-header__row"><a class="vcms-page-header__back" href="${window.esc(options.back||"home.html")}" aria-label="Back">‹</a><div class="vcms-page-header__title"><h1>${window.esc(options.title||"VCMS")}</h1>${options.subtitle?`<p>${window.esc(options.subtitle)}</p>`:""}</div>${action}</div>${toolbar}`;
+    return header;
+  }
+
+  function stateHTML(type, message, actionHTML) {
+    const safeType = /^(loading|empty|error)$/.test(type) ? type : "empty";
+    return `<div class="vcms-state ${safeType}" role="status"><div>${window.esc(message||"")}${actionHTML||""}</div></div>`;
+  }
+
+  function status(label, type) {
+    const safeType = /^(success|warning|danger|neutral)$/.test(type) ? type : "neutral";
+    return `<span class="vcms-status vcms-status-${safeType}">${window.esc(label||"")}</span>`;
+  }
+
+  window.VCMS_UI = { toast, errorMessage, setLoading, requestJSON, pageHeader, stateHTML, status };
 })();

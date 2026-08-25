@@ -11,6 +11,7 @@ Phase 7 adds the Site Supervisor module + the OT hours engine
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import date as date_cls, datetime, timedelta, timezone
 
 import httpx
@@ -2225,6 +2226,60 @@ async def list_settings(user: dict = Depends(get_current_user)):
                              params={"select": "key,value,effective_from", "order": "key.asc"},
                              headers=supabase_headers(user["token"]))
         return r.json() if r.status_code == 200 else []
+
+
+class AppearanceBody(BaseModel):
+    preset: str = "vortex"
+    primary: str = "#C00000"
+
+
+APPEARANCE_PRESETS = {
+    "vortex": "#C00000", "blue": "#1565C0", "orange": "#C2410C",
+    "navy": "#1E3A5F", "emerald": "#047857", "custom": None,
+}
+
+
+@app.get("/api/v1/appearance")
+async def get_appearance(user: dict = Depends(get_current_user)):
+    """Company brand is readable by every signed-in user."""
+    async with shared_client() as client:
+        r = await client.get(
+            f"{REST}/settings",
+            params={"key": "eq.ui_company_theme", "select": "value", "limit": "1"},
+            headers=supabase_headers(user["token"]),
+        )
+        rows = r.json() if r.status_code == 200 else []
+        value = rows[0].get("value") if rows else None
+        if not isinstance(value, dict):
+            value = {"preset": "vortex", "primary": "#C00000"}
+        return value
+
+
+@app.patch("/api/v1/appearance")
+async def update_appearance(body: AppearanceBody,
+                            user: dict = Depends(get_current_user)):
+    """Only Admin changes the company brand; safety colours remain fixed."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only the Administrator can change the company theme")
+    preset = body.preset.strip().lower()
+    if preset not in APPEARANCE_PRESETS:
+        raise HTTPException(status_code=400, detail="Choose an approved colour preset")
+    primary = APPEARANCE_PRESETS[preset] or body.primary.strip().upper()
+    if not re.fullmatch(r"#[0-9A-F]{6}", primary):
+        raise HTTPException(status_code=400, detail="Choose a valid six-digit colour")
+    value = {"preset": preset, "primary": primary}
+    async with shared_client() as client:
+        r = await client.post(
+            f"{REST}/settings",
+            params={"on_conflict": "key"},
+            headers={**supabase_headers(user["token"]),
+                     "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={"key": "ui_company_theme", "value": value},
+        )
+        if r.status_code not in (200, 201, 204):
+            raise HTTPException(status_code=500, detail="Could not save the company theme")
+        await audit(client, user, "update", "appearance", "company", None, value)
+    return {"ok": True, **value}
 
 
 # ---------------- Site "not working" (off) days ----------------

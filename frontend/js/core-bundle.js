@@ -12,48 +12,129 @@ window.esc = function (v) {
 
 
 // source: js/core/theme.js
-// ---- Display theme (Light / Sunlight / Dark) — shared by all pages ----
-// Applied here (config.js loads in <head> on every page) so the whole app is
-// themed with no page-by-page changes and no flash of the wrong colours.
-// Header stays Vortex red in every theme (brand + high contrast already).
+// VCMS appearance foundation: company brand + personal display mode.
 (function () {
-  var THEMES = { light: 1, sun: 1, dark: 1 };
-  var t = localStorage.getItem("vcms_theme");
-  if (!THEMES[t]) t = "light";
-  document.documentElement.setAttribute("data-theme", t);
-  if (document.getElementById("vcms-theme-css")) return;
-  var css =
-    /* ===== SUNLIGHT: bright white, near-black bold text, bigger fonts ===== */
-    ':root[data-theme="sun"]{font-size:17px;}' +
-    ':root[data-theme="sun"] body,:root[data-theme="sun"] .bg-gray-100,:root[data-theme="sun"] .bg-gray-50,:root[data-theme="sun"] .grid-home{background:#ffffff !important;color:#000 !important;}' +
-    ':root[data-theme="sun"] .bg-white,:root[data-theme="sun"] .panel{background:#ffffff !important;color:#000 !important;border:1.5px solid #111 !important;}' +
-    ':root[data-theme="sun"] .text-gray-900,:root[data-theme="sun"] .text-gray-800,:root[data-theme="sun"] .text-gray-700,:root[data-theme="sun"] .text-gray-600,:root[data-theme="sun"] .text-gray-500,:root[data-theme="sun"] .text-gray-400{color:#000 !important;}' +
-    ':root[data-theme="sun"] .border,:root[data-theme="sun"] .border-gray-100,:root[data-theme="sun"] .border-gray-200,:root[data-theme="sun"] .border-gray-300{border-color:#111 !important;}' +
-    ':root[data-theme="sun"] .divide-gray-100>*+*{border-color:#111 !important;}' +
-    ':root[data-theme="sun"] input,:root[data-theme="sun"] select,:root[data-theme="sun"] textarea{background:#fff !important;color:#000 !important;border-color:#111 !important;}' +
-    ':root[data-theme="sun"] .app-lbl,:root[data-theme="sun"] .sect-h .t{color:#000 !important;font-weight:700 !important;}' +
-    /* ===== DARK: for night / indoor ===== */
-    ':root[data-theme="dark"] body,:root[data-theme="dark"] .bg-gray-100,:root[data-theme="dark"] .bg-gray-50,:root[data-theme="dark"] .grid-home{background:#0f1216 !important;color:#e5e7eb !important;}' +
-    ':root[data-theme="dark"] .bg-white,:root[data-theme="dark"] .panel{background:#1b2028 !important;color:#e5e7eb !important;}' +
-    ':root[data-theme="dark"] .text-gray-900,:root[data-theme="dark"] .text-gray-800,:root[data-theme="dark"] .text-gray-700{color:#e5e7eb !important;}' +
-    ':root[data-theme="dark"] .text-gray-600,:root[data-theme="dark"] .text-gray-500,:root[data-theme="dark"] .text-gray-400{color:#9aa4b2 !important;}' +
-    ':root[data-theme="dark"] .border,:root[data-theme="dark"] .border-gray-100,:root[data-theme="dark"] .border-gray-200,:root[data-theme="dark"] .border-gray-300{border-color:#2b323c !important;}' +
-    ':root[data-theme="dark"] .divide-gray-100>*+*{border-color:#2b323c !important;}' +
-    ':root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#0f1216 !important;color:#e5e7eb !important;border-color:#3a4150 !important;}' +
-    ':root[data-theme="dark"] .app-lbl{color:#cbd2dc !important;}' +
-    ':root[data-theme="dark"] .sect-h .t{color:#e5e7eb !important;}' +
-    ':root[data-theme="dark"] .soon-note,:root[data-theme="dark"] .sect.soon .sect-h .t{color:#6b7280 !important;}';
-  var s = document.createElement("style");
-  s.id = "vcms-theme-css"; s.textContent = css;
-  (document.head || document.documentElement).appendChild(s);
-})();
-window.vmmsGetTheme = function () { var t = localStorage.getItem("vcms_theme"); return (t === "sun" || t === "dark") ? t : "light"; };
-window.vmmsSetTheme = function (t) {
-  if (t !== "sun" && t !== "dark") t = "light";
-  localStorage.setItem("vcms_theme", t);
-  document.documentElement.setAttribute("data-theme", t);
-};
+  var PRESETS = {
+    vortex: "#C00000", blue: "#1565C0", orange: "#C2410C",
+    navy: "#1E3A5F", emerald: "#047857"
+  };
+  var MODE_KEY = "vcms_mode", BRAND_KEY = "vcms_company_appearance_v1";
 
+  function cleanHex(value, fallback) {
+    value = String(value || "").trim().toUpperCase();
+    return /^#[0-9A-F]{6}$/.test(value) ? value : fallback;
+  }
+  function rgb(hex) {
+    hex = cleanHex(hex, "#C00000").slice(1);
+    return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16)];
+  }
+  function mix(hex, target, weight) {
+    var a=rgb(hex), b=rgb(target), out=a.map(function(v,i){return Math.round(v+(b[i]-v)*weight)});
+    return "#"+out.map(function(v){return v.toString(16).padStart(2,"0")}).join("").toUpperCase();
+  }
+  function readable(hex) {
+    var c=rgb(hex), y=(c[0]*299+c[1]*587+c[2]*114)/1000;
+    return y >= 155 ? "#111827" : "#FFFFFF";
+  }
+  function readBrand() {
+    try {
+      var hit=JSON.parse(localStorage.getItem(BRAND_KEY)||"null");
+      if(hit && hit.primary) return {preset:hit.preset||"custom",primary:cleanHex(hit.primary,"#C00000"),t:hit.t||0};
+    } catch (_) {}
+    return {preset:"vortex",primary:"#C00000",t:0};
+  }
+  function readMode() {
+    var mode=localStorage.getItem(MODE_KEY), old=localStorage.getItem("vcms_theme");
+    if(!mode && old){mode=old==="sun"?"contrast":old;localStorage.setItem(MODE_KEY,mode)}
+    return /^(light|dark|contrast)$/.test(mode||"") ? mode : "light";
+  }
+  function applyBrand(value) {
+    value=value||readBrand(); var primary=cleanHex(value.primary,PRESETS[value.preset]||"#C00000");
+    var root=document.documentElement.style;
+    root.setProperty("--vcms-brand",primary);
+    root.setProperty("--vcms-brand-dark",mix(primary,"#000000",.22));
+    root.setProperty("--vcms-brand-hover",mix(primary,"#000000",.13));
+    root.setProperty("--vcms-brand-soft",mix(primary,"#FFFFFF",.90));
+    root.setProperty("--vcms-brand-border",mix(primary,"#FFFFFF",.62));
+    root.setProperty("--vcms-on-brand",readable(primary));
+    document.documentElement.setAttribute("data-brand",value.preset||"custom");
+    var meta=document.querySelector('meta[name="theme-color"]'); if(meta)meta.content=mix(primary,"#000000",.22);
+    window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:value,mode:readMode()}}));
+  }
+  function applyMode(mode) {
+    mode=/^(light|dark|contrast)$/.test(mode)?mode:"light";
+    document.documentElement.setAttribute("data-theme",mode);
+    window.dispatchEvent(new CustomEvent("vcmsappearancechange",{detail:{brand:readBrand(),mode:mode}}));
+  }
+  function setBrand(value) {
+    var saved={preset:value.preset||"custom",primary:cleanHex(value.primary,"#C00000"),t:Date.now()};
+    localStorage.setItem(BRAND_KEY,JSON.stringify(saved)); applyBrand(saved); return saved;
+  }
+  function setMode(mode) { localStorage.setItem(MODE_KEY,mode); applyMode(mode); }
+
+  window.VCMS_APPEARANCE={presets:PRESETS,getBrand:readBrand,setBrand:setBrand,getMode:readMode,setMode:setMode,applyBrand:applyBrand};
+  window.vmmsGetTheme=readMode; window.vmmsSetTheme=setMode;
+  applyBrand(readBrand()); applyMode(readMode());
+
+  // Refresh the company brand at most every six hours; normal navigation uses the phone cache.
+  window.addEventListener("load",function(){
+    var cached=readBrand();
+    if(cached.t && Date.now()-cached.t<6*3600000)return;
+    if(typeof getSession!=="function" || !getSession() || typeof vmmsApi!=="function")return;
+    vmmsApi("/api/v1/appearance").then(function(r){return r.ok?r.json():null}).then(function(v){if(v)setBrand(v)}).catch(function(){});
+  });
+})();
+
+// source: js/core/components.js
+// Shared visual components. Safety colours are semantic and never follow the brand.
+(function(){
+  if(document.getElementById("vcms-component-css"))return;
+  var style=document.createElement("style"); style.id="vcms-component-css";
+  style.textContent=`
+  @media screen{
+    :root{
+      --vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-brand-hover:#A70000;
+      --vcms-brand-soft:#F9E6E6;--vcms-brand-border:#E6A3A3;--vcms-on-brand:#fff;
+      --vcms-success:#15803D;--vcms-success-soft:#ECFDF3;
+      --vcms-warning:#B45309;--vcms-warning-soft:#FFFBEB;
+      --vcms-danger:#B91C1C;--vcms-danger-soft:#FEF2F2;
+      --vcms-ink:#182230;--vcms-muted:#667085;--vcms-surface:#fff;--vcms-page:#EEF1F5;
+      --vcms-line:#DCE1E8;--vcms-control-h:46px;--vcms-radius:12px;
+    }
+    :root[data-theme="dark"]{--vcms-ink:#F3F4F6;--vcms-muted:#AAB3C0;--vcms-surface:#1B2028;--vcms-page:#0F1216;--vcms-line:#353D49}
+    :root[data-theme="contrast"]{font-size:17px;--vcms-ink:#000;--vcms-muted:#111;--vcms-surface:#fff;--vcms-page:#fff;--vcms-line:#111}
+    body{color:var(--vcms-ink)}
+    .bg-red-600,.bg-red-700{background-color:var(--vcms-brand)!important;color:var(--vcms-on-brand)!important}
+    header.bg-red-700,.bg-red-800{background-color:var(--vcms-brand-dark)!important;color:var(--vcms-on-brand)!important}
+    .text-red-600,.text-red-700{color:var(--vcms-brand)!important}.border-red-600,.border-red-700{border-color:var(--vcms-brand)!important}
+    .accent-red-600,.accent-red-700{accent-color:var(--vcms-brand)!important}.focus\\:ring-red-600:focus{--tw-ring-color:var(--vcms-brand)!important}
+    .vcms-btn{min-height:var(--vcms-control-h);display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;border:1px solid transparent;border-radius:10px;font-weight:800;font-size:14px;line-height:1.1;transition:background .15s,border-color .15s,transform .08s;white-space:nowrap}
+    .vcms-btn:active{transform:translateY(1px)}.vcms-btn:focus-visible,.vcms-control:focus-visible{outline:3px solid var(--vcms-brand-border);outline-offset:2px}
+    .vcms-btn-primary{background:var(--vcms-brand);color:var(--vcms-on-brand)}.vcms-btn-primary:hover{background:var(--vcms-brand-hover)}
+    .vcms-btn-secondary{background:#252B35;color:#fff}.vcms-btn-tertiary{background:var(--vcms-surface);color:var(--vcms-ink);border-color:var(--vcms-line)}
+    .vcms-btn-danger{background:var(--vcms-surface);color:var(--vcms-danger);border-color:var(--vcms-danger)}
+    .vcms-btn-success{background:var(--vcms-success);color:#fff}.vcms-btn:disabled{background:#E5E7EB!important;color:#8A94A3!important;border-color:#D1D5DB!important;cursor:not-allowed;box-shadow:none;transform:none}
+    .vcms-control{height:var(--vcms-control-h);min-height:var(--vcms-control-h);width:100%;padding:0 12px;border:1px solid var(--vcms-line);border-radius:10px;background:var(--vcms-surface);color:var(--vcms-ink);font-size:14px}
+    textarea.vcms-control{height:auto;min-height:96px;padding-top:10px;padding-bottom:10px}.vcms-label{display:block;margin:0 0 6px;color:var(--vcms-muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+    .vcms-page-header{background:var(--vcms-brand-dark);color:var(--vcms-on-brand);box-shadow:0 2px 8px rgba(15,23,42,.18);position:sticky;top:0;z-index:20}
+    .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:28px;min-height:40px;display:grid;place-items:center;font-size:25px;font-weight:800}
+    .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vcms-page-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 12px}.vcms-page-toolbar>*{min-width:0}
+    .vcms-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.vcms-status-success{color:var(--vcms-success);background:var(--vcms-success-soft)}.vcms-status-warning{color:var(--vcms-warning);background:var(--vcms-warning-soft)}.vcms-status-danger{color:var(--vcms-danger);background:var(--vcms-danger-soft)}.vcms-status-neutral{color:#475467;background:#F2F4F7}
+    :root[data-theme="dark"] body,:root[data-theme="dark"] .bg-gray-100,:root[data-theme="dark"] .bg-gray-50{background:var(--vcms-page)!important;color:var(--vcms-ink)!important}
+    :root[data-theme="dark"] .bg-white,:root[data-theme="dark"] .panel{background:var(--vcms-surface)!important;color:var(--vcms-ink)!important;border-color:var(--vcms-line)!important}
+    :root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] textarea{background:#11161D!important;color:var(--vcms-ink)!important;border-color:var(--vcms-line)!important}
+    :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
+    :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
+    :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
+    @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}}
+  }
+  @media print{
+    :root{--vcms-brand:#C00000;--vcms-brand-dark:#960000;--vcms-on-brand:#fff;--vcms-success:#15803D;--vcms-warning:#B45309;--vcms-danger:#B91C1C}
+    .vcms-toast{display:none!important}
+  }`;
+  (document.head||document.documentElement).appendChild(style);
+})();
 
 // source: js/core/drafts.js
 // ---- Small text-form draft recovery (no photos, files, signatures or secrets) ----
@@ -91,7 +172,7 @@ window.vmmsSetTheme = function (t) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260813-8', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260825-ui1', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -218,15 +299,6 @@ if (window.tailwind) {
     } } } }
   };
 }
-
-// Header bars sit one shade darker than the brand buttons, for hierarchy.
-// (Higher specificity than the utility class, so no !important needed.)
-(function () {
-  var s = document.createElement("style");
-  s.textContent = "header.bg-red-700{background-color:#A00000}";
-  document.head.appendChild(s);
-})();
-
 
 // source: js/core/ui-theme.js
 // ---- Modern Soft UI theme + subtle motion (applies app-wide) ----
