@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException
 
 from .schemas import (ActivityIn, ActivityMappingIn, ActivityPatch, ActivityTargetIn,
-                      ManpowerRateIn, OtherCostIn, ResourceRateIn, SetupIn, WbsIn)
+                      CostToCompleteIn, ManpowerRateIn, OtherCostIn, ProjectValueIn,
+                      ResourceRateIn, SetupIn, WbsIn)
 
 
 @dataclass(frozen=True)
@@ -206,5 +208,42 @@ def build_planning_router(c: PlanningContext) -> APIRouter:
             r=await client.post(f"{c.rest_url}/planning_other_direct_costs",headers=headers(user,True),json=payload)
             if r.status_code not in (200,201): raise HTTPException(400,"Could not save direct cost")
             row=r.json()[0]; await c.audit(client,user,"create","planning_other_direct_cost",row["id"],None,{"project_id":project_id,"amount":body.amount}); return row
+
+    @router.get("/projects/{project_id}/forecast-pnl")
+    async def forecast_pnl(project_id: str, data_date: str | None = None,
+                           user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            payload={"p_project_id":project_id}
+            if data_date: payload["p_data_date"]=data_date
+            r=await client.post(f"{c.rest_url}/rpc/planning_project_pnl_summary",headers=headers(user),json=payload)
+            if r.status_code not in (200,201): raise HTTPException(500,"Could not calculate forecast P&L")
+            return r.json()
+
+    @router.put("/projects/{project_id}/forecast-pnl/project-value")
+    async def save_project_value(project_id: str, body: ProjectValueIn, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        payload=body.model_dump(mode="json"); payload.update({"project_id":project_id,"updated_by":user["user_id"]})
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_project_values",params={"on_conflict":"project_id"},headers={**headers(user,True),"Prefer":"resolution=merge-duplicates,return=representation"},json=payload)
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not save project value")
+            await c.audit(client,user,"update","planning_project_value",project_id,None,{"currency":body.currency}); return r.json()[0]
+
+    @router.put("/projects/{project_id}/forecast-pnl/cost-to-complete")
+    async def save_ctc(project_id: str, body: CostToCompleteIn, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        payload=body.model_dump(mode="json"); payload.update({"project_id":project_id,"approved_by":user["user_id"],"approved_at":datetime.now(timezone.utc).isoformat()})
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_ctc_forecasts",params={"on_conflict":"project_id"},headers={**headers(user,True),"Prefer":"resolution=merge-duplicates,return=representation"},json=payload)
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not approve cost to complete")
+            await c.audit(client,user,"approve","planning_cost_to_complete",project_id,None,{"basis":body.approved_basis}); return r.json()[0]
+
+    @router.post("/projects/{project_id}/forecast-pnl/snapshots", status_code=201)
+    async def create_pnl_snapshot(project_id: str, data_date: str, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/rpc/create_planning_pnl_snapshot",headers=headers(user),json={"p_project_id":project_id,"p_data_date":data_date})
+            if r.status_code not in (200,201): raise HTTPException(500,"Could not create P&L snapshot")
+            sid=r.json(); await c.audit(client,user,"create","planning_pnl_snapshot",str(sid),None,{"project_id":project_id,"data_date":data_date}); return {"id":sid}
 
     return router

@@ -115,3 +115,24 @@ class OtherCostIn(BaseModel):
         if self.category not in {"subcontractor","transport","disposal","testing_permit","miscellaneous"}:
             raise ValueError("Invalid cost category")
         return self
+
+
+class ProjectValueIn(BaseModel):
+    currency: str = Field(default="SGD", min_length=3, max_length=3)
+    original_value: float = Field(ge=0, le=100_000_000_000)
+    approved_variations: float = Field(default=0, ge=0, le=100_000_000_000)
+    omissions: float = Field(default=0, ge=0, le=100_000_000_000)
+
+
+class CostToCompleteIn(BaseModel):
+    approved_basis: str
+    manual_amount: float | None = Field(default=None, ge=0, le=100_000_000_000)
+    manual_reason: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def valid_basis(self):
+        if self.approved_basis not in {"automatic", "manual"}:
+            raise ValueError("Invalid forecast basis")
+        if self.approved_basis == "manual" and (self.manual_amount is None or not (self.manual_reason or "").strip()):
+            raise ValueError("Manual forecast requires amount and reason")
+        return self
