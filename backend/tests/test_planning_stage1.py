@@ -30,9 +30,8 @@ def test_stage1_migration_is_admin_only_and_authoritative():
     assert "planned_finish=(select max(work_date)" in sql
 
 
-def test_planning_page_has_grid_selection_and_no_cost_fields():
+def test_planning_page_keeps_grid_selection_and_excludes_stage4_pnl():
     page = (ROOT / "frontend/planning.html").read_text()
     assert "data-activity" in page and "selected_dates" in page
     assert "pointerdown" in page and "pointerover" in page
-    for forbidden in ("normal_rate", "ot_rate", "forecast_pnl"):
-        assert forbidden not in page
+    assert "forecast_pnl" not in page

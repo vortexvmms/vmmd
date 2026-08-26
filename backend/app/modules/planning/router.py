@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException
 
-from .schemas import ActivityIn, ActivityMappingIn, ActivityPatch, ActivityTargetIn, SetupIn, WbsIn
+from .schemas import (ActivityIn, ActivityMappingIn, ActivityPatch, ActivityTargetIn,
+                      ManpowerRateIn, OtherCostIn, ResourceRateIn, SetupIn, WbsIn)
 
 
 @dataclass(frozen=True)
@@ -162,5 +163,48 @@ def build_planning_router(c: PlanningContext) -> APIRouter:
                 if pr.status_code==200: saved={x["activity_id"]:x for x in pr.json()}
             for row in rows: row["saved_progress"]=saved.get(row["activity_id"])
             return rows
+
+    @router.get("/projects/{project_id}/costing")
+    async def costing(project_id: str, date_from: str | None = None, date_to: str | None = None,
+                      user: dict = Depends(c.get_current_user)):
+        admin(user)
+        async with c.shared_client() as client:
+            calls = [
+                client.get(f"{c.rest_url}/planning_manpower_rates", params={"project_id":f"eq.{project_id}","select":"*","is_active":"eq.true","order":"effective_from.desc"}, headers=headers(user)),
+                client.get(f"{c.rest_url}/planning_resource_rates", params={"project_id":f"eq.{project_id}","select":"*","is_active":"eq.true","order":"resource_type.asc,resource_name.asc"}, headers=headers(user)),
+                client.get(f"{c.rest_url}/planning_other_direct_costs", params={"project_id":f"eq.{project_id}","select":"*","order":"cost_date.desc","limit":"200"}, headers=headers(user)),
+                client.post(f"{c.rest_url}/rpc/planning_project_cost_summary", headers=headers(user), json={"p_project_id":project_id,"p_from":date_from,"p_to":date_to}),
+            ]
+            import asyncio
+            rs=await asyncio.gather(*calls)
+            if any(r.status_code not in (200,201) for r in rs): raise HTTPException(500,"Could not load private project costing")
+            return {"manpower_rates":rs[0].json(),"resource_rates":rs[1].json(),"other_costs":rs[2].json(),"summary":rs[3].json()}
+
+    @router.post("/projects/{project_id}/costing/manpower-rates", status_code=201)
+    async def add_manpower_rate(project_id: str, body: ManpowerRateIn, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        payload=body.model_dump(mode="json"); payload.update({"project_id":project_id,"trade":body.trade.strip() if body.trade else None,"created_by":user["user_id"]})
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_manpower_rates",headers=headers(user,True),json=payload)
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not save manpower rate")
+            row=r.json()[0]; await c.audit(client,user,"create","planning_manpower_rate",row["id"],None,{"project_id":project_id}); return row
+
+    @router.post("/projects/{project_id}/costing/resource-rates", status_code=201)
+    async def add_resource_rate(project_id: str, body: ResourceRateIn, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        payload=body.model_dump(mode="json"); payload.update({"project_id":project_id,"resource_name":body.resource_name.strip(),"created_by":user["user_id"]})
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_resource_rates",headers=headers(user,True),json=payload)
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not save resource rate")
+            row=r.json()[0]; await c.audit(client,user,"create","planning_resource_rate",row["id"],None,{"project_id":project_id,"resource_type":body.resource_type}); return row
+
+    @router.post("/projects/{project_id}/costing/other-costs", status_code=201)
+    async def add_other_cost(project_id: str, body: OtherCostIn, user: dict = Depends(c.get_current_user)):
+        admin(user)
+        payload=body.model_dump(mode="json"); payload.update({"project_id":project_id,"created_by":user["user_id"]})
+        async with c.shared_client() as client:
+            r=await client.post(f"{c.rest_url}/planning_other_direct_costs",headers=headers(user,True),json=payload)
+            if r.status_code not in (200,201): raise HTTPException(400,"Could not save direct cost")
+            row=r.json()[0]; await c.audit(client,user,"create","planning_other_direct_cost",row["id"],None,{"project_id":project_id,"amount":body.amount}); return row
 
     return router
