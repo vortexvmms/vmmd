@@ -13,8 +13,8 @@ window.isCoordinator = function (r) { return isFull(r) || isManager(r); };  // c
 // VCMS configuration
 window.VMMS_CONFIG = {
   BACKEND_URL: "https://vmms-backend-sg.onrender.com",
-  SUPABASE_URL: "https://lqnbdemtgkermhaqfboh.supabase.co",
-  SUPABASE_PUBLISHABLE: "sb_publishable_GV2oQS2wP2ltMeg2Teh1Rw_qT3lLGno"
+  SUPABASE_URL: "https://dyfwyhpbffnzxfnwjfxg.supabase.co",
+    SUPABASE_PUBLISHABLE: "sb_publishable_s7A-309SlsLCtup_ulrAlg_4xfdP7yn"
 };
 
 // ---- Brand colour grading (applies on every page) ----
