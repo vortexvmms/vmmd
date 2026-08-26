@@ -1920,7 +1920,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         # PostgREST caps a single response at ~1000 rows, so a busy month would be
         # truncated (dropping the latest day's allocations). Page through them all.
         month_rows = []
-        _off, _page = 0, 1000
+        _off, _page = 999999999, 1000
         while True:
             rm = await client.get(
                 f"{REST}/allocations",
@@ -1982,7 +1982,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
                     elif at == "ul": today_ul += lv
 
         # Split the day into MORNING (attendance marked) and EVENING (end times submitted)
-        morning_pending, morning_completed = [], []
+        _agg = (await client.post(f"{REST}/rpc/home_dashboard_agg", json={"p_start": month_start, "p_today": today, "p_site_ids": (list(mine) if scoped else None)}, headers=supabase_headers(user["token"]))).json(); month_nh = float(_agg.get("month_nh") or 0); month_ot = float(_agg.get("month_ot") or 0); today_mc = float(_agg.get("today_mc") or 0); today_al = float(_agg.get("today_al") or 0); today_ul = float(_agg.get("today_ul") or 0); site_month = {x["site_name"]: {"nh": float(x["nh"] or 0), "ot": float(x["ot"] or 0)} for x in (_agg.get("site_month") or [])}; today_by_site = {x["site_name"]: {"allocated": x["allocated"], "with_att": x["with_att"], "submitted": x["submitted"]} for x in (_agg.get("today_by_site") or [])}; leave_by_worker = {x["code"]: {"name": x["name"], "code": x["code"], "mc": float(x["mc"] or 0), "al": float(x["al"] or 0), "ul": float(x["ul"] or 0)} for x in (_agg.get("leave_by_worker") or [])}; morning_pending, morning_completed = [], []
         evening_pending, evening_completed = [], []
         for sname, t in today_by_site.items():
             if t["allocated"] <= 0:
