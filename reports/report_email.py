@@ -33,8 +33,8 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 # ---- public (non-secret) config, mirrors frontend/js/config.js ----
-SUPABASE_URL = "https://lqnbdemtgkermhaqfboh.supabase.co"
-SUPABASE_PUBLISHABLE = "sb_publishable_GV2oQS2wP2ltMeg2Teh1Rw_qT3lLGno"
+SUPABASE_URL = "https://dyfwyhpbffnzxfnwjfxg.supabase.co"
+SUPABASE_PUBLISHABLE = "sb_publishable_s7A-309SlsLCtup_ulrAlg_4xfdP7yn"
 BACKEND_URL = "https://vmms-backend-sg.onrender.com"
 SGT = dt.timezone(dt.timedelta(hours=8))
 
