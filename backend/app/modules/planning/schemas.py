@@ -15,6 +15,51 @@ class WbsIn(BaseModel):
     parent_id: str | None = None
 
 
+class WbsImportRow(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=180)
+    parent_code: str | None = Field(default=None, max_length=40)
+
+
+class ActivityImportRow(BaseModel):
+    wbs_code: str = Field(min_length=1, max_length=40)
+    code: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=220)
+    selected_dates: list[date] = Field(min_length=1, max_length=1000)
+    activity_type: str = "task"
+
+    @model_validator(mode="after")
+    def valid(self):
+        self.selected_dates = sorted(set(self.selected_dates))
+        if self.activity_type not in {"task", "milestone"}:
+            raise ValueError("Invalid activity type")
+        if self.activity_type == "milestone" and len(self.selected_dates) != 1:
+            raise ValueError("A milestone must use exactly one date")
+        return self
+
+
+class ProgrammeImportIn(BaseModel):
+    wbs: list[WbsImportRow] = Field(min_length=1, max_length=500)
+    activities: list[ActivityImportRow] = Field(default_factory=list, max_length=5000)
+
+    @model_validator(mode="after")
+    def unique_and_connected(self):
+        wbs_codes = [x.code.strip().upper() for x in self.wbs]
+        activity_codes = [x.code.strip().upper() for x in self.activities]
+        if len(wbs_codes) != len(set(wbs_codes)):
+            raise ValueError("Duplicate WBS code in import")
+        if len(activity_codes) != len(set(activity_codes)):
+            raise ValueError("Duplicate activity code in import")
+        known = set(wbs_codes)
+        for row in self.wbs:
+            if row.parent_code and row.parent_code.strip().upper() not in known:
+                raise ValueError(f"Parent WBS {row.parent_code} is missing")
+        for row in self.activities:
+            if row.wbs_code.strip().upper() not in known:
+                raise ValueError(f"Activity {row.code} refers to missing WBS {row.wbs_code}")
+        return self
+
+
 class ActivityIn(BaseModel):
     wbs_id: str
     code: str = Field(min_length=1, max_length=40)

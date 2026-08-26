@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .schemas import (ActivityIn, ActivityMappingIn, ActivityPatch, ActivityTargetIn,
                       CostToCompleteIn, ManpowerRateIn, OtherCostIn, ProjectValueIn,
-                      ResourceRateIn, SetupIn, WbsIn)
+                      ProgrammeImportIn, ResourceRateIn, SetupIn, WbsIn)
 
 
 @dataclass(frozen=True)
@@ -84,6 +84,38 @@ def build_planning_router(c: PlanningContext) -> APIRouter:
             r=await client.post(f"{c.rest_url}/wbs_nodes",headers=headers(user,True),json={"project_id":project_id,"schedule_id":schedule["id"],"parent_id":body.parent_id,"code":body.code.strip().upper(),"name":body.name.strip(),"created_by":user["user_id"],"updated_by":user["user_id"]})
             if r.status_code not in (200,201): raise HTTPException(400,"Could not create WBS item; check code and parent")
             return r.json()[0]
+
+    @router.post("/projects/{project_id}/import", status_code=201)
+    async def import_programme(project_id: str, body: ProgrammeImportIn,
+                               user: dict = Depends(c.get_current_user)):
+        """Atomically import a validated WBS/activity programme through the database RPC."""
+        admin(user)
+        payload = {
+            "wbs": [{"code": x.code.strip().upper(), "name": x.name.strip(),
+                     "parent_code": x.parent_code.strip().upper() if x.parent_code else None}
+                    for x in body.wbs],
+            "activities": [{"wbs_code": x.wbs_code.strip().upper(),
+                            "code": x.code.strip().upper(), "name": x.name.strip(),
+                            "activity_type": x.activity_type,
+                            "selected_dates": [d.isoformat() for d in x.selected_dates]}
+                           for x in body.activities],
+        }
+        async with c.shared_client() as client:
+            r = await client.post(f"{c.rest_url}/rpc/import_planning_programme",
+                                  headers=headers(user),
+                                  json={"p_project_id": project_id, "p_payload": payload})
+            if r.status_code not in (200, 201):
+                detail = "Import failed. Check duplicate codes, parent WBS and dates."
+                try:
+                    detail = r.json().get("message") or detail
+                except Exception:
+                    pass
+                raise HTTPException(400, detail)
+            result = r.json()
+            await c.audit(client, user, "import", "planning_programme", project_id,
+                          None, {"wbs_count": len(body.wbs),
+                                 "activity_count": len(body.activities)})
+            return result
 
     async def replace_dates(client,user,activity_id,project_id,dates):
         r=await client.post(f"{c.rest_url}/rpc/replace_activity_dates",headers=headers(user),json={"p_activity_id":activity_id,"p_project_id":project_id,"p_dates":[d.isoformat() for d in dates]})
