@@ -55,5 +55,9 @@ def test_programme_import_ui_and_atomic_rpc_are_present():
     assert 'id="importWbs"' in page
     assert "Download template" in page and "Confirm import" in page
     assert "parseImportRows" in page and "Exclude Dates" in page
+    assert "parseExistingSchedule" in page
+    assert "VORTEX ACTUAL WORK SCHEDULE" in page
+    assert "cellStyles:true" in page and "sheetStubs:true" in page
+    assert "weekDates" in page and "programmeFill" in page
     assert "import_planning_programme" in sql and "security definer" in sql
     assert '"/projects/{project_id}/import"' in router
