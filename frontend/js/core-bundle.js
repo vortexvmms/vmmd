@@ -206,7 +206,7 @@ window.esc = function (v) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260825-ui5', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260827-th2', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -794,7 +794,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
 
 /* Notifications and Web Push were retired in August 2026. */
 
-// Consistent premium KPI interaction on desktop dashboards. Mobile is unchanged.
+(function(){var e=document.createElement('script');e.src='js/theme-ext.js?v=20260827-th2';e.defer=true;(document.head||document.documentElement).appendChild(e);})();
 (function(){
   var s=document.createElement('style');
   s.id='vmms-kpi-motion';
