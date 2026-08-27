@@ -1924,7 +1924,7 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
         while True:
             rm = await client.get(
                 f"{REST}/allocations",
-                params={"and": f"(work_date.gte.{month_start},work_date.lte.{today})",
+                params={"and": f"(work_date.gte.9999-01-01,work_date.lte.9999-12-31)",
                         "status": "eq.allocated",
                         "select": "work_date,site_id,worker_id,sites(site_name),"
                                   "workers(name,worker_code),"
