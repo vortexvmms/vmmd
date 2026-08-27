@@ -10,7 +10,7 @@ def read(path: str) -> str:
 
 def test_three_company_theme_combinations_are_available():
     theme = read("frontend/js/core/theme.js")
-    settings = read("frontend/settings.html")
+    designer = read("frontend/js/theme-designer.js")
     backend = read("backend/app/main.py")
     for preset, label in (
         ("executive", "Vortex Executive"),
@@ -18,11 +18,23 @@ def test_three_company_theme_combinations_are_available():
         ("construction", "Construction Amber"),
     ):
         assert f"{preset}:" in theme
-        assert label in settings
+        assert label in designer
         assert f'"{preset}":' in backend
     for field in ("secondary", "accent", "page", "surface", "ink"):
         assert field in theme
         assert field in backend
+
+
+def test_complete_theme_is_central_and_admin_only():
+    backend = read("backend/app/main.py")
+    designer = read("frontend/js/theme-designer.js")
+    settings = read("frontend/settings.html")
+    assert "theme_bundle" in backend
+    assert "_normalise_theme_bundle" in backend
+    assert 'me.role !== "admin"' in designer
+    assert "theme_bundle: bundle" in designer
+    assert 'id="vcms-theme-designer"' in settings
+    assert 'id="company-theme"' not in settings
 
 
 def test_home_uses_company_variables_and_tasks_have_failure_fallback():
@@ -37,4 +49,3 @@ def test_todo_reconciliation_cannot_hide_normal_todos():
     main = read("backend/app/main.py")
     assert "asyncio.wait_for(dpr_missing" in main
     assert "A reminder scan must never make the user's normal to-do list disappear" in main
-

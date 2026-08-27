@@ -39,6 +39,15 @@ def test_all_management_surfaces_use_server_hour_fields():
     assert "/api/v1/resource-summary" in RESOURCE
 
 
+def test_dashboard_uses_reproducible_database_aggregation():
+    migration = (ROOT / "db/migrations/0015_home_dashboard_aggregation.sql").read_text()
+    assert "create or replace function public.home_dashboard_agg" in migration
+    assert "security invoker" in migration
+    assert "9999-01-01" not in MAIN
+    assert 'ra.status_code != 200' in MAIN
+    assert "Dashboard summary is temporarily unavailable" in MAIN
+
+
 def test_mobile_end_time_has_durable_queue_and_recovery():
     required = [
         "localStorage.setItem(ATT_QUEUE_KEY", "SAVE_QUEUE", 'addEventListener("online"',

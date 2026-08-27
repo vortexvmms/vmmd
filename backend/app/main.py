@@ -1916,73 +1916,50 @@ async def dashboard(date: str = "", user: dict = Depends(get_current_user)):
             mine = {x["site_id"] for x in (rl.json() if rl.status_code == 200 else [])}
             sites = [s for s in sites if s["id"] in mine]
 
-        # everything in the selected date's month, up to and including that date.
-        # PostgREST caps a single response at ~1000 rows, so a busy month would be
-        # truncated (dropping the latest day's allocations). Page through them all.
-        month_rows = []
-        _off, _page = 999999999, 1000
-        while True:
-            rm = await client.get(
-                f"{REST}/allocations",
-                params={"and": f"(work_date.gte.9999-01-01,work_date.lte.9999-12-31)",
-                        "status": "eq.allocated",
-                        "select": "work_date,site_id,worker_id,sites(site_name),"
-                                  "workers(name,worker_code),"
-                                  "attendance(present,submitted_at,normal_hours,ot_hours,absence_type,partial_leave_type,leave_value)",
-                        "order": "work_date.asc,id.asc", "limit": _page, "offset": _off},
-                headers=supabase_headers(user["token"]))
-            if rm.status_code != 200:
-                break
-            batch = rm.json()
-            month_rows.extend(batch)
-            if len(batch) < _page:
-                break
-            _off += _page
-
-        month_nh = month_ot = 0.0
-        today_mc = today_al = today_ul = 0
-        today_by_site: dict[str, dict] = {}
-        site_month: dict[str, dict] = {}
-        # per-worker leave tally for the month → "who takes the most MC/AL/UL"
-        leave_by_worker: dict[str, dict] = {}
-
-        for a in month_rows:
-            sname = (a.get("sites") or {}).get("site_name", "?")
-            att = a.get("attendance")
-            nh = float(att["normal_hours"]) if att and att["present"] else 0.0
-            ot = float(att["ot_hours"]) if att and att["present"] else 0.0
-            month_nh += nh
-            month_ot += ot
-
-            # Count full-day and half-day MC / AL / UL values per worker.
-            if att:
-                at = (att.get("partial_leave_type") if att.get("present") else att.get("absence_type"))
-                if at in ("mc", "al", "ul"):
-                    w = a.get("workers") or {}
-                    code = w.get("worker_code") or a.get("worker_id") or "?"
-                    lw = leave_by_worker.setdefault(
-                        code, {"name": w.get("name", "?"), "code": code, "mc": 0, "al": 0, "ul": 0})
-                    lw[at] += float(att.get("leave_value") or (0.5 if att.get("present") else 1))
-
-            sm = site_month.setdefault(sname, {"nh": 0.0, "ot": 0.0})
-            sm["nh"] += nh
-            sm["ot"] += ot
-
-            if a["work_date"] == today:
-                t = today_by_site.setdefault(sname, {"allocated": 0, "submitted": 0, "with_att": 0})
-                t["allocated"] += 1
-                if att:
-                    t["with_att"] += 1
-                    if att["submitted_at"]:
-                        t["submitted"] += 1
-                    at = (att.get("partial_leave_type") if att.get("present") else att.get("absence_type"))
-                    lv = float(att.get("leave_value") or (0.5 if att.get("present") and at else 1))
-                    if at == "mc": today_mc += lv
-                    elif at == "al": today_al += lv
-                    elif at == "ul": today_ul += lv
+        # One database-side aggregation replaces thousands of allocation rows on
+        # mobile.  Never silently return zeroes when the RPC is unavailable.
+        ra = await client.post(
+            f"{REST}/rpc/home_dashboard_agg",
+            json={"p_start": month_start, "p_today": today,
+                  "p_site_ids": (list(mine) if scoped else None)},
+            headers=supabase_headers(user["token"]),
+        )
+        if ra.status_code != 200:
+            raise HTTPException(status_code=503,
+                                detail="Dashboard summary is temporarily unavailable. Please retry.")
+        try:
+            agg = ra.json()
+            if not isinstance(agg, dict):
+                raise ValueError("invalid dashboard aggregate")
+            month_nh = float(agg.get("month_nh") or 0)
+            month_ot = float(agg.get("month_ot") or 0)
+            today_mc = float(agg.get("today_mc") or 0)
+            today_al = float(agg.get("today_al") or 0)
+            today_ul = float(agg.get("today_ul") or 0)
+            site_month = {
+                x["site_name"]: {"nh": float(x.get("nh") or 0),
+                                 "ot": float(x.get("ot") or 0)}
+                for x in (agg.get("site_month") or []) if x.get("site_name")
+            }
+            today_by_site = {
+                x["site_name"]: {"allocated": int(x.get("allocated") or 0),
+                                 "with_att": int(x.get("with_att") or 0),
+                                 "submitted": int(x.get("submitted") or 0)}
+                for x in (agg.get("today_by_site") or []) if x.get("site_name")
+            }
+            leave_by_worker = {
+                x["code"]: {"name": x.get("name") or "?", "code": x["code"],
+                            "mc": float(x.get("mc") or 0),
+                            "al": float(x.get("al") or 0),
+                            "ul": float(x.get("ul") or 0)}
+                for x in (agg.get("leave_by_worker") or []) if x.get("code")
+            }
+        except (TypeError, ValueError, KeyError):
+            raise HTTPException(status_code=503,
+                                detail="Dashboard summary returned invalid data. Please retry.")
 
         # Split the day into MORNING (attendance marked) and EVENING (end times submitted)
-        _agg = (await client.post(f"{REST}/rpc/home_dashboard_agg", json={"p_start": month_start, "p_today": today, "p_site_ids": (list(mine) if scoped else None)}, headers=supabase_headers(user["token"]))).json(); month_nh = float(_agg.get("month_nh") or 0); month_ot = float(_agg.get("month_ot") or 0); today_mc = float(_agg.get("today_mc") or 0); today_al = float(_agg.get("today_al") or 0); today_ul = float(_agg.get("today_ul") or 0); site_month = {x["site_name"]: {"nh": float(x["nh"] or 0), "ot": float(x["ot"] or 0)} for x in (_agg.get("site_month") or [])}; today_by_site = {x["site_name"]: {"allocated": x["allocated"], "with_att": x["with_att"], "submitted": x["submitted"]} for x in (_agg.get("today_by_site") or [])}; leave_by_worker = {x["code"]: {"name": x["name"], "code": x["code"], "mc": float(x["mc"] or 0), "al": float(x["al"] or 0), "ul": float(x["ul"] or 0)} for x in (_agg.get("leave_by_worker") or [])}; morning_pending, morning_completed = [], []
+        morning_pending, morning_completed = [], []
         evening_pending, evening_completed = [], []
         for sname, t in today_by_site.items():
             if t["allocated"] <= 0:
@@ -2249,6 +2226,7 @@ class AppearanceBody(BaseModel):
     page: str = "#F2F4F7"
     surface: str = "#FFFFFF"
     ink: str = "#182230"
+    theme_bundle: dict | None = None
 
 
 APPEARANCE_PRESETS = {
@@ -2258,6 +2236,99 @@ APPEARANCE_PRESETS = {
     "vortex": "#C00000", "blue": "#1565C0", "orange": "#C2410C",
     "navy": "#1E3A5F", "emerald": "#047857", "custom": None,
 }
+
+THEME_COLOUR_KEYS = (
+    "brand", "secondary", "accent", "page", "surface", "ink", "muted",
+    "heading", "line", "success", "warning", "danger", "info", "sidebar",
+    "sidebarInk", "thead", "theadInk", "rowAlt",
+)
+
+
+def _bounded_number(value, low: float, high: float, label: str) -> float:
+    if isinstance(value, bool):
+        raise HTTPException(status_code=400, detail=f"Invalid theme {label}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid theme {label}")
+    if number < low or number > high:
+        raise HTTPException(status_code=400, detail=f"Theme {label} is outside the allowed range")
+    return number
+
+
+def _normalise_theme_bundle(raw: dict | None) -> dict | None:
+    """Allow only documented design tokens; arbitrary CSS/HTML never reaches storage."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not isinstance(raw.get("themes"), dict):
+        raise HTTPException(status_code=400, detail="Invalid company theme configuration")
+    themes_raw = raw["themes"]
+    if not 1 <= len(themes_raw) <= 12:
+        raise HTTPException(status_code=400, detail="Keep between 1 and 12 company themes")
+    active = str(raw.get("active") or "")
+    if active not in themes_raw:
+        raise HTTPException(status_code=400, detail="The active company theme is missing")
+    clean_themes = {}
+    for name, theme in themes_raw.items():
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._()&-]{0,39}", name):
+            raise HTTPException(status_code=400, detail="Theme names may contain letters, numbers, spaces and basic punctuation")
+        if not isinstance(theme, dict):
+            raise HTTPException(status_code=400, detail=f"Invalid theme: {name}")
+        colours, shapes = theme.get("colors"), theme.get("shapes")
+        type_tokens, animation = theme.get("type"), theme.get("anim")
+        if not all(isinstance(x, dict) for x in (colours, shapes, type_tokens, animation)):
+            raise HTTPException(status_code=400, detail=f"Theme {name} is incomplete")
+        clean_colours = {}
+        for key in THEME_COLOUR_KEYS:
+            value = str(colours.get(key) or "").upper()
+            if not re.fullmatch(r"#[0-9A-F]{6}", value):
+                raise HTTPException(status_code=400, detail=f"Theme {name} has an invalid {key} colour")
+            clean_colours[key] = value
+        density = str(shapes.get("density") or "")
+        font = str(type_tokens.get("font") or "")
+        level = str(animation.get("level") or "")
+        hover = str(animation.get("hover") or "")
+        press = str(animation.get("press") or "")
+        if density not in {"compact", "standard", "spacious"}:
+            raise HTTPException(status_code=400, detail="Invalid theme density")
+        if font not in {"system", "arial", "arialnarrow", "inter", "georgia", "mono"}:
+            raise HTTPException(status_code=400, detail="Invalid theme font")
+        if type_tokens.get("fwH") not in {600, 700, 800} or type_tokens.get("fwBtn") not in {600, 700, 800}:
+            raise HTTPException(status_code=400, detail="Invalid theme font weight")
+        if level not in {"none", "subtle", "standard", "smooth"}:
+            raise HTTPException(status_code=400, detail="Invalid animation level")
+        if hover not in {"none", "lift", "glow"} or press not in {"none", "scale", "sink"}:
+            raise HTTPException(status_code=400, detail="Invalid theme animation effect")
+        clean_themes[name] = {
+            "colors": clean_colours,
+            "shapes": {
+                "btnRadius": _bounded_number(shapes.get("btnRadius"), 0, 22, "button radius"),
+                "inputRadius": _bounded_number(shapes.get("inputRadius"), 0, 22, "input radius"),
+                "cardRadius": _bounded_number(shapes.get("cardRadius"), 0, 28, "card radius"),
+                "modalRadius": _bounded_number(shapes.get("modalRadius"), 0, 28, "modal radius"),
+                "borderW": _bounded_number(shapes.get("borderW"), 0, 3, "border width"),
+                "shadow": _bounded_number(shapes.get("shadow"), 0, 1.4, "shadow"),
+                "density": density,
+            },
+            "type": {
+                "font": font,
+                "fsBase": _bounded_number(type_tokens.get("fsBase"), 12, 17, "base font size"),
+                "fsH": _bounded_number(type_tokens.get("fsH"), 16, 26, "heading size"),
+                "fwH": int(_bounded_number(type_tokens.get("fwH"), 600, 800, "heading weight")),
+                "fwBtn": int(_bounded_number(type_tokens.get("fwBtn"), 600, 800, "button weight")),
+            },
+            "anim": {
+                "level": level,
+                "tspeed": int(_bounded_number(animation.get("tspeed"), 120, 400, "transition speed")),
+                "hover": hover,
+                "press": press,
+            },
+        }
+    try:
+        version = max(1, min(int(raw.get("version") or 1), 1_000_000_000))
+    except (TypeError, ValueError):
+        version = 1
+    return {"version": version, "active": active, "themes": clean_themes}
 
 
 @app.get("/api/v1/appearance")
@@ -2282,11 +2353,18 @@ async def update_appearance(body: AppearanceBody,
     """Only Admin changes the company brand; safety colours remain fixed."""
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Only the Administrator can change the company theme")
+    bundle = _normalise_theme_bundle(body.theme_bundle)
     preset = body.preset.strip().lower()
     if preset not in APPEARANCE_PRESETS:
         raise HTTPException(status_code=400, detail="Choose an approved colour preset")
     selected = APPEARANCE_PRESETS[preset]
-    if isinstance(selected, dict):
+    if bundle:
+        colours = bundle["themes"][bundle["active"]]["colors"]
+        value = {"preset": "custom", "primary": colours["brand"],
+                 "secondary": colours["secondary"], "accent": colours["accent"],
+                 "page": colours["page"], "surface": colours["surface"],
+                 "ink": colours["ink"], "theme_bundle": bundle}
+    elif isinstance(selected, dict):
         value = {"preset": preset, **selected}
     else:
         primary = selected or body.primary.strip().upper()

@@ -47,4 +47,4 @@ def test_appearance_foundation_keeps_semantic_colours_separate():
         assert token in components
     assert "@media print" in components
     assert "VCMS_APPEARANCE" in theme
-    assert 'id="company-theme"' in settings and 'id="theme-seg"' in settings
+    assert 'id="vcms-theme-designer"' in settings and 'id="theme-seg"' in settings

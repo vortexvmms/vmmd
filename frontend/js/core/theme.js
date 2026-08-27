@@ -11,6 +11,7 @@
     emerald:{primary:"#047857",secondary:"#273142",accent:"#D6A32F",page:"#F2F4F7",surface:"#FFFFFF",ink:"#182230"}
   };
   var MODE_KEY = "vcms_mode", BRAND_KEY = "vcms_company_appearance_v1";
+  var BUNDLE_KEY = "vcms_theme_bundle_v1";
 
   function cleanHex(value, fallback) {
     value = String(value || "").trim().toUpperCase();
@@ -74,7 +75,12 @@
   }
   function setBrand(value) {
     var saved=normalise(value);saved.t=Date.now();
-    localStorage.setItem(BRAND_KEY,JSON.stringify(saved)); applyBrand(saved); return saved;
+    localStorage.setItem(BRAND_KEY,JSON.stringify(saved));
+    if(value && value.theme_bundle && value.theme_bundle.themes){
+      localStorage.setItem(BUNDLE_KEY,JSON.stringify(value.theme_bundle));
+      window.dispatchEvent(new CustomEvent("vcmscompanytheme",{detail:value.theme_bundle}));
+    }
+    applyBrand(saved); return saved;
   }
   function setMode(mode) { localStorage.setItem(MODE_KEY,mode); applyMode(mode); }
 
@@ -82,11 +88,21 @@
   window.vmmsGetTheme=readMode; window.vmmsSetTheme=setMode;
   applyBrand(readBrand()); applyMode(readMode());
 
-  // Refresh the company brand at most every six hours; normal navigation uses the phone cache.
+  // Refresh the small company-theme record at most every 15 minutes; normal
+  // navigation still uses the phone cache and adds no request.
   window.addEventListener("load",function(){
     var cached=readBrand();
-    if(cached.t && Date.now()-cached.t<6*3600000)return;
+    if(cached.t && Date.now()-cached.t<15*60000)return;
     if(typeof getSession!=="function" || !getSession() || typeof vmmsApi!=="function")return;
     vmmsApi("/api/v1/appearance").then(function(r){return r.ok?r.json():null}).then(function(v){if(v)setBrand(v)}).catch(function(){});
   });
+})();
+
+// Extended design tokens are kept outside the core bundle so normal pages stay
+// small.  This loader is generated from source (never hand-edited in the bundle).
+(function(){
+  if(document.getElementById("vcms-theme-ext-script"))return;
+  var e=document.createElement("script");e.id="vcms-theme-ext-script";
+  e.src="js/theme-ext.js?v=20260828-stable1";e.defer=true;
+  (document.head||document.documentElement).appendChild(e);
 })();

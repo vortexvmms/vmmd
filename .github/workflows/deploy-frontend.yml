@@ -3,8 +3,10 @@
 name: Deploy frontend to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  # Production is published only after the complete Test workflow succeeds.
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -21,12 +23,18 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

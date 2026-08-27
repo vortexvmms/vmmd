@@ -1,7 +1,6 @@
 // VCMS Custom Theme Designer (admin-only). Mounts into #vcms-theme-designer on settings.html.
-// Stores only validated --vcms-* tokens. Base 6 colours persist to /api/v1/appearance
-// (all users, existing path); the richer token bundle is versioned in localStorage and
-// painted site-wide by the core "theme-ext" block until the backend token bundle ships.
+// Stores only validated --vcms-* tokens. The complete versioned bundle persists
+// through /api/v1/appearance and is cached locally for fast mobile startup.
 (function () {
   "use strict";
   var MOUNT = document.getElementById("vcms-theme-designer");
@@ -27,6 +26,10 @@
   function lum(h) { var c = rgb(h).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
   function contrast(a, b) { var l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function cleanName(v) {
+    v = String(v || "").trim().slice(0, 40);
+    return /^[A-Za-z0-9][A-Za-z0-9 ._()&-]{0,39}$/.test(v) ? v : "";
+  }
 
   var PRESETS = {
     "Vortex Executive (default)": {
@@ -221,19 +224,26 @@
   }
 
   function renderSelect() {
-    MOUNT.querySelector("#th-select").innerHTML = Object.keys(bundle.themes).map(function (n) { return '<option value="' + n + '" ' + (n === activeName ? "selected" : "") + ">" + n + (n === DEFAULT_NAME ? " ★" : "") + "</option>"; }).join("");
+    var select = MOUNT.querySelector("#th-select"); select.textContent = "";
+    Object.keys(bundle.themes).forEach(function (n) {
+      var option = document.createElement("option"); option.value = n;
+      option.textContent = n + (n === DEFAULT_NAME ? " ★" : "");
+      option.selected = n === activeName; select.appendChild(option);
+    });
   }
   function persist() { try { localStorage.setItem(BKEY, JSON.stringify(bundle)); } catch (_) {} }
 
   function duplicateTheme() {
     var name = prompt("Name for the duplicated theme:", activeName.replace(/\s*\(default\)/, "") + " copy"); if (!name) return;
-    name = name.slice(0, 40); if (bundle.themes[name]) { alert("A theme with that name exists."); return; }
+    name = cleanName(name); if (!name) { alert("Use letters, numbers, spaces and basic punctuation only."); return; }
+    if (bundle.themes[name]) { alert("A theme with that name exists."); return; }
     bundle.themes[name] = clone(working); activeName = name; working = clone(bundle.themes[name]); savedSnapshot = clone(working);
     persist(); renderSelect(); renderControls(); applyLive(working);
   }
   function renameTheme() {
     if (PRESETS[activeName]) { alert("Preset themes cannot be renamed. Duplicate to make an editable copy."); return; }
-    var name = prompt("Rename theme:", activeName); if (!name || name === activeName) return; name = name.slice(0, 40);
+    var name = prompt("Rename theme:", activeName); if (!name || name === activeName) return;
+    name = cleanName(name); if (!name) { alert("Use letters, numbers, spaces and basic punctuation only."); return; }
     if (bundle.themes[name]) { alert("That name is taken."); return; }
     bundle.themes[name] = bundle.themes[activeName]; delete bundle.themes[activeName]; if (bundle.active === activeName) bundle.active = name; activeName = name;
     persist(); renderSelect();
@@ -257,21 +267,19 @@
   function saveTheme() {
     var C = working.colors;
     if (contrast(C.ink, C.surface) < 4.5 || contrast(readable(C.brand), C.brand) < 4.5) { alert("This combination is not readable enough to save. Adjust text or background colour."); return; }
-    if (!confirm('Apply "' + activeName + '" to the whole site for all users?\n\nColours apply for everyone. Shapes, fonts and animation apply on your devices now and for all users once the backend theme update is live. Safety colours and permissions are unchanged.')) return;
+    if (!confirm('Apply "' + activeName + '" to the whole site for all users?\n\nColours, shapes, fonts and animation will apply on every signed-in device.')) return;
     bundle.themes[activeName] = clone(working); bundle.active = activeName; bundle.version = (bundle.version || 1) + 1;
-    persist(); savedSnapshot = clone(working); markDirty();
-    var payload = { preset: "custom", primary: C.brand, secondary: C.secondary, accent: C.accent, page: C.page, surface: C.surface, ink: C.ink };
-    if (window.VCMS_APPEARANCE) { try { window.VCMS_APPEARANCE.setBrand(payload); } catch (_) {} }
+    var payload = { preset: "custom", primary: C.brand, secondary: C.secondary, accent: C.accent, page: C.page, surface: C.surface, ink: C.ink, theme_bundle: bundle };
     var btn = MOUNT.querySelector("#th-save");
     function done(msg) { note(msg); if (window.VCMS_UI && VCMS_UI.toast) VCMS_UI.toast("Theme saved · v" + bundle.version, "success"); }
     if (typeof vmmsApi === "function") {
       if (window.VCMS_UI) VCMS_UI.setLoading(btn, true, "Saving…");
       vmmsApi("/api/v1/appearance", { method: "PATCH", body: JSON.stringify(payload) })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { if (d && window.VCMS_APPEARANCE) VCMS_APPEARANCE.setBrand(d); done("Saved & applied site-wide · version v" + bundle.version + ". Cached devices refresh on next open."); })
-        .catch(function () { done("Saved on this device · colour sync to server will retry."); })
+        .then(function (r) { return r.json().catch(function(){return {};}).then(function(d){if(!r.ok)throw new Error(d.detail||"Could not save theme");return d;}); })
+        .then(function (d) { persist(); savedSnapshot = clone(working); markDirty(); if (d && window.VCMS_APPEARANCE) VCMS_APPEARANCE.setBrand(d); done("Saved & applied site-wide · version v" + bundle.version + ". Cached devices refresh automatically."); })
+        .catch(function (e) { note(e.message || "Could not save the company theme. Your preview was not published."); if (window.VCMS_UI && VCMS_UI.toast) VCMS_UI.toast("Theme was not saved", "error"); })
         .finally(function () { if (window.VCMS_UI) VCMS_UI.setLoading(btn, false); paintExtended(working); });
-    } else { done("Saved on this device · version v" + bundle.version + "."); }
+    } else { note("Could not connect to save the company theme."); }
   }
 
   /* ---- admin gate, then render ---- */
@@ -285,8 +293,17 @@
   function gate() {
     if (typeof vmmsApi !== "function") { setTimeout(gate, 300); return; }
     vmmsApi("/api/v1/me").then(function (r) { return r.ok ? r.json() : null; }).then(function (me) {
-      var full = window.isFull ? isFull(me && me.role) : (me && me.role === "admin");
-      if (me && full) start(); else { MOUNT.style.display = "none"; }
+      if (!me || me.role !== "admin") { MOUNT.style.display = "none"; return null; }
+      return vmmsApi("/api/v1/appearance").then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+    }).then(function (appearance) {
+      if (appearance === null && MOUNT.style.display === "none") return;
+      if (appearance && appearance.theme_bundle && appearance.theme_bundle.themes) {
+        bundle = appearance.theme_bundle;
+        Object.keys(PRESETS).forEach(function (n) { if (!bundle.themes[n]) bundle.themes[n] = clone(PRESETS[n]); });
+        if (!bundle.themes[bundle.active]) bundle.active = DEFAULT_NAME;
+        activeName = bundle.active; working = clone(bundle.themes[activeName]); savedSnapshot = clone(working); persist();
+      }
+      start();
     }).catch(function () { MOUNT.style.display = "none"; });
   }
   gate();

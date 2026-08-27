@@ -28,6 +28,8 @@ jobs:
       - run: node --check frontend/js/core-bundle.js
       - run: node --check frontend/js/ui.js
       - run: node --check frontend/js/shell.js
+      - run: node --check frontend/js/theme-ext.js
+      - run: node --check frontend/js/theme-designer.js
       - run: python3 scripts/build_frontend_core.py
       - run: git diff --exit-code frontend/js/core-bundle.js
 
