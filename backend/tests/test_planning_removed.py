@@ -15,7 +15,7 @@ def test_old_planning_is_not_exposed_in_navigation():
     # is a new administrator-only page with a different route and contracts.
     assert 'grp:"Planning"' in home
     assert '"planning.html"' in home
-    assert 'grp:"Planning"' in shell
+    assert 'group:"Planning"' in shell
     assert '"planning.html"' in shell
 
 

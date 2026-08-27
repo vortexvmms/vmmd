@@ -70,6 +70,41 @@ test('management pages receive the shared desktop system', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
+test('Home and management pages use the same visible desktop shell', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'Desktop shell only');
+  await signedIn(page);
+  const empty = route => route.fulfill({ json: [] });
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', empty);
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/allocations*', empty);
+  await page.goto('/workers.html');
+  await expect(page.locator('#vcms-app-header')).toBeVisible();
+  await expect(page.locator('#vcms-app-rail')).toBeVisible();
+  await expect(page.locator('#vcms-greeting')).toContainText(/Good/);
+  await expect(page.locator('#vcms-user-name')).toHaveText('Test Supervisor');
+  await expect(page.locator('#vcms-role-chip')).toHaveText('Site Supervisor');
+  await page.locator('#vcms-rail-toggle').click();
+  await expect(page.locator('body')).toHaveClass(/vcms-rail-mini/);
+  await expect.poll(() => page.locator('#vcms-app-rail').evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(72);
+
+  await page.goto('/home.html');
+  await expect(page.locator('#vcms-app-header')).toBeVisible();
+  await expect(page.locator('#vcms-app-rail')).toBeVisible();
+  await expect(page.locator('body > header.brand')).toBeHidden();
+  await expect(page.locator('body > .layout > aside.side')).toBeHidden();
+  await expect(page.locator('#vcms-app-header:visible')).toHaveCount(1);
+});
+
+test('shared desktop shell is not added to supervisor phone pages', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-safari', 'Phone workflow only');
+  await signedIn(page);
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/attendance*', r => r.fulfill({ json: { allocations: [], summary: {} } }));
+  await page.goto('/attendance.html');
+  await expect(page.locator('#vcms-app-header')).toHaveCount(0);
+  await expect(page.locator('#vcms-app-rail')).toHaveCount(0);
+  await expect(page.locator('body > header')).toBeVisible();
+});
+
 test('all visible form controls have an accessible name', async ({ page }) => {
   await page.goto('/login.html');
   const unnamed = await page.locator('input:visible,select:visible,textarea:visible').evaluateAll(nodes =>

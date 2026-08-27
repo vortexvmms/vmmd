@@ -117,7 +117,7 @@ window.esc = function (v) {
 (function(){
   if(document.getElementById("vcms-theme-ext-script"))return;
   var e=document.createElement("script");e.id="vcms-theme-ext-script";
-  e.src="js/theme-ext.js?v=20260828-stable1";e.defer=true;
+  e.src="js/theme-ext.js?v=20260828-shell2";e.defer=true;
   (document.head||document.documentElement).appendChild(e);
 })();
 
@@ -222,7 +222,7 @@ window.esc = function (v) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260828-stable1', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260828-shell2', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
@@ -248,109 +248,74 @@ window.esc = function (v) {
 
 
 // source: js/core/layout.js
-// ---- Desktop workspace standardisation (mobile markup and navigation untouched) ----
-// Each operational page receives a stable page class. This lets directory, admin
-// and report screens use the available laptop/monitor width without changing the
-// familiar phone workflow used by supervisors.
+// ---- Shared desktop shell and workspace design system ----
+// Phone markup is intentionally untouched; supervisors keep the lightweight
+// page-native mobile workflow. Desktop pages share Home's visual language.
 (function () {
-  var slug = (location.pathname.split("/").pop() || "home.html").replace(/\.html$/i, "").replace(/[^a-z0-9-]/gi, "");
-  function tag(){ if(document.body) document.body.classList.add("vmms-page-" + slug); }
-  if(document.body) tag(); else document.addEventListener("DOMContentLoaded",tag);
-  var s=document.createElement("style"); s.id="vmms-desktop-workspaces";
-  s.textContent=`
-  @media screen and (min-width:900px){
-    body[class*="vmms-page-"] main{width:calc(100% - 40px);max-width:1480px;margin-left:auto;margin-right:auto}
-    body.vmms-page-workers main,body.vmms-page-sites main,body.vmms-page-users main,
-    body.vmms-page-whatsapp main,body.vmms-page-reports main,body.vmms-page-manhours main,
-    body.vmms-page-dprlist main,body.vmms-page-pr-directory main,body.vmms-page-settings main{
-      max-width:none!important;width:100%!important;padding:20px 24px 70px!important
-    }
-    body.vmms-page-sites #list{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px!important}
-    body.vmms-page-sites #list>*{margin:0!important;min-width:0}
-    body.vmms-page-users main>div,body.vmms-page-pr-directory main>div,body.vmms-page-dprlist main>div,
-    body.vmms-page-reports main>div,body.vmms-page-manhours main>div,body.vmms-page-settings main>div{
-      border-color:#dce1e8!important;box-shadow:0 7px 20px rgba(15,23,42,.07)!important
-    }
-    body.vmms-page-whatsapp main{max-width:1100px!important;margin-left:auto!important;margin-right:auto!important}
-    body.vmms-page-whatsapp #msg{min-height:420px;font-size:14px;line-height:1.65}
-    body.vmms-page-dprlist table,body.vmms-page-pr-directory table,
-    body.vmms-page-reports table,body.vmms-page-manhours table{width:100%}
+  "use strict";
+  var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"").replace(/[^a-z0-9-]/gi,"");
+  function tag(){if(document.body)document.body.classList.add("vmms-page-"+slug)}
+  if(document.body)tag();else document.addEventListener("DOMContentLoaded",tag,{once:true});
+  if(document.getElementById("vcms-workspace-system"))return;
+  var style=document.createElement("style");style.id="vcms-workspace-system";
+  style.textContent=`
+  html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+  @media(min-width:900px){
+    body.vcms-shelled{margin:0 0 0 236px!important;padding-top:64px!important;min-height:100vh!important;background:radial-gradient(1200px 560px at 82% -8%,var(--vcms-surface,#fff),var(--vcms-page,#eef1f5) 62%)!important;color:var(--vcms-ink,#182230)!important;transition:margin-left .2s ease;background-color .22s ease;color .22s ease}
+    body.vcms-shelled.vcms-rail-mini{margin-left:72px!important}
+    #vcms-app-header{position:fixed;inset:0 0 auto 0;height:64px;box-sizing:border-box;z-index:1000;display:flex;align-items:center;gap:14px;padding:0 18px 0 14px;background:linear-gradient(105deg,var(--vcms-brand,#c00000),color-mix(in srgb,var(--vcms-brand,#c00000) 86%,var(--vcms-info,#175cd3)))!important;color:var(--vcms-on-brand,#fff);border-bottom:3px solid color-mix(in srgb,var(--vcms-sidebar-bg,#0e131e) 84%,black);box-shadow:0 8px 24px rgba(15,23,42,.2);font-family:var(--vcms-font-family,Inter,Arial,sans-serif)}
+    .vcms-app-brand{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;flex:none}.vcms-app-brand img{height:43px;width:auto;max-width:112px;background:#fff;border-radius:11px;padding:3px;box-sizing:border-box}.vcms-app-brand strong{font-size:23px;letter-spacing:.01em}
+    .vcms-app-title{flex:1;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:clamp(13px,1.04vw,17px);font-weight:800}
+    .vcms-user-card{height:44px;max-width:310px;display:flex;align-items:center;gap:12px;padding:0 9px 0 14px;border-radius:12px;background:var(--vcms-surface,#fff);color:var(--vcms-ink,#182230);border:1px solid color-mix(in srgb,var(--vcms-line,#dce1e8) 82%,transparent);box-shadow:0 4px 14px rgba(15,23,42,.12);box-sizing:border-box}.vcms-user-card>div{min-width:0}.vcms-user-card strong{display:block;font-size:14px;line-height:1.12;white-space:nowrap}.vcms-user-card small{display:block;margin-top:2px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--vcms-muted,#667085);font-size:11px}.vcms-user-card span{padding:5px 11px;border-radius:999px;background:var(--vcms-brand,#c00000);color:var(--vcms-on-brand,#fff);font-size:11px;font-weight:800;white-space:nowrap}
+    #vcms-view-role{height:44px;min-width:220px;max-width:300px;padding:0 34px 0 14px;border:1px solid color-mix(in srgb,var(--vcms-line,#dce1e8) 82%,transparent);border-radius:12px;background:var(--vcms-surface,#fff);color:var(--vcms-ink,#182230);font-size:12px;font-weight:800;box-shadow:0 4px 14px rgba(15,23,42,.1)}
+    .vcms-app-logout{height:44px;padding:0 18px;border:0;border-radius:12px;background:var(--vcms-sidebar-bg,#0e131e);color:#fff;font-size:13px;font-weight:800;white-space:nowrap;box-shadow:0 6px 16px rgba(15,23,42,.2);transition:transform .16s ease,box-shadow .16s ease}.vcms-app-logout:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(15,23,42,.28)}
+    #vcms-app-rail{position:fixed;left:0;top:64px;bottom:0;width:236px;z-index:990;display:flex;flex-direction:column;box-sizing:border-box;background:linear-gradient(180deg,color-mix(in srgb,var(--vcms-sidebar-bg,#0e131e) 86%,white),var(--vcms-sidebar-bg,#0e131e));color:var(--vcms-sidebar-ink,#b7c0d0);border-right:1px solid rgba(255,255,255,.06);box-shadow:7px 0 28px rgba(15,23,42,.16);transition:width .2s ease}
+    body.vcms-rail-mini #vcms-app-rail{width:72px}.vcms-rail-tools{height:48px;display:flex;align-items:center;justify-content:flex-end;padding:0 10px;box-sizing:border-box}body.vcms-rail-mini .vcms-rail-tools{justify-content:center;padding:0}
+    #vcms-rail-toggle{width:34px;height:32px;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.08);color:#cbd3e0;font-size:19px;font-weight:900;display:grid;place-items:center;transition:transform .2s ease,background .16s ease}#vcms-rail-toggle:hover{background:var(--vcms-brand,#c00000);color:#fff}body.vcms-rail-mini #vcms-rail-toggle{transform:rotate(180deg)}
+    #vcms-app-nav{flex:1;overflow:auto;padding:0 10px 18px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}#vcms-app-nav::-webkit-scrollbar{width:5px}#vcms-app-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:10px}
+    #vcms-app-nav a{position:relative;min-height:40px;display:flex;align-items:center;gap:11px;margin:2px 0;padding:7px 10px;box-sizing:border-box;border-radius:12px;color:rgba(255,255,255,.74);text-decoration:none;font-size:13.5px;font-weight:600;transition:background .16s ease,color .16s ease}#vcms-app-nav a svg{width:19px;height:19px;flex:none;color:rgba(255,255,255,.7)}#vcms-app-nav a:hover{background:rgba(255,255,255,.07);color:#fff}#vcms-app-nav a:hover svg{color:#fff}#vcms-app-nav a.on{background:color-mix(in srgb,var(--vcms-brand,#c00000) 28%,transparent);color:#fff;font-weight:800}#vcms-app-nav a.on svg{color:#fff}#vcms-app-nav a.on:before{content:"";position:absolute;left:-10px;top:7px;bottom:7px;width:5px;border-radius:0 5px 5px 0;background:var(--vcms-brand,#c00000)}
+    .vcms-group-toggle{width:100%;height:38px;margin:7px 0 2px;padding:0 10px;border:0;border-top:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(255,255,255,.025);color:rgba(255,255,255,.42);display:flex;align-items:center;justify-content:space-between;font:800 10.5px var(--vcms-font-family,Arial,sans-serif);letter-spacing:.09em;text-transform:uppercase}.vcms-group-toggle:hover{background:rgba(255,255,255,.06);color:#fff}.vcms-chevron{font-size:15px;transition:transform .18s ease}.vcms-group-toggle[aria-expanded=false] .vcms-chevron{transform:rotate(-90deg)}.vcms-group-items.is-closed{display:none}
+    body.vcms-rail-mini #vcms-app-nav{padding-left:8px;padding-right:8px}body.vcms-rail-mini #vcms-app-nav a{justify-content:center;padding-left:8px;padding-right:8px}body.vcms-rail-mini .vcms-nav-label,body.vcms-rail-mini .vcms-group-toggle{display:none}body.vcms-rail-mini .vcms-group-items{display:block!important}body.vcms-rail-mini #vcms-app-nav a.on:before{left:-8px}
+    body.vcms-shelled>.vcms-pagebar{position:sticky!important;top:64px!important;z-index:980!important;width:100%!important;height:auto!important;min-height:64px!important;margin:0!important;padding:0!important;background:color-mix(in srgb,var(--vcms-surface,#fff) 94%,transparent)!important;color:var(--vcms-ink,#182230)!important;border:0!important;border-bottom:1px solid var(--vcms-line,#dce1e8)!important;box-shadow:0 8px 24px -22px rgba(15,23,42,.45)!important;backdrop-filter:blur(10px)}
+    body.vcms-shelled>.vcms-pagebar>div:first-child{min-height:64px!important;width:100%!important;max-width:none!important;margin:0!important;padding:10px 22px!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:12px!important}body.vcms-shelled>.vcms-pagebar>div:nth-child(n+2){min-height:52px!important;width:100%!important;max-width:none!important;margin:0!important;padding:8px 22px!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;background:color-mix(in srgb,var(--vcms-page,#eef1f5) 76%,var(--vcms-surface,#fff))!important;border-top:1px solid var(--vcms-line,#dce1e8)!important}
+    body.vcms-shelled>.vcms-pagebar .vcms-page-header__back{display:none!important}body.vcms-shelled>.vcms-pagebar h1,body.vcms-shelled>.vcms-pagebar h2{color:var(--vcms-heading,#101828)!important;font-size:20px!important;font-weight:800!important;line-height:1.2!important}body.vcms-shelled>.vcms-pagebar p,body.vcms-shelled>.vcms-pagebar .text-red-100{color:var(--vcms-muted,#667085)!important}body.vcms-shelled>.vcms-pagebar a{color:var(--vcms-ink,#182230)}
+    body.vcms-shelled.vmms-page-workers>.vcms-pagebar{display:flex!important;align-items:center!important}body.vcms-shelled.vmms-page-workers>.vcms-pagebar>div:first-child{flex:1 1 auto!important;width:auto!important}body.vcms-shelled.vmms-page-workers>.vcms-pagebar>div:nth-child(2){flex:0 0 auto!important;width:auto!important;min-height:64px!important;border-top:0!important;background:transparent!important}body.vcms-shelled main{width:calc(100% - 36px)!important;max-width:1480px!important;margin-left:auto!important;margin-right:auto!important;padding:18px 0 64px!important;box-sizing:border-box}body.vcms-shelled.vmms-page-workers main,body.vcms-shelled.vmms-page-allocation main,body.vcms-shelled.vmms-page-attendance main,body.vcms-shelled.vmms-page-verify main,body.vcms-shelled.vmms-page-timesheet main,body.vcms-shelled.vmms-page-dashboard main,body.vcms-shelled.vmms-page-dpr main,body.vcms-shelled.vmms-page-resource-summary main,body.vcms-shelled.vmms-page-pr-new main,body.vcms-shelled.vmms-page-planning main{max-width:none!important;padding-left:18px!important;padding-right:18px!important}
+    body.vcms-shelled main input:not([type=checkbox]):not([type=radio]),body.vcms-shelled main select,body.vcms-shelled main textarea{border-color:var(--vcms-line,#dce1e8)!important;border-radius:11px!important;background:var(--vcms-surface,#fff)!important;color:var(--vcms-ink,#182230)!important;box-shadow:0 1px 2px rgba(15,23,42,.03);transition:border-color .16s ease,box-shadow .16s ease}body.vcms-shelled main input:not([type=checkbox]):not([type=radio]):focus,body.vcms-shelled main select:focus,body.vcms-shelled main textarea:focus{border-color:var(--vcms-brand,#c00000)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--vcms-brand,#c00000) 14%,transparent)!important;outline:none!important}
+    body.vcms-shelled main .bg-white.rounded-lg,body.vcms-shelled main .bg-white.rounded-xl,body.vcms-shelled main .panel,body.vcms-shelled main .settings-card,body.vcms-shelled main .sheet,body.vcms-shelled main .worker-table-wrap,body.vcms-shelled main .worker-tools,body.vcms-shelled main .wkpi{background:var(--vcms-surface,#fff)!important;border-color:var(--vcms-line,#dce1e8)!important;box-shadow:0 16px 36px -26px rgba(17,30,58,.38)!important}
+    body.vcms-shelled main .rounded-lg,body.vcms-shelled main .rounded-xl,body.vcms-shelled main .panel,body.vcms-shelled main .settings-card,body.vcms-shelled main .sheet,body.vcms-shelled main .wkpi{border-radius:16px!important}
+    body.vcms-shelled main table thead th{background:var(--vcms-thead,var(--vcms-sidebar-bg,#151c2c))!important;color:var(--vcms-thead-ink,#fff)!important;border-color:color-mix(in srgb,var(--vcms-thead,#151c2c) 82%,white)!important}body.vcms-shelled main table tbody tr:nth-child(even){background:var(--vcms-row-alt,#f7f8fb)}body.vcms-shelled main table tbody tr:hover{background:color-mix(in srgb,var(--vcms-brand,#c00000) 7%,var(--vcms-surface,#fff))!important}
+    body.vcms-shelled main button,body.vcms-shelled main a[role=button]{transition:transform .15s ease,box-shadow .15s ease,background-color .15s ease,border-color .15s ease}body.vcms-shelled main button:hover:not(:disabled),body.vcms-shelled main a[role=button]:hover{transform:translateY(-1px)}
+    body.vcms-shelled.vmms-page-workers .wkpi{border:1px solid var(--vcms-line,#dce1e8)!important;border-top:0!important;position:relative;overflow:hidden;padding:14px 16px!important}body.vcms-shelled.vmms-page-workers .wkpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--vcms-brand,#c00000)}body.vcms-shelled.vmms-page-workers .wkpi[data-status=active]:before{background:var(--vcms-success,#15803d)}body.vcms-shelled.vmms-page-workers .wkpi[data-status=on_leave]:before{background:var(--vcms-warning,#b45309)}body.vcms-shelled.vmms-page-workers .wkpi[data-status=inactive]:before{background:var(--vcms-muted,#667085)}body.vcms-shelled.vmms-page-workers .worker-table th{background:var(--vcms-thead,var(--vcms-sidebar-bg,#151c2c))!important;color:var(--vcms-thead-ink,#fff)!important}
+    body.vcms-shared-home>.brand,body.vcms-shared-home>.layout>.side{display:none!important}body.vcms-shared-home>.layout{display:block!important}body.vcms-shared-home>.layout>.main{width:100%!important}body.vcms-shared-home .content{padding:14px 18px!important}
+    @media(max-width:1280px){.vcms-user-card{display:none}.vcms-app-title{font-size:14px}#vcms-view-role{min-width:210px}}
+    @media(min-width:1500px){body.vcms-shelled main{max-width:none!important}.vcms-user-card{max-width:340px}}
+    ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}::-webkit-scrollbar-thumb:hover{background:#94a3b8}
   }
-  @media screen and (min-width:1500px){
-    body[class*="vmms-page-"] main{max-width:none}
-    body.vmms-page-workers #list,body.vmms-page-sites #list{grid-template-columns:repeat(4,minmax(0,1fr))}
-  }`;
-  (document.head||document.documentElement).appendChild(s);
+  @media(max-width:899px){#vcms-app-header,#vcms-app-rail{display:none!important}}
+  @media(prefers-reduced-motion:reduce){#vcms-app-header,#vcms-app-rail,body.vcms-shelled,body.vcms-shelled *{transition:none!important;animation-duration:.01ms!important}}
+  `;
+  (document.head||document.documentElement).appendChild(style);
 })();
 
-// ---- Stage 3: progressively standardise management and report pages ----
-// The decorator only adds shared classes; IDs, inline handlers and page-specific
-// classes remain untouched, so operational behaviour is unchanged.
+// ---- Shared component decorators ----
 (function () {
-  var excluded={login:1,index:1,home:1,home2:1,request:1,attendance:1,allocation:1,whatsapp:1,camera:1};
   function apply(){
+    if(!document.body)return;
     var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"");
-    if(excluded[slug]||!document.body)return;
-    document.body.classList.add("vcms-standard-page");
-    var header=document.querySelector("body>header");
-    if(header){
-      header.classList.add("vcms-legacy-header");
-      var title=header.querySelector("h1"); if(title)title.classList.add("vcms-legacy-title");
-      var back=header.querySelector('a[href="home.html"]'); if(back){back.classList.add("vcms-page-header__back");back.setAttribute("aria-label","Back to home")}
-    }
-    document.querySelectorAll('main input:not([type]),main input[type="text"],main input[type="search"],main input[type="email"],main input[type="password"],main input[type="number"],main input[type="date"],main input[type="time"],main input[type="tel"],main input[type="url"],main select,main textarea').forEach(function(el){
-      if(!el.classList.contains("vcms-control"))el.classList.add("vcms-control");
-    });
-    document.querySelectorAll("button").forEach(function(btn){
-      if(btn.closest(".grp-items,.nav,.schedule-tabs")||btn.classList.contains("vcms-btn"))return;
-      var c=btn.className||"";
-      if(/bg-red-(600|700|800)|bg-green-(600|700)/.test(c))btn.classList.add("vcms-btn",/bg-green/.test(c)?"vcms-btn-success":"vcms-btn-primary");
-      else if(/border-red-(600|700)|text-red-(600|700)/.test(c))btn.classList.add("vcms-btn","vcms-btn-tertiary");
-    });
+    if(!{login:1,index:1,home2:1}[slug])document.body.classList.add("vcms-standard-page");
+    var header=document.querySelector("body>header:not(#vcms-app-header)");
+    if(header&&slug!=="home"){header.classList.add("vcms-legacy-header");var title=header.querySelector("h1");if(title)title.classList.add("vcms-legacy-title");var back=header.querySelector('a[href="home.html"]');if(back){back.classList.add("vcms-page-header__back");back.setAttribute("aria-label","Back to home")}}
+    document.querySelectorAll('main input:not([type]),main input[type="text"],main input[type="search"],main input[type="email"],main input[type="password"],main input[type="number"],main input[type="date"],main input[type="time"],main input[type="tel"],main input[type="url"],main select,main textarea').forEach(function(el){el.classList.add("vcms-control")});
+    document.querySelectorAll("button:not([type])").forEach(function(button){if(!button.closest("form"))button.type="button"});
+    document.querySelectorAll("input,select,textarea").forEach(function(el){if(!el.getAttribute("aria-label")&&!el.getAttribute("aria-labelledby")){var label=el.closest("label"),text=label&&label.textContent.trim();if(text)el.setAttribute("aria-label",text.slice(0,100));else if(el.placeholder)el.setAttribute("aria-label",el.placeholder)}});
+    var main=document.querySelector("main");if(main&&!main.id)main.id="main-content";
     document.querySelectorAll('#toast,[role="status"][class*="fixed"]').forEach(function(el){el.classList.add("vcms-toast")});
   }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply,{once:true});else apply();
 })();
 
-// ---- Stage 4: accessibility and resilient interaction defaults ----
-(function(){
-  function apply(){
-    document.querySelectorAll("button:not([type])").forEach(function(b){if(!b.closest("form"))b.type="button"});
-    document.querySelectorAll("input,select,textarea").forEach(function(el){
-      if(!el.getAttribute("aria-label")&&!el.getAttribute("aria-labelledby")){
-        var label=el.closest("label"), text=label&&label.textContent.trim();
-        if(text)el.setAttribute("aria-label",text.slice(0,100));
-        else if(el.placeholder)el.setAttribute("aria-label",el.placeholder);
-      }
-    });
-    var main=document.querySelector("main");if(main&&!main.id)main.id="main-content";
-  }
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",apply);else apply();
-})();
-
-// ---- Light global polish (safe, non-breaking): crisper type + nicer scrollbars ----
-(function () {
-  if (document.getElementById("vcms-polish")) return;
-  var s = document.createElement("style"); s.id = "vcms-polish";
-  s.textContent =
-    "html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}" +
-    "@media(min-width:1024px){::-webkit-scrollbar{width:10px;height:10px}" +
-    "::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}" +
-    "::-webkit-scrollbar-thumb:hover{background:#94A3B8}" +
-    "body:not(.shell){background:#E4E7EC !important}" +
-    // Use the empty desktop gutters: widen phone-width content containers to ~1024px.
-    // Excludes bottom-sheet modals (rounded-t-2xl) and pages that already opted into a
-    // wider desktop width (md:max-w-*). Login stays narrow (uses max-w-sm).
-    "[class~=\"max-w-md\"]:not([class*=\"md:max-w\"]):not([class*=\"rounded-t-2xl\"])" +
-    "{max-width:64rem !important;}}";
-  (document.head || document.documentElement).appendChild(s);
-})();
-
-// ---- Load the app-shell nav rail on every signed-in page (self-skips login/home) ----
-(function () {
-  var sh = document.createElement("script"); sh.src = "js/shell.js?v=20260813-8"; sh.defer = true;
-  (document.head || document.documentElement).appendChild(sh);
-})();
+// ---- Load the shared desktop application shell ----
+(function () {var script=document.createElement("script");script.src="js/shell.js?v=20260828-shell2";script.defer=true;(document.head||document.documentElement).appendChild(script)})();
 
 // source: js/core/app-config.js
 // ---- Role tiers (Rev 6) — shared by all pages ----
