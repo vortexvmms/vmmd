@@ -22,7 +22,7 @@ def _today_sgt() -> str:
     return (datetime.now(timezone.utc) + timedelta(hours=8)).date().isoformat()
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 # The backend calls its own public endpoints so all role-scoping/logic is reused.
 SELF_BASE = os.environ.get("BACKEND_SELF_URL", "https://vmms-backend-sg.onrender.com").rstrip("/")
 GEMINI_URL = (
