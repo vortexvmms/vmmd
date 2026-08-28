@@ -2933,7 +2933,7 @@ async def dpr_missing(days: int = 30, user: dict = Depends(get_current_user)):
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     days = max(1, min(days, 90))
-    end_d = date_cls.fromisoformat(_sgt_today()) - timedelta(days=1)
+    end_d = date_cls.fromisoformat(sgt_today()) - timedelta(days=1)
     # This workflow was introduced on 10/08/2026. Do not create historical
     # reminders before launch; only allocated site-days from launch onward count.
     feature_start = date_cls(2026, 8, 10)
@@ -3415,7 +3415,7 @@ async def update_lifecycle_project(project_id: str, body: ProjectLifecycleIn,
     if body.lifecycle_status == "completed" and not body.actual_completion_date:
         raise HTTPException(status_code=400, detail="Actual completion date is required")
     if body.lifecycle_status == "cancelled" and not payload.get("cancelled_date"):
-        payload["cancelled_date"] = _sgt_today()
+        payload["cancelled_date"] = sgt_today()
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
     async with shared_client() as client:
         r = await client.patch(f"{REST}/dpr_projects", params={"id": f"eq.{project_id}"},
@@ -3762,7 +3762,7 @@ async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
     """
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    today = _sgt_today()
+    today = sgt_today()
     days = max(7, min(730, days))
     limit = max(1, min(500, limit))
     requested = site_ids or site_id
@@ -3860,7 +3860,7 @@ async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
 async def home_overview(user: dict = Depends(get_current_user)):
     """Cross-module snapshot for the home dashboard: manpower on site, active
     sites, DPRs, open PRs, pending attendance, an activity feed and alerts."""
-    today = _sgt_today()
+    today = sgt_today()
     start = (date_cls.fromisoformat(today) - timedelta(days=13)).isoformat()
     async with shared_client() as client:
         rd = await client.get(
