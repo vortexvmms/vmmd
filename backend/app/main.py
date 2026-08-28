@@ -3755,17 +3755,55 @@ async def site_progress(days: int = 14, user: dict = Depends(get_current_user)):
     days = max(1, min(60, days))
     today = _sgt_today()
     start = (date_cls.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
-    params = {"select": "report_date,site_id,item_of_work,description,manpower,photos,prepared_by_name,sites(site_name)",
+    # First load only narrow report metadata. The previous query downloaded every
+    # photo and manpower JSON object for the whole period in one response. A few
+    # photo-heavy DPRs could exhaust the Render connection and leave Site Board
+    # permanently showing "Loading...".
+    params = {"select": "id,report_date,site_id,item_of_work,description,prepared_by_name,sites(site_name)",
               "and": f"(report_date.gte.{start},report_date.lte.{today})",
               "order": "report_date.desc", "limit": "1000"}
     async with shared_client() as client:
         r = await client.get(f"{REST}/daily_reports", params=params,
                              headers=supabase_headers(user["token"]))
-        rows = r.json() if r.status_code == 200 else []
+        if r.status_code != 200:
+            raise HTTPException(status_code=503, detail="Site Board data is temporarily unavailable")
+        rows = r.json()
+
+        # Manpower is small enough to load for the period and is required for
+        # the daily trend. Photos are the expensive field, so only the newest
+        # report for each site loads that array.
+        latest_ids = []
+        seen_sites = set()
+        for row in rows:
+            sid = row.get("site_id")
+            if sid and sid not in seen_sites and row.get("id"):
+                seen_sites.add(sid)
+                latest_ids.append(row["id"])
+        rm = await client.get(
+            f"{REST}/daily_reports",
+            params={"select": "id,manpower",
+                    "and": f"(report_date.gte.{start},report_date.lte.{today})",
+                    "order": "report_date.desc", "limit": "1000"},
+            headers=supabase_headers(user["token"]),
+        )
+        if rm.status_code != 200:
+            raise HTTPException(status_code=503, detail="Site Board manpower is temporarily unavailable")
+        detail_by_id = {item.get("id"): item for item in rm.json()}
+        if latest_ids:
+            rd = await client.get(
+                f"{REST}/daily_reports",
+                params={"id": f"in.({','.join(latest_ids)})", "select": "id,photos"},
+                headers=supabase_headers(user["token"]),
+            )
+            if rd.status_code != 200:
+                raise HTTPException(status_code=503, detail="Site Board totals are temporarily unavailable")
+            for item in rd.json():
+                detail_by_id.setdefault(item.get("id"), {}).update(item)
     sites, trend, feed = {}, {}, []
     for row in rows:
         sid = row.get("site_id"); d = row.get("report_date")
-        mp = len(row.get("manpower") or []); ph = len(row.get("photos") or [])
+        detail = detail_by_id.get(row.get("id"), {})
+        mp = len(detail.get("manpower") or []); ph = len(detail.get("photos") or [])
         name = (row.get("sites") or {}).get("site_name", "?")
         if sid not in sites:
             sites[sid] = {"site_id": sid, "site_name": name, "latest_date": d,

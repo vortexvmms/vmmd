@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
-async function signedIn(page) {
+async function signedIn(page, role = 'site_sup') {
   await page.addInitScript(() => localStorage.setItem('vmms_session', JSON.stringify({
     access_token: 'test-token', refresh_token: 'test-refresh', expires_at: Date.now() + 3600000
   })));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/me', r => r.fulfill({ json: {
-    name: 'Test Supervisor', role: 'site_sup', user_id: 'u1', menu: null
+    name: role === 'admin' ? 'Test Administrator' : 'Test Supervisor', role, user_id: 'u1', menu: null
   }}));
 }
 
@@ -103,6 +103,51 @@ test('shared desktop shell is not added to supervisor phone pages', async ({ pag
   await expect(page.locator('#vcms-app-header')).toHaveCount(0);
   await expect(page.locator('#vcms-app-rail')).toHaveCount(0);
   await expect(page.locator('body > header')).toBeVisible();
+});
+
+test('DPR readiness uses a dedicated desktop column without covering the form', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'Desktop layout only');
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/projects*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/reminders*', r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/dpr\?.*/, r => r.fulfill({ json: {} }));
+  await page.goto('/dpr.html');
+  await expect(page.locator('#dpr-progress')).toBeVisible();
+  const boxes = await page.evaluate(() => {
+    const content = document.getElementById('dpr-content').getBoundingClientRect();
+    const progress = document.getElementById('dpr-progress').getBoundingClientRect();
+    return { contentRight: content.right, progressLeft: progress.left };
+  });
+  expect(boxes.progressLeft).toBeGreaterThanOrEqual(boxes.contentRight + 12);
+});
+
+test('Resource Summary desktop controls are compact and aligned', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'Desktop layout only');
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.goto('/resource-summary.html');
+  const metrics = await page.evaluate(() => {
+    const site = document.getElementById('f-site').getBoundingClientRect();
+    const month = document.getElementById('f-month').getBoundingClientRect();
+    const load = document.querySelector('.rs-filter-grid > button').getBoundingClientRect();
+    const print = document.getElementById('b-print').getBoundingClientRect();
+    return { siteTop:site.top, monthTop:month.top, loadTop:load.top, loadWidth:load.width, printWidth:print.width };
+  });
+  expect(Math.abs(metrics.siteTop - metrics.monthTop)).toBeLessThanOrEqual(2);
+  expect(Math.abs(metrics.siteTop - metrics.loadTop)).toBeLessThanOrEqual(30);
+  expect(metrics.loadWidth).toBeLessThanOrEqual(180);
+  expect(metrics.printWidth).toBeLessThanOrEqual(200);
+});
+
+test('Site Board replaces failed loading with a retry action', async ({ page }) => {
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/site-progress*', r => r.fulfill({ status:503, json:{ detail:'Site Board data is temporarily unavailable' } }));
+  await page.goto('/site-dashboard.html');
+  await expect(page.getByText('Site Board data is temporarily unavailable')).toBeVisible();
+  await expect(page.getByRole('button', { name:'Retry' })).toBeVisible();
+  await expect(page.getByText('Loading…')).toHaveCount(0);
 });
 
 test('all visible form controls have an accessible name', async ({ page }) => {

@@ -29,6 +29,7 @@
     .clamp2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .feed-item { padding:11px 14px; border-top:1px solid #F1F5F9; }
     .stale { color:#B91C1C; font-weight:700; } .fresh { color:#15803D; font-weight:700; }
+    .retry-btn{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;min-height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--vcms-brand,#C00000);color:#fff;font-weight:800;cursor:pointer}
     /* self-contained responsive grids (don't depend on prebuilt Tailwind subset) */
     .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
     .sitegrid { display:grid; grid-template-columns:1fr; gap:12px; }
@@ -78,27 +79,46 @@
     function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
     function daysAgo(iso, today){ try{ return Math.round((new Date(today)-new Date(iso))/86400000); }catch(e){ return 0; } }
 
+    function loadError(message){
+      const msg=document.getElementById("msg");
+      msg.classList.remove("hidden"); msg.textContent="";
+      const text=document.createElement("div"); text.textContent=message;
+      const retry=document.createElement("button"); retry.type="button"; retry.className="retry-btn"; retry.textContent="Retry"; retry.onclick=load;
+      msg.append(text,retry);
+    }
     async function load(){
       const days=document.getElementById("f-days").value;
       document.getElementById("msg").classList.remove("hidden"); document.getElementById("msg").textContent="Loading…";
       document.getElementById("body").classList.add("hidden");
-      const r=await vmmsApi("/api/v1/site-progress?days="+days);
-      if(!r.ok){ document.getElementById("msg").textContent="Could not load ("+r.status+")."; return; }
-      DATA=await r.json();
-      document.getElementById("msg").classList.add("hidden");
-      document.getElementById("body").classList.remove("hidden");
-      render();
+      const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),25000);
+      try{
+        const r=await vmmsApi("/api/v1/site-progress?days="+days,{signal:controller.signal});
+        if(!r.ok){
+          const error=await r.json().catch(()=>({}));
+          loadError(error.detail||("Could not load Site Board ("+r.status+").")); return;
+        }
+        DATA=await r.json();
+        document.getElementById("msg").classList.add("hidden");
+        document.getElementById("body").classList.remove("hidden");
+        render();
+      }catch(error){
+        loadError(error&&error.name==="AbortError"?"Site Board took too long to respond. Please retry.":"Could not connect to Site Board. Check the connection and retry.");
+      }finally{ clearTimeout(timeout); }
     }
     function render(){
       document.getElementById("k-men").textContent=DATA.manpower_latest;
       document.getElementById("k-sites").textContent=DATA.active_sites;
       document.getElementById("k-dprs").textContent=DATA.dprs;
       document.getElementById("k-photos").textContent=(DATA.sites||[]).reduce((a,s)=>a+(s.photos||0),0);
-      if(CH) CH.destroy();
       const t=DATA.trend||[];
-      CH=new Chart(document.getElementById("ch-men"),{type:"line",
-        data:{labels:t.map(x=>fmtDMY(x.date).slice(0,5)),datasets:[{data:t.map(x=>x.manpower),borderColor:"#16A34A",backgroundColor:"rgba(22,163,74,.12)",fill:true,tension:.35,pointRadius:2,borderWidth:2}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:"#EEF2F7"},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+      if(typeof Chart==="function"){
+        if(CH) CH.destroy();
+        CH=new Chart(document.getElementById("ch-men"),{type:"line",
+          data:{labels:t.map(x=>fmtDMY(x.date).slice(0,5)),datasets:[{data:t.map(x=>x.manpower),borderColor:"#16A34A",backgroundColor:"rgba(22,163,74,.12)",fill:true,tension:.35,pointRadius:2,borderWidth:2}]},
+          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:"#EEF2F7"},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
+      }else{
+        document.querySelector(".chart-h").innerHTML='<p class="text-sm text-gray-400 text-center mt-8">Trend chart is temporarily unavailable. Site data is shown below.</p>';
+      }
       document.getElementById("sites").innerHTML=(DATA.sites||[]).map(s=>{
         const ago=daysAgo(s.latest_date, DATA.today);
         const tag=ago>=2?`<span class="stale">${ago}d ago</span>`:(ago===1?`<span>yesterday</span>`:`<span class="fresh">today</span>`);

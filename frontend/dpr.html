@@ -89,10 +89,11 @@
     @media(min-width:900px){
       body.dpr{background:linear-gradient(135deg,#eef1f5,#e4e8ef)}
       body.dpr>header>div{max-width:none!important;width:100%!important}
-      #dpr-main{max-width:none!important;width:100%;padding:20px 330px 105px 24px}
-      #dpr-main>.panel{border-color:#dce1e8;box-shadow:0 6px 18px rgba(15,23,42,.06)}
+      #dpr-main{max-width:none!important;width:100%;padding:20px 24px 105px!important}
+      #dpr-content{min-width:0}
+      #dpr-content>.panel{border-color:#dce1e8;box-shadow:0 6px 18px rgba(15,23,42,.06)}
       #dpr-main>.sect{font-size:12px;color:#303847;margin-top:22px}
-      #dpr-progress{display:block;position:fixed;right:24px;top:82px;width:282px;background:#fff;border:1px solid #dce1e8;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(15,23,42,.10);z-index:7}
+      #dpr-progress{display:block;position:static;width:100%;margin:0 0 16px;background:#fff;border:1px solid #dce1e8;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(15,23,42,.10);z-index:7}
       #dpr-progress h2{margin:0;padding:14px 16px;background:#252b35;color:#fff;font-size:14px;font-weight:800}
       .dpr-prog-body{padding:15px}.dpr-meter{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}.dpr-meter i{display:block;height:100%;background:#c00000;transition:width .3s}
       #dpr-checks{margin-top:12px}.dpr-check{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #edf0f4;font-size:12px;color:#4b5563}.dpr-check:last-child{border:0}.dpr-ok{color:#15803d;font-weight:800}.dpr-miss{color:#b45309;font-weight:800}
@@ -100,7 +101,12 @@
       table.edt{min-width:0}.pgrid2{grid-template-columns:repeat(4,minmax(0,1fr))}
       #dprbar>div{max-width:none!important;padding-left:24px;padding-right:24px}
     }
-    @media(min-width:1600px){#dpr-main{padding-right:360px}#dpr-progress{width:310px}.pgrid2{grid-template-columns:repeat(5,minmax(0,1fr))}}
+    @media(min-width:1200px){
+      #dpr-main{display:grid!important;grid-template-columns:minmax(0,1fr) 282px;gap:18px;align-items:start}
+      #dpr-content{grid-column:1;grid-row:1}
+      #dpr-progress{grid-column:2;grid-row:1;position:sticky;top:84px;margin:0}
+    }
+    @media(min-width:1600px){#dpr-main{grid-template-columns:minmax(0,1fr) 310px}.pgrid2{grid-template-columns:repeat(5,minmax(0,1fr))}}
   </style>
 </head>
 <body class="dpr min-h-screen flex flex-col">
@@ -119,6 +125,7 @@
 
   <main id="dpr-main" class="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
     <aside id="dpr-progress"><h2>DPR readiness</h2><div class="dpr-prog-body"><div style="display:flex;justify-content:space-between;margin-bottom:7px"><b id="dpr-percent">0% complete</b><span id="dpr-draftstate" style="font-size:11px;color:#64748b">Draft</span></div><div class="dpr-meter"><i id="dpr-meter-fill" style="width:0"></i></div><div id="dpr-checks"></div></div><div id="dpr-missing-wrap" class="dpr-missing-box" style="display:none"><div class="dpr-missing-title"><span>Missing DPR dates</span><span id="dpr-missing-count"></span></div><div id="dpr-missing" class="dpr-missing-list"></div></div></aside>
+    <div id="dpr-content">
     <div id="banner" class="hidden panel p-3 mb-3 text-sm text-center"></div>
 
     <div class="panel p-4">
@@ -236,6 +243,7 @@
         <button type="button" class="addbtn" style="background:#fef2f2" onclick="saveMySig()">Save as my signature</button>
       </div>
       <p class="text-xs text-gray-400 mt-1">Sign with finger/mouse then tap <b>Use drawing</b>, or upload a signature image.</p>
+    </div>
     </div>
   </main>
 

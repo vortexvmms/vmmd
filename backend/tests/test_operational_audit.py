@@ -9,6 +9,8 @@ HOME = (ROOT / "frontend/home.html").read_text()
 DASH = (ROOT / "frontend/dashboard.html").read_text()
 REPORTS = (ROOT / "frontend/reports.html").read_text()
 RESOURCE = (ROOT / "frontend/resource-summary.html").read_text()
+SITE_BOARD = (ROOT / "frontend/site-dashboard.html").read_text()
+DPR = (ROOT / "frontend/dpr.html").read_text()
 
 
 def _hours_engine():
@@ -70,3 +72,20 @@ def test_responsive_contracts_present():
         assert 'name="viewport"' in page.read_text(errors="ignore"), page.name
     assert "max-width:900px" in HOME
     assert "min-width:901px" in HOME
+
+
+def test_site_board_avoids_wide_photo_history_and_recovers_from_errors():
+    route = MAIN[MAIN.index('@app.get("/api/v1/site-progress")'):
+                 MAIN.index('@app.get("/api/v1/home-overview")')]
+    assert '"select": "id,report_date,site_id,item_of_work,description,prepared_by_name,sites(site_name)"' in route
+    assert '"select": "id,manpower"' in route
+    assert '"select": "id,photos"' in route
+    assert "report_date,site_id,item_of_work,description,manpower,photos" not in route
+    assert "loadError" in SITE_BOARD and "Retry" in SITE_BOARD
+
+
+def test_dpr_and_resource_summary_have_explicit_desktop_layouts():
+    assert 'id="dpr-content"' in DPR
+    assert "grid-template-columns:minmax(0,1fr) 282px" in DPR
+    assert "position:sticky;top:84px" in DPR
+    assert "rs-filter-grid" in RESOURCE and "rs-actions" in RESOURCE
