@@ -1,0 +1,1 @@
+Redeploy trigger for vmms-backend-sg. Safe to delete. 2026-08-28 site-progress fix.
