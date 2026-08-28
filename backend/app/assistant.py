@@ -199,9 +199,9 @@ async def run_assistant(message: str, user: dict, today: str) -> dict:
     sys_text = SYSTEM_PROMPT + f"\nToday: {today}. The user's role is: {role}."
 
     contents = [{"role": "user", "parts": [{"text": message}]}]
-    tools = [{"function_declarations": TOOL_DECLARATIONS}]
+    tools = [{"functionDeclarations": TOOL_DECLARATIONS}]
     payload = {
-        "system_instruction": {"parts": [{"text": sys_text}]},
+        "systemInstruction": {"parts": [{"text": sys_text}]},
         "tools": tools,
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 900},
     }
@@ -214,7 +214,7 @@ async def run_assistant(message: str, user: dict, today: str) -> dict:
             except Exception:
                 return {"reply": "The assistant timed out. Please try again.", "error": True}
             if r.status_code != 200:
-                return {"reply": "The assistant is unavailable right now. Please try again shortly.",
+                return {"reply": "" + str(r.status_code) + " " + r.text[:250] + "",
                         "error": True}
             data = r.json()
             cand = (data.get("candidates") or [{}])[0]
