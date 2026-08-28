@@ -146,15 +146,18 @@ test('Site Board loads selected-site DPRs and searches the report table', async 
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/site-progress*', r => r.fulfill({ json:{
     today:'2026-08-28', site_id:'s1', partial:false,
-    summary:{ reports:2, reported_days:2, latest_manpower:7, photos:1 },
-    trend:[{ date:'2026-08-27', manpower:6 },{ date:'2026-08-28', manpower:7 }],
+    summary:{ reports:2, reported_days:2, selected_sites:1, reports_with_photos:1 },
+    trend:[{ date:'2026-08-27', reports:1 },{ date:'2026-08-28', reports:1 }],
     reports:[
-      { id:'d1',date:'2026-08-28',location:'DTSS2-T08',item_of_work:'Tunnel repair',description:'Grouting at shaft wall',prepared_by:'Rajesh',manpower:7,photo_count:1,photo:{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',caption:'Grouting'} },
-      { id:'d2',date:'2026-08-27',location:'Store',item_of_work:'Delivery',description:'Material unloading',prepared_by:'Prakash',manpower:6,photo_count:0,photo:null }
+      { id:'d1',site_id:'s1',site_name:'LOGISTICS',date:'2026-08-28',location:'DTSS2-T08',item_of_work:'Tunnel repair',description:'Grouting at shaft wall',prepared_by:'Rajesh',photo:{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',caption:'Grouting'} },
+      { id:'d2',site_id:'s1',site_name:'LOGISTICS',date:'2026-08-27',location:'Store',item_of_work:'Delivery',description:'Material unloading',prepared_by:'Prakash',photo:null }
     ]
   }}));
   await page.goto('/site-dashboard.html');
-  await page.locator('#f-site').selectOption('s1');
+  await expect(page.locator('#search')).toBeVisible();
+  await page.locator('#site-picker').click();
+  await page.locator('.site-check[value="s1"]').check();
+  await page.locator('#load-btn').click();
   await expect(page.locator('#k-reports')).toHaveText('2');
   await expect(page.locator('#report-rows tr')).toHaveCount(2);
   await page.locator('#search').fill('grouting');

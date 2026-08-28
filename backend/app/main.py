@@ -3749,33 +3749,50 @@ async def pr_delete(pr_id: str, user: dict = Depends(get_current_user)):
 
 
 @app.get("/api/v1/site-progress")
-async def site_progress(site_id: str = "", days: int = 180, limit: int = 500,
+async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
+                        limit: int = 500,
                         user: dict = Depends(get_current_user)):
     """Searchable Site Board built directly from saved Daily Progress Reports.
 
-    A site must be selected before DPR data is requested. This avoids the old
-    organisation-wide photo/manpower download that was slow on Render and could
-    leave the page permanently loading. Supabase RLS still limits supervisors to
-    the sites they are permitted to read.
+    One or more sites must be selected before DPR data is requested. Only the
+    first relevant photo is projected from each DPR JSON array. This keeps the
+    response small enough for weak connections and avoids the previous fetch
+    failure caused by downloading every manpower and photo object. Supabase RLS
+    still limits supervisors to sites they are permitted to read.
     """
     if user["role"] not in DPR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
     today = _sgt_today()
     days = max(7, min(730, days))
     limit = max(1, min(500, limit))
-    if not site_id:
-        return {"today": today, "days": days, "site_id": "", "summary": {},
+    requested = site_ids or site_id
+    selected_ids = []
+    for value in str(requested or "").split(","):
+        value = value.strip()
+        if not value:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9-]{8,80}", value):
+            raise HTTPException(status_code=400, detail="Invalid site selection")
+        if value not in selected_ids:
+            selected_ids.append(value)
+    selected_ids = selected_ids[:30]
+    if not selected_ids:
+        return {"today": today, "days": days, "site_ids": [], "summary": {},
                 "trend": [], "reports": [], "partial": False}
 
     start = (date_cls.fromisoformat(today) - timedelta(days=days - 1)).isoformat()
-    common = {"site_id": f"eq.{site_id}",
+    site_filter = (f"eq.{selected_ids[0]}" if len(selected_ids) == 1
+                   else f"in.({','.join(selected_ids)})")
+    common = {"site_id": site_filter,
               "and": f"(report_date.gte.{start},report_date.lte.{today})",
               "order": "report_date.desc", "limit": str(limit)}
     async with shared_client() as client:
         meta = await client.get(
             f"{REST}/daily_reports",
             params={**common,
-                    "select": "id,report_date,location,item_of_work,description,prepared_by_name,status,updated_at"},
+                    "select": "id,site_id,report_date,location,item_of_work,description,"
+                              "prepared_by_name,status,updated_at,first_photo:photos->0,"
+                              "sites(site_name)"},
             headers=supabase_headers(user["token"]),
         )
         if meta.status_code != 200:
@@ -3783,58 +3800,47 @@ async def site_progress(site_id: str = "", days: int = 180, limit: int = 500,
                                 detail="Daily report data is temporarily unavailable")
         rows = meta.json()
 
-        # The JSON-heavy columns are isolated in a second, site-scoped request.
-        # If that optional request fails, textual DPR search still works and the
-        # board returns a clear partial-data notice instead of hanging.
-        details = await client.get(
-            f"{REST}/daily_reports",
-            params={**common, "select": "id,manpower,photos"},
-            headers=supabase_headers(user["token"]),
-        )
-        partial = details.status_code != 200
-        detail_by_id = ({item.get("id"): item for item in details.json()}
-                        if not partial else {})
-
-    def relevant_photo(items):
-        for photo in items or []:
-            if isinstance(photo, str) and photo.strip():
-                return {"url": photo.strip(), "caption": ""}
-            if isinstance(photo, dict):
-                url = photo.get("url") or photo.get("public_url")
-                if url:
-                    return {"url": url, "caption": photo.get("caption") or ""}
+    def relevant_photo(photo):
+        if isinstance(photo, str) and photo.strip():
+            return {"url": photo.strip(), "caption": ""}
+        if isinstance(photo, dict):
+            url = photo.get("url") or photo.get("public_url")
+            if url:
+                return {"url": url, "caption": photo.get("caption") or ""}
         return None
 
-    reports, trend, total_photos = [], [], 0
+    reports, report_dates, reports_with_photos = [], {}, 0
     for row in rows:
-        detail = detail_by_id.get(row.get("id"), {})
-        manpower = detail.get("manpower") or []
-        photos = detail.get("photos") or []
-        total_photos += len(photos)
+        photo = relevant_photo(row.get("first_photo"))
+        if photo:
+            reports_with_photos += 1
+        if row.get("report_date"):
+            report_dates[row["report_date"]] = report_dates.get(row["report_date"], 0) + 1
         report = {
-            "id": row.get("id"), "date": row.get("report_date"),
+            "id": row.get("id"), "site_id": row.get("site_id"),
+            "site_name": (row.get("sites") or {}).get("site_name") or "",
+            "date": row.get("report_date"),
             "location": row.get("location") or "",
             "item_of_work": row.get("item_of_work") or "",
             "description": row.get("description") or "",
             "prepared_by": row.get("prepared_by_name") or "",
             "status": row.get("status") or "",
-            "manpower": len(manpower), "photo_count": len(photos),
-            "photo": relevant_photo(photos), "updated_at": row.get("updated_at"),
+            "photo": photo, "updated_at": row.get("updated_at"),
         }
         reports.append(report)
-        trend.append({"date": report["date"], "manpower": report["manpower"]})
 
     latest = reports[0] if reports else {}
     return {
-        "today": today, "days": days, "site_id": site_id, "partial": partial,
+        "today": today, "days": days, "site_ids": selected_ids, "partial": False,
         "summary": {
             "reports": len(reports),
             "reported_days": len({x["date"] for x in reports if x.get("date")}),
             "latest_date": latest.get("date"),
-            "latest_manpower": latest.get("manpower", 0),
-            "photos": total_photos,
+            "selected_sites": len({x["site_id"] for x in reports if x.get("site_id")}),
+            "reports_with_photos": reports_with_photos,
         },
-        "trend": list(reversed(trend[:30])),
+        "trend": [{"date": day, "reports": report_dates[day]}
+                  for day in sorted(report_dates.keys())[-30:]],
         "reports": reports,
     }
 

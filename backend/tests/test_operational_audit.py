@@ -74,17 +74,19 @@ def test_responsive_contracts_present():
     assert "min-width:901px" in HOME
 
 
-def test_site_board_is_scoped_to_one_site_and_searches_dpr_content():
+def test_site_board_is_scoped_to_selected_sites_and_searches_dpr_content():
     route = MAIN[MAIN.index('@app.get("/api/v1/site-progress")'):
                  MAIN.index('@app.get("/api/v1/home-overview")')]
-    assert 'site_id: str = ""' in route
-    assert '"site_id": f"eq.{site_id}"' in route
-    assert "id,report_date,location,item_of_work,description,prepared_by_name" in route
-    assert '"select": "id,manpower,photos"' in route
-    assert '"reports": reports' in route and '"photo": relevant_photo(photos)' in route
+    assert 'site_id: str = "", site_ids: str = ""' in route
+    assert 'site_filter = (f"eq.{selected_ids[0]}"' in route
+    assert 'else f"in.({\',\'.join(selected_ids)})")' in route
+    assert "id,site_id,report_date,location,item_of_work,description" in route
+    assert "first_photo:photos->0" in route
+    assert '"reports": reports' in route and '"photo": photo' in route
     for heading in ("Date", "Location", "Detailed activity description", "Relevant DPR photo"):
         assert heading in SITE_BOARD
-    assert 'id="f-site"' in SITE_BOARD and 'id="search"' in SITE_BOARD
+    assert 'id="site-picker"' in SITE_BOARD and 'class="site-check"' in SITE_BOARD
+    assert 'id="search"' in SITE_BOARD and "site_ids=" in SITE_BOARD
 
 
 def test_dpr_and_resource_summary_have_explicit_desktop_layouts():

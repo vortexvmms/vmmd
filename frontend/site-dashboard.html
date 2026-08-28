@@ -15,9 +15,11 @@
     body.site-board{background:#eef3f9;color:#172033}
     .sb-wrap{width:min(1500px,calc(100% - 32px));margin:0 auto;padding:20px 0 44px}
     .sb-card{background:#fff;border:1px solid #d9e2ee;border-radius:16px;box-shadow:0 5px 18px rgba(23,32,51,.06)}
-    .sb-controls{display:grid;grid-template-columns:minmax(240px,1fr) 190px 120px;gap:12px;align-items:end;padding:16px}
+    .sb-controls{display:grid;grid-template-columns:minmax(320px,1fr) 190px 120px;gap:12px;align-items:end;padding:16px;overflow:visible}
     .sb-label{display:block;font-size:12px;font-weight:800;color:#5a6880;text-transform:uppercase;letter-spacing:.04em}
     .sb-field{display:block;width:100%;height:46px;margin-top:6px;padding:0 13px;border:1px solid #cbd6e3;border-radius:10px;background:#fff;color:#172033;font:inherit}
+    .sb-multi{position:relative;margin-top:6px}.sb-picker{display:flex;width:100%;height:46px;align-items:center;justify-content:space-between;gap:12px;padding:0 13px;border:1px solid #cbd6e3;border-radius:10px;background:#fff;color:#172033;font:inherit;font-weight:700;text-align:left;cursor:pointer}.sb-picker span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sb-picker[aria-expanded="true"]{border-color:var(--vcms-brand,#1565c0);box-shadow:0 0 0 3px color-mix(in srgb,var(--vcms-brand,#1565c0) 16%,transparent)}
+    .sb-site-panel{position:absolute;left:0;right:0;top:52px;z-index:50;max-height:340px;overflow:hidden;border:1px solid #cbd6e3;border-radius:12px;background:#fff;box-shadow:0 16px 38px rgba(23,32,51,.2)}.sb-site-panel[hidden]{display:none}.sb-site-actions{display:flex;gap:8px;padding:10px;border-bottom:1px solid #e3e9f1;background:#f7f9fc}.sb-site-actions button{height:34px;padding:0 12px;border:1px solid #cbd6e3;border-radius:8px;background:#fff;color:#314158;font-weight:800;cursor:pointer}.sb-site-options{max-height:280px;overflow:auto;padding:6px}.sb-site-option{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:#28364b;font-size:14px;text-transform:none;letter-spacing:0;cursor:pointer}.sb-site-option:hover{background:#edf4ff}.sb-site-option input{width:18px;height:18px;accent-color:var(--vcms-brand,#1565c0)}
     .sb-btn{height:46px;border:0;border-radius:10px;padding:0 18px;background:var(--vcms-brand,#1565c0);color:#fff;font-weight:800;cursor:pointer}
     .sb-btn.secondary{background:#202b3d}.sb-btn:disabled{opacity:.55;cursor:not-allowed}
     .sb-status{min-height:38px;margin:12px 0;padding:10px 14px;border-radius:10px;background:#fff7dd;color:#8a4b09;font-size:13px}
@@ -48,9 +50,9 @@
     .sb-empty{padding:52px 18px;text-align:center;color:#6b788b}.sb-empty strong{display:block;color:#28364b;font-size:18px;margin-bottom:5px}
     .sb-modal{display:none;position:fixed;inset:0;z-index:1000;background:#0e1521e8;padding:22px;align-items:center;justify-content:center}.sb-modal.open{display:flex}
     .sb-modal figure{margin:0;max-width:min(1100px,96vw);max-height:92vh;text-align:center}.sb-modal img{max-width:100%;max-height:82vh;border-radius:12px;background:#fff}.sb-modal figcaption{margin-top:8px;color:#fff}.sb-close{position:fixed;top:16px;right:18px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#111827;font-size:25px;cursor:pointer}
-    @media(max-width:900px){.sb-wrap{width:min(100% - 20px,760px);padding-top:12px}.sb-controls{grid-template-columns:1fr 1fr}.sb-controls label:first-child{grid-column:1/-1}.sb-btn{width:100%}.sb-kpis{grid-template-columns:1fr 1fr}.sb-overview{grid-template-columns:1fr}}
+    @media(max-width:900px){.sb-wrap{width:min(100% - 20px,760px);padding-top:12px}.sb-controls{grid-template-columns:1fr 1fr}.sb-controls>div:first-child{grid-column:1/-1}.sb-btn{width:100%}.sb-kpis{grid-template-columns:1fr 1fr}.sb-overview{grid-template-columns:1fr}}
     @media(max-width:700px){.sb-table,.sb-table tbody{display:block;width:100%}.sb-table thead,.sb-table colgroup{display:none}.sb-table tbody{padding:10px}.sb-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:7px 10px;margin-bottom:10px;padding:12px;border:1px solid #dbe4ef;border-radius:12px;background:#fff!important}.sb-table td{display:block;padding:0;border:0}.sb-table td:nth-child(1),.sb-table td:nth-child(2),.sb-table td:nth-child(3){grid-column:1}.sb-table td:nth-child(4){grid-column:2;grid-row:1/4}.sb-photo,.sb-no-photo{width:112px;height:88px}.sb-description{font-size:13px}.sb-date{color:#1558c0}}
-    @media(max-width:520px){.sb-controls{grid-template-columns:1fr}.sb-controls label:first-child{grid-column:auto}.sb-kpis{grid-template-columns:1fr 1fr}.sb-kpi{padding:13px}.sb-kpi strong{font-size:24px}.sb-search-head{grid-template-columns:1fr}.sb-count{white-space:normal}}
+    @media(max-width:520px){.sb-controls{grid-template-columns:1fr}.sb-controls>div:first-child{grid-column:auto}.sb-kpis{grid-template-columns:1fr 1fr}.sb-kpi{padding:13px}.sb-kpi strong{font-size:24px}.sb-search-head{grid-template-columns:1fr}.sb-count{white-space:normal}}
   </style>
 </head>
 <body class="site-board min-h-screen flex flex-col">
@@ -63,9 +65,15 @@
 
   <main class="flex-1 sb-wrap">
     <section class="sb-card sb-controls" aria-label="Site Board filters">
-      <label class="sb-label" for="f-site">Site name
-        <select id="f-site" class="sb-field"><option value="">Select a site…</option></select>
-      </label>
+      <div class="sb-label">Site names
+        <div class="sb-multi" id="site-multi">
+          <button id="site-picker" class="sb-picker" type="button" aria-label="Choose site names" aria-haspopup="listbox" aria-expanded="false"><span id="site-picker-text">Select one or more sites…</span><span>▾</span></button>
+          <div id="site-panel" class="sb-site-panel" hidden>
+            <div class="sb-site-actions"><button id="select-all-sites" type="button">Select all</button><button id="clear-sites" type="button">Clear</button></div>
+            <div id="site-options" class="sb-site-options" role="listbox" aria-multiselectable="true"></div>
+          </div>
+        </div>
+      </div>
       <label class="sb-label" for="f-days">Report period
         <select id="f-days" class="sb-field">
           <option value="30">Last 30 days</option><option value="90">Last 90 days</option>
@@ -77,12 +85,12 @@
     </section>
     <div id="status" class="sb-status" role="status"></div>
 
-    <div id="board" hidden>
+    <div id="board">
       <section class="sb-kpis" aria-label="DPR dashboard summary">
         <div class="sb-card sb-kpi" style="--tone:#1565c0"><strong id="k-reports">0</strong><span>Daily reports</span></div>
         <div class="sb-card sb-kpi" style="--tone:#13a05f"><strong id="k-days">0</strong><span>Reported days</span></div>
-        <div class="sb-card sb-kpi" style="--tone:#e07a00"><strong id="k-men">0</strong><span>Latest manpower</span></div>
-        <div class="sb-card sb-kpi" style="--tone:#7348d6"><strong id="k-photos">0</strong><span>DPR photos</span></div>
+        <div class="sb-card sb-kpi" style="--tone:#e07a00"><strong id="k-sites">0</strong><span>Sites with reports</span></div>
+        <div class="sb-card sb-kpi" style="--tone:#7348d6"><strong id="k-photos">0</strong><span>Reports with photos</span></div>
       </section>
 
       <section class="sb-overview">
@@ -93,8 +101,8 @@
           <p id="latest-activity" class="sb-activity">—</p>
         </article>
         <article class="sb-card sb-trend">
-          <div class="sb-eyebrow">Manpower trend · latest 30 reports</div>
-          <div id="trend" class="sb-bars" aria-label="Daily manpower trend"></div>
+          <div class="sb-eyebrow">DPR activity · latest 30 reporting days</div>
+          <div id="trend" class="sb-bars" aria-label="Daily report activity trend"></div>
         </article>
       </section>
 
@@ -102,7 +110,7 @@
         <div class="sb-search-head">
           <div class="sb-search">
             <label class="sr-only" for="search">Search daily reports</label>
-            <input id="search" type="search" placeholder="Search date, location, item of work, activity, reporter or photo caption…" autocomplete="off">
+            <input id="search" type="search" placeholder="Search site, date, location, work, activity, reporter or photo caption…" autocomplete="off">
             <button id="clear-search" type="button" aria-label="Clear search">×</button>
           </div>
           <div id="result-count" class="sb-count">0 reports</div>
@@ -126,57 +134,64 @@
 
   <script>
     requireLogin();
-    let REPORTS=[];
+    let REPORTS=[],SITES=[];
     const $=id=>document.getElementById(id);
     const safe=v=>window.esc?window.esc(v):String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     function fmtDate(iso){if(!iso)return"—";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso}
     function setStatus(text,type=""){$("status").textContent=text||"";$("status").className="sb-status "+type}
-    function searchText(row){const photo=row.photo||{};return [row.date,fmtDate(row.date),row.location,row.item_of_work,row.description,row.prepared_by,row.status,photo.caption].join(" ").toLowerCase()}
+    function searchText(row){const photo=row.photo||{};return [row.site_name,row.date,fmtDate(row.date),row.location,row.item_of_work,row.description,row.prepared_by,row.status,photo.caption].join(" ").toLowerCase()}
+    function selectedSiteIds(){return [...document.querySelectorAll(".site-check:checked")].map(x=>x.value)}
+    function updateSitePicker(){
+      const ids=selectedSiteIds(),names=SITES.filter(s=>ids.includes(String(s.id))).map(s=>s.site_name);
+      $("site-picker-text").textContent=!names.length?"Select one or more sites…":names.length<=2?names.join(", "):`${names.length} sites selected`;
+    }
+    function setSitePanel(open){$("site-panel").hidden=!open;$("site-picker").setAttribute("aria-expanded",String(open))}
 
     async function boot(){
       setStatus("Loading site names…");
       try{
         const r=await vmmsApi("/api/v1/sites");
         if(!r.ok)throw Error("Could not load sites");
-        const sites=(await r.json()).slice().sort((a,b)=>(a.site_name||"").localeCompare(b.site_name||""));
-        $("f-site").innerHTML='<option value="">Select a site…</option>'+sites.map(s=>`<option value="${safe(s.id)}">${safe(s.site_name)}</option>`).join("");
-        const saved=localStorage.getItem("vcms_site_board_site");
-        if(saved&&sites.some(s=>String(s.id)===saved))$("f-site").value=saved;
-        if($("f-site").value)load();
-        else setStatus("Select a site to build its dashboard from saved Daily Progress Reports.");
+        SITES=(await r.json()).slice().sort((a,b)=>(a.site_name||"").localeCompare(b.site_name||""));
+        let saved=[];try{saved=JSON.parse(localStorage.getItem("vcms_site_board_sites")||"[]")}catch(e){}
+        const old=localStorage.getItem("vcms_site_board_site");if(!saved.length&&old)saved=[old];
+        $("site-options").innerHTML=SITES.map(s=>`<label class="sb-site-option" role="option"><input class="site-check" type="checkbox" value="${safe(s.id)}" ${saved.includes(String(s.id))?"checked":""}><span>${safe(s.site_name)}</span></label>`).join("");
+        document.querySelectorAll(".site-check").forEach(x=>x.onchange=updateSitePicker);updateSitePicker();
+        if(selectedSiteIds().length)load();
+        else setStatus("Select one or more sites, then tap Load. You can search the loaded Daily Reports below.");
       }catch(e){setStatus("Could not load site names. Check your connection and refresh.","error")}
     }
 
     async function load(){
-      const siteId=$("f-site").value;
-      if(!siteId){$("board").hidden=true;setStatus("Select a site to build its dashboard from saved Daily Progress Reports.");return}
-      localStorage.setItem("vcms_site_board_site",siteId);
-      $("load-btn").disabled=true;$("load-btn").textContent="Loading…";$("board").hidden=true;
+      const siteIds=selectedSiteIds();
+      if(!siteIds.length){setStatus("Select at least one site before loading Daily Reports.","error");return}
+      localStorage.setItem("vcms_site_board_sites",JSON.stringify(siteIds));
+      $("load-btn").disabled=true;$("load-btn").textContent="Loading…";
       setStatus("Loading Daily Progress Reports…");
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
       try{
-        const url=`/api/v1/site-progress?site_id=${encodeURIComponent(siteId)}&days=${encodeURIComponent($("f-days").value)}`;
+        const url=`/api/v1/site-progress?site_ids=${encodeURIComponent(siteIds.join(","))}&days=${encodeURIComponent($("f-days").value)}`;
         const r=await vmmsApi(url,{signal:controller.signal});
         const data=await r.json().catch(()=>({}));
         if(!r.ok)throw Error(data.detail||"Could not load Daily Reports");
         REPORTS=Array.isArray(data.reports)?data.reports:[];
-        renderDashboard(data);$("search").value="";renderRows();$("board").hidden=false;
-        setStatus(data.partial?"Daily Report text loaded, but some manpower or photos could not be loaded. Tap Load to retry.":"Dashboard generated from saved Daily Progress Reports.",data.partial?"":"ok");
+        renderDashboard(data);renderRows();
+        setStatus(data.partial?"Daily Report text loaded, but some photos could not be loaded. Tap Load to retry.":"Dashboard generated from saved Daily Progress Reports.",data.partial?"":"ok");
       }catch(e){
-        REPORTS=[];$("board").hidden=true;
-        setStatus(e&&e.name==="AbortError"?"The request took too long. Tap Load to retry.":(e.message||"Could not connect. Tap Load to retry."),"error");
+        const message=e&&e.name==="AbortError"?"The request took too long. Tap Load to retry.":"Could not connect to Site Board. Your previous results are still available; tap Load to retry.";
+        setStatus(message,"error");
       }finally{clearTimeout(timer);$("load-btn").disabled=false;$("load-btn").textContent="Load"}
     }
 
     function renderDashboard(data){
       const s=data.summary||{},latest=REPORTS[0]||{};
       $("k-reports").textContent=s.reports||0;$("k-days").textContent=s.reported_days||0;
-      $("k-men").textContent=s.latest_manpower||0;$("k-photos").textContent=s.photos||0;
+      $("k-sites").textContent=s.selected_sites||0;$("k-photos").textContent=s.reports_with_photos||0;
       $("latest-title").textContent=latest.item_of_work||"No activity recorded";
-      $("latest-meta").textContent=latest.date?`${fmtDate(latest.date)} · ${latest.location||"Location not entered"} · Reported by ${latest.prepared_by||"—"}`:"No Daily Report in this period";
+      $("latest-meta").textContent=latest.date?`${latest.site_name||"Site"} · ${fmtDate(latest.date)} · ${latest.location||"Location not entered"} · Reported by ${latest.prepared_by||"—"}`:"No Daily Report in this period";
       $("latest-activity").textContent=latest.description||"No detailed activity description entered.";
-      const trend=data.trend||[],max=Math.max(1,...trend.map(x=>Number(x.manpower)||0));
-      $("trend").innerHTML=trend.length?trend.map(x=>`<div class="sb-bar" style="--h:${Math.max(3,Math.round((Number(x.manpower)||0)/max*100))}%" data-tip="${safe(fmtDate(x.date))}: ${Number(x.manpower)||0} men"></div>`).join(""):'<span class="sb-muted">No manpower data</span>';
+      const trend=data.trend||[],max=Math.max(1,...trend.map(x=>Number(x.reports)||0));
+      $("trend").innerHTML=trend.length?trend.map(x=>`<div class="sb-bar" style="--h:${Math.max(3,Math.round((Number(x.reports)||0)/max*100))}%" data-tip="${safe(fmtDate(x.date))}: ${Number(x.reports)||0} DPR${Number(x.reports)===1?"":"s"}"></div>`).join(""):'<span class="sb-muted">No report activity</span>';
     }
 
     function renderRows(){
@@ -184,18 +199,22 @@
       const rows=q?REPORTS.filter(r=>searchText(r).includes(q)):REPORTS;
       $("result-count").textContent=`${rows.length} of ${REPORTS.length} report${REPORTS.length===1?"":"s"}`;
       $("report-rows").innerHTML=rows.map(r=>{
-        const p=r.photo||{},photo=p.url?`<button type="button" class="sb-photo" data-url="${safe(p.url)}" data-caption="${safe(p.caption||r.item_of_work||r.date||"")}"><img loading="lazy" decoding="async" src="${safe(p.url)}" alt="DPR photo for ${safe(r.item_of_work||r.date||"")}">${r.photo_count>1?`<span>+${r.photo_count-1}</span>`:""}</button>`:'<div class="sb-no-photo">No DPR photo</div>';
-        return `<tr><td><div class="sb-date">${safe(fmtDate(r.date))}</div><div class="sb-muted">${r.manpower||0} men</div></td><td><div class="sb-location">${safe(r.location||"—")}</div></td><td><div class="sb-work">${safe(r.item_of_work||"Activity")}</div><div class="sb-description">${safe(r.description||"No detailed description entered")}</div><div class="sb-muted" style="margin-top:7px">Reported by ${safe(r.prepared_by||"—")}</div></td><td>${photo}</td></tr>`;
+        const p=r.photo||{},photo=p.url?`<button type="button" class="sb-photo" data-url="${safe(p.url)}" data-caption="${safe(p.caption||r.item_of_work||r.date||"")}"><img loading="lazy" decoding="async" src="${safe(p.url)}" alt="DPR photo for ${safe(r.item_of_work||r.date||"")}"></button>`:'<div class="sb-no-photo">No DPR photo</div>';
+        return `<tr><td><div class="sb-date">${safe(fmtDate(r.date))}</div></td><td><div class="sb-work">${safe(r.site_name||"Site")}</div><div class="sb-location">${safe(r.location||"—")}</div></td><td><div class="sb-work">${safe(r.item_of_work||"Activity")}</div><div class="sb-description">${safe(r.description||"No detailed description entered")}</div><div class="sb-muted" style="margin-top:7px">Reported by ${safe(r.prepared_by||"—")}</div></td><td>${photo}</td></tr>`;
       }).join("");
       $("empty").hidden=rows.length>0;$("report-rows").closest("table").style.display=rows.length?"table":"none";
       document.querySelectorAll(".sb-photo").forEach(btn=>btn.onclick=()=>openPhoto(btn.dataset.url,btn.dataset.caption));
     }
     function openPhoto(url,caption){$("modal-image").src=url;$("modal-caption").textContent=caption||"Daily Report photo";$("photo-modal").classList.add("open")}
     function closePhoto(){$("photo-modal").classList.remove("open");$("modal-image").src=""}
-    $("load-btn").onclick=load;$("f-site").onchange=load;$("f-days").onchange=()=>$("f-site").value&&load();
+    $("load-btn").onclick=load;$("f-days").onchange=()=>selectedSiteIds().length&&load();
+    $("site-picker").onclick=()=>setSitePanel($("site-panel").hidden);
+    $("select-all-sites").onclick=()=>{document.querySelectorAll(".site-check").forEach(x=>x.checked=true);updateSitePicker()};
+    $("clear-sites").onclick=()=>{document.querySelectorAll(".site-check").forEach(x=>x.checked=false);updateSitePicker()};
     $("search").oninput=renderRows;$("clear-search").onclick=()=>{$("search").value="";renderRows();$("search").focus()};
     $("photo-modal").onclick=e=>{if(e.target===$("photo-modal")||e.target.closest(".sb-close"))closePhoto()};
-    document.addEventListener("keydown",e=>{if(e.key==="Escape")closePhoto()});
+    document.addEventListener("click",e=>{if(!e.target.closest("#site-multi"))setSitePanel(false)});
+    document.addEventListener("keydown",e=>{if(e.key==="Escape"){closePhoto();setSitePanel(false)}});
     boot();
     if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
   </script>
