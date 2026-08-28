@@ -17,7 +17,7 @@ from datetime import date as date_cls, datetime, timedelta, timezone
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware; from .assistant import router as assistant_router
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 
 from .auth import (
@@ -25,6 +25,7 @@ from .auth import (
     get_current_user,
     invalidate_users as _cache_invalidate_users,
 )
+from .assistant import router as assistant_router
 from .core.roles import (
     ALL_ROLES, ATTENDANCE_ROLES, COORDINATOR_ROLES, FULL_ROLES,
     MANAGER_ROLES, SUPERVISOR_ROLES,
@@ -45,7 +46,8 @@ from .modules.projects.router import ProjectModuleContext, build_projects_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
-app.add_middleware(GZipMiddleware, minimum_size=750, compresslevel=5); app.include_router(assistant_router)
+app.add_middleware(GZipMiddleware, minimum_size=750, compresslevel=5)
+app.include_router(assistant_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

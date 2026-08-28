@@ -1,1 +1,3 @@
 .venv-audit/
+test-results/
+playwright-report/

@@ -8,14 +8,39 @@ from __future__ import annotations
 
 import os
 import json
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from .auth import get_current_user
 
 router = APIRouter()
+
+
+class AssistantRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=1200)
+
+
+# Render runs one lightweight web process for VCMS. This small per-user guard
+# prevents accidental double taps (and scripted abuse) from exhausting the
+# Gemini free quota. It is deliberately independent of the database.
+_REQUESTS: dict[str, deque[float]] = defaultdict(deque)
+_RATE_WINDOW_SECONDS = 60
+_RATE_MAX_REQUESTS = 6
+
+
+def _check_rate_limit(user_id: str) -> None:
+    now = time.monotonic()
+    bucket = _REQUESTS[str(user_id)]
+    while bucket and bucket[0] <= now - _RATE_WINDOW_SECONDS:
+        bucket.popleft()
+    if len(bucket) >= _RATE_MAX_REQUESTS:
+        raise HTTPException(status_code=429, detail="Please wait a moment before asking again")
+    bucket.append(now)
 
 
 def _today_sgt() -> str:
@@ -184,7 +209,7 @@ def _cap(obj, limit=6000):
     return s
 
 
-async def run_assistant(message: str, user: dict, today: str, model: str = "") -> dict:
+async def run_assistant(message: str, user: dict, today: str) -> dict:
     """Main entry: returns {'reply': str} or {'reply': str, 'error': True}."""
     message = (message or "").strip()
     if not message:
@@ -210,7 +235,11 @@ async def run_assistant(message: str, user: dict, today: str, model: str = "") -
         for _ in range(5):  # up to 5 tool rounds
             payload["contents"] = contents
             try:
-                r = await client.post("https://generativelanguage.googleapis.com/v1beta/models/" + (model or GEMINI_MODEL) + ":generateContent?key=" + GEMINI_API_KEY, json=payload)
+                r = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+                    params={"key": GEMINI_API_KEY},
+                    json=payload,
+                )
             except Exception:
                 return {"reply": "The assistant timed out. Please try again.", "error": True}
             if r.status_code != 200:
@@ -236,6 +265,7 @@ async def run_assistant(message: str, user: dict, today: str, model: str = "") -
 
 
 @router.post("/api/v1/assistant")
-async def assistant_endpoint(payload: dict, user: dict = Depends(get_current_user)):
+async def assistant_endpoint(payload: AssistantRequest, user: dict = Depends(get_current_user)):
     """Chat assistant. Body: {"message": "..."}. Role-scoped via the user's token."""
-    return await run_assistant((payload or {}).get("message", ""), user, _today_sgt(), (payload or {}).get("model", ""))
+    _check_rate_limit(user.get("user_id", "unknown"))
+    return await run_assistant(payload.message, user, _today_sgt())

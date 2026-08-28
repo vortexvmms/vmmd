@@ -5,10 +5,10 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v50-site-board-resilient';
+const CACHE = 'vcms-v51-assistant';
 const APP_SHELL = [
   './','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html','camera.html','camera-settings.html','camera-photos.html','audit-log.html','camera-manifest.json',
-  'css/app.css','js/core-bundle.js?v=20260828-shell2','js/auth.js?v=20260813-8','js/ui.js?v=20260825-ui5','js/shell.js?v=20260828-shell2','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'
+  'css/app.css','css/assistant.css?v=20260828-1','js/core-bundle.js?v=20260828-shell3','js/auth.js?v=20260813-8','js/ui.js?v=20260825-ui5','js/shell.js?v=20260828-shell3','js/chatbot.js?v=20260828-1','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {

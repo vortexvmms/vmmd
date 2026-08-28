@@ -65,4 +65,13 @@
 })();
 
 // ---- Load the shared desktop application shell ----
-(function () {var script=document.createElement("script");script.src="js/shell.js?v=20260828-shell2";script.defer=true;(document.head||document.documentElement).appendChild(script)})();
+(function () {
+  var shell=document.createElement("script");
+  shell.src="js/shell.js?v=20260828-shell3";
+  shell.defer=true;
+  (document.head||document.documentElement).appendChild(shell);
+  var assistant=document.createElement("script");
+  assistant.src="js/chatbot.js?v=20260828-1";
+  assistant.defer=true;
+  (document.head||document.documentElement).appendChild(assistant);
+})();

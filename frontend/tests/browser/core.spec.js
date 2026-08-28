@@ -181,3 +181,21 @@ test('all visible form controls have an accessible name', async ({ page }) => {
     }).length);
   expect(unnamed).toBe(0);
 });
+
+test('VCMS Assistant is available site-wide and returns a role-scoped answer', async ({ page }) => {
+  await signedIn(page, 'site_sup');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/attendance*', r => r.fulfill({ json: { allocations: [], summary: {} } }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/assistant', async route => {
+    const body = route.request().postDataJSON();
+    expect(body).toEqual({ message: 'Today’s attendance' });
+    await route.fulfill({ json: { reply: 'Today: 7 workers are present at LOGISTICS.' } });
+  });
+  await page.goto('/attendance.html');
+  await expect(page.locator('#vcms-assistant-fab')).toBeVisible();
+  await page.locator('#vcms-assistant-fab').click();
+  await expect(page.locator('#vcms-assistant-panel')).toHaveClass(/is-open/);
+  await page.getByRole('button', { name: 'Today’s attendance' }).click();
+  await expect(page.locator('.vcms-assistant-msg.is-bot').last()).toContainText('7 workers are present');
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+});
