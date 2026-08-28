@@ -69,7 +69,7 @@
         <div class="sb-multi" id="site-multi">
           <button id="site-picker" class="sb-picker" type="button" aria-label="Choose site names" aria-haspopup="listbox" aria-expanded="false"><span id="site-picker-text">Select one or more sites…</span><span>▾</span></button>
           <div id="site-panel" class="sb-site-panel" hidden>
-            <div class="sb-site-actions"><button id="select-all-sites" type="button">Select all</button><button id="clear-sites" type="button">Clear</button></div>
+            <div class="sb-site-actions"><button id="select-all-sites" type="button">Select all</button><button id="clear-sites" type="button">Clear</button><button id="done-sites" type="button">Done</button></div>
             <div id="site-options" class="sb-site-options" role="listbox" aria-multiselectable="true"></div>
           </div>
         </div>
@@ -211,6 +211,7 @@
     $("site-picker").onclick=()=>setSitePanel($("site-panel").hidden);
     $("select-all-sites").onclick=()=>{document.querySelectorAll(".site-check").forEach(x=>x.checked=true);updateSitePicker()};
     $("clear-sites").onclick=()=>{document.querySelectorAll(".site-check").forEach(x=>x.checked=false);updateSitePicker()};
+    $("done-sites").onclick=()=>setSitePanel(false);
     $("search").oninput=renderRows;$("clear-search").onclick=()=>{$("search").value="";renderRows();$("search").focus()};
     $("photo-modal").onclick=e=>{if(e.target===$("photo-modal")||e.target.closest(".sb-close"))closePhoto()};
     document.addEventListener("click",e=>{if(!e.target.closest("#site-multi"))setSitePanel(false)});

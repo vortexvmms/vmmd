@@ -157,6 +157,7 @@ test('Site Board loads selected-site DPRs and searches the report table', async 
   await expect(page.locator('#search')).toBeVisible();
   await page.locator('#site-picker').click();
   await page.locator('.site-check[value="s1"]').check();
+  await page.locator('#done-sites').click();
   await page.locator('#load-btn').click();
   await expect(page.locator('#k-reports')).toHaveText('2');
   await expect(page.locator('#report-rows tr')).toHaveCount(2);
