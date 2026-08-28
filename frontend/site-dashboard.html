@@ -178,7 +178,8 @@
         renderDashboard(data);renderRows();
         setStatus(data.partial?"Daily Report text loaded, but some photos could not be loaded. Tap Load to retry.":"Dashboard generated from saved Daily Progress Reports.",data.partial?"":"ok");
       }catch(e){
-        const message=e&&e.name==="AbortError"?"The request took too long. Tap Load to retry.":"Could not connect to Site Board. Your previous results are still available; tap Load to retry.";
+        const known=e&&e.message&&!/Failed to fetch|NetworkError|Load failed/i.test(e.message)?e.message:"";
+        const message=e&&e.name==="AbortError"?"The request took too long. Tap Load to retry.":known||"Could not connect to Site Board. Your previous results are still available; tap Load to retry.";
         setStatus(message,"error");
       }finally{clearTimeout(timer);$("load-btn").disabled=false;$("load-btn").textContent="Load"}
     }

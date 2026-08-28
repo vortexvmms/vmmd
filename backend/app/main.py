@@ -3791,14 +3791,25 @@ async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
             f"{REST}/daily_reports",
             params={**common,
                     "select": "id,site_id,report_date,location,item_of_work,description,"
-                              "prepared_by_name,status,updated_at,first_photo:photos->0,"
-                              "sites(site_name)"},
+                              "prepared_by_name,status,updated_at,sites(site_name)"},
             headers=supabase_headers(user["token"]),
         )
         if meta.status_code != 200:
             raise HTTPException(status_code=503,
                                 detail="Daily report data is temporarily unavailable")
         rows = meta.json()
+
+        # Photos are optional. Keep this as a separate, skinny projection so a
+        # PostgREST JSON projection issue or slow photo payload can never stop
+        # the textual dashboard and search results from loading.
+        photos = await client.get(
+            f"{REST}/daily_reports",
+            params={**common, "select": "id,first_photo:photos->0"},
+            headers=supabase_headers(user["token"]),
+        )
+        partial = photos.status_code != 200
+        first_photo_by_id = ({item.get("id"): item.get("first_photo")
+                              for item in photos.json()} if not partial else {})
 
     def relevant_photo(photo):
         if isinstance(photo, str) and photo.strip():
@@ -3811,7 +3822,7 @@ async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
 
     reports, report_dates, reports_with_photos = [], {}, 0
     for row in rows:
-        photo = relevant_photo(row.get("first_photo"))
+        photo = relevant_photo(first_photo_by_id.get(row.get("id")))
         if photo:
             reports_with_photos += 1
         if row.get("report_date"):
@@ -3831,7 +3842,7 @@ async def site_progress(site_id: str = "", site_ids: str = "", days: int = 180,
 
     latest = reports[0] if reports else {}
     return {
-        "today": today, "days": days, "site_ids": selected_ids, "partial": False,
+        "today": today, "days": days, "site_ids": selected_ids, "partial": partial,
         "summary": {
             "reports": len(reports),
             "reported_days": len({x["date"] for x in reports if x.get("date")}),

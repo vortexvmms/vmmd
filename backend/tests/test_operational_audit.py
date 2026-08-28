@@ -81,7 +81,8 @@ def test_site_board_is_scoped_to_selected_sites_and_searches_dpr_content():
     assert 'site_filter = (f"eq.{selected_ids[0]}"' in route
     assert 'else f"in.({\',\'.join(selected_ids)})")' in route
     assert "id,site_id,report_date,location,item_of_work,description" in route
-    assert "first_photo:photos->0" in route
+    assert '"select": "id,first_photo:photos->0"' in route
+    assert 'partial = photos.status_code != 200' in route
     assert '"reports": reports' in route and '"photo": photo' in route
     for heading in ("Date", "Location", "Detailed activity description", "Relevant DPR photo"):
         assert heading in SITE_BOARD

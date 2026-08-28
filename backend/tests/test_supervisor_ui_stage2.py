@@ -35,7 +35,7 @@ def test_supervisor_home_remains_reduced_to_daily_work_and_support():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v49-site-board-multi" in page("sw.js")
+    assert "vcms-v50-site-board-resilient" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
