@@ -184,7 +184,7 @@ def _cap(obj, limit=6000):
     return s
 
 
-async def run_assistant(message: str, user: dict, today: str) -> dict:
+async def run_assistant(message: str, user: dict, today: str, model: str = "") -> dict:
     """Main entry: returns {'reply': str} or {'reply': str, 'error': True}."""
     message = (message or "").strip()
     if not message:
@@ -210,7 +210,7 @@ async def run_assistant(message: str, user: dict, today: str) -> dict:
         for _ in range(5):  # up to 5 tool rounds
             payload["contents"] = contents
             try:
-                r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
+                r = await client.post("https://generativelanguage.googleapis.com/v1beta/models/" + (model or GEMINI_MODEL) + ":generateContent?key=" + GEMINI_API_KEY, json=payload)
             except Exception:
                 return {"reply": "The assistant timed out. Please try again.", "error": True}
             if r.status_code != 200:
@@ -238,4 +238,4 @@ async def run_assistant(message: str, user: dict, today: str) -> dict:
 @router.post("/api/v1/assistant")
 async def assistant_endpoint(payload: dict, user: dict = Depends(get_current_user)):
     """Chat assistant. Body: {"message": "..."}. Role-scoped via the user's token."""
-    return await run_assistant((payload or {}).get("message", ""), user, _today_sgt())
+    return await run_assistant((payload or {}).get("message", ""), user, _today_sgt(), (payload or {}).get("model", ""))
