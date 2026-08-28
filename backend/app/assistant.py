@@ -206,7 +206,7 @@ async def run_assistant(message: str, user: dict, today: str, model: str = "") -
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 900},
     }
 
-    async with httpx.AsyncClient(timeout=45) as client:
+    async with httpx.AsyncClient(timeout=90) as client:
         for _ in range(5):  # up to 5 tool rounds
             payload["contents"] = contents
             try:
@@ -214,7 +214,7 @@ async def run_assistant(message: str, user: dict, today: str, model: str = "") -
             except Exception:
                 return {"reply": "The assistant timed out. Please try again.", "error": True}
             if r.status_code != 200:
-                _m = await client.get("https://generativelanguage.googleapis.com/v1beta/models?key=" + GEMINI_API_KEY); return {"reply": str(r.status_code) + " MODELS " + _m.text[:3000],
+                return {"reply": "The assistant is busy right now (" + str(r.status_code) + "). Please try again.",
                         "error": True}
             data = r.json()
             cand = (data.get("candidates") or [{}])[0]
