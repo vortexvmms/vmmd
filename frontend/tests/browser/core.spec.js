@@ -141,13 +141,27 @@ test('Resource Summary desktop controls are compact and aligned', async ({ page 
   expect(metrics.printWidth).toBeLessThanOrEqual(200);
 });
 
-test('Site Board replaces failed loading with a retry action', async ({ page }) => {
+test('Site Board loads selected-site DPRs and searches the report table', async ({ page }) => {
   await signedIn(page, 'admin');
-  await page.route('https://vmms-backend-sg.onrender.com/api/v1/site-progress*', r => r.fulfill({ status:503, json:{ detail:'Site Board data is temporarily unavailable' } }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/site-progress*', r => r.fulfill({ json:{
+    today:'2026-08-28', site_id:'s1', partial:false,
+    summary:{ reports:2, reported_days:2, latest_manpower:7, photos:1 },
+    trend:[{ date:'2026-08-27', manpower:6 },{ date:'2026-08-28', manpower:7 }],
+    reports:[
+      { id:'d1',date:'2026-08-28',location:'DTSS2-T08',item_of_work:'Tunnel repair',description:'Grouting at shaft wall',prepared_by:'Rajesh',manpower:7,photo_count:1,photo:{url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',caption:'Grouting'} },
+      { id:'d2',date:'2026-08-27',location:'Store',item_of_work:'Delivery',description:'Material unloading',prepared_by:'Prakash',manpower:6,photo_count:0,photo:null }
+    ]
+  }}));
   await page.goto('/site-dashboard.html');
-  await expect(page.getByText('Site Board data is temporarily unavailable')).toBeVisible();
-  await expect(page.getByRole('button', { name:'Retry' })).toBeVisible();
-  await expect(page.getByText('Loading…')).toHaveCount(0);
+  await page.locator('#f-site').selectOption('s1');
+  await expect(page.locator('#k-reports')).toHaveText('2');
+  await expect(page.locator('#report-rows tr')).toHaveCount(2);
+  await page.locator('#search').fill('grouting');
+  await expect(page.locator('#report-rows tr')).toHaveCount(1);
+  await expect(page.locator('#report-rows')).toContainText('DTSS2-T08');
+  await expect(page.locator('#report-rows .sb-photo')).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
 test('all visible form controls have an accessible name', async ({ page }) => {

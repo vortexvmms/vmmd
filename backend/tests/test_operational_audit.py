@@ -74,14 +74,17 @@ def test_responsive_contracts_present():
     assert "min-width:901px" in HOME
 
 
-def test_site_board_avoids_wide_photo_history_and_recovers_from_errors():
+def test_site_board_is_scoped_to_one_site_and_searches_dpr_content():
     route = MAIN[MAIN.index('@app.get("/api/v1/site-progress")'):
                  MAIN.index('@app.get("/api/v1/home-overview")')]
-    assert '"select": "id,report_date,site_id,item_of_work,description,prepared_by_name,sites(site_name)"' in route
-    assert '"select": "id,manpower"' in route
-    assert '"select": "id,photos"' in route
-    assert "report_date,site_id,item_of_work,description,manpower,photos" not in route
-    assert "loadError" in SITE_BOARD and "Retry" in SITE_BOARD
+    assert 'site_id: str = ""' in route
+    assert '"site_id": f"eq.{site_id}"' in route
+    assert "id,report_date,location,item_of_work,description,prepared_by_name" in route
+    assert '"select": "id,manpower,photos"' in route
+    assert '"reports": reports' in route and '"photo": relevant_photo(photos)' in route
+    for heading in ("Date", "Location", "Detailed activity description", "Relevant DPR photo"):
+        assert heading in SITE_BOARD
+    assert 'id="f-site"' in SITE_BOARD and 'id="search"' in SITE_BOARD
 
 
 def test_dpr_and_resource_summary_have_explicit_desktop_layouts():

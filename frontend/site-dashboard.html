@@ -3,142 +3,201 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#C00000">
-  <title>VCMS — Site Progress</title>
+  <meta name="theme-color" content="#1565C0">
+  <title>VCMS — Site Board</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260828-shell2"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
+  <script src="js/auth.js?v=20260813-8"></script>
+  <script src="js/ui.js?v=20260825-ui5"></script>
   <style>
-    body.db { background:#F1F3F6; }
-    .wrap { max-width:1180px; }
-    .card { background:#fff; border:1px solid #E5E7EB; border-radius:16px; box-shadow:0 1px 2px rgba(16,24,40,.05); }
-    .kpi { padding:16px 18px; border-left:5px solid var(--ac,#16A34A); }
-    .kpi .n { font-size:30px; font-weight:800; color:#0F172A; line-height:1.05; letter-spacing:-.01em; }
-    .kpi .l { font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; }
-    .sect-h { font-size:13px; font-weight:800; color:#334155; letter-spacing:.02em; }
-    .chart-h { position:relative; height:230px; }
-    .stile .hd { font-weight:800; color:#0F172A; font-size:15px; }
-    .stile .sub { color:#64748B; font-size:12px; }
-    .badge { font-size:11px; font-weight:800; border-radius:999px; padding:3px 11px; white-space:nowrap; }
-    .b-men{ background:#DCFCE7; color:#15803D;} .b-photo{ background:#DBEAFE; color:#1D4ED8;}
-    .clamp3 { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-    .clamp2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-    .feed-item { padding:11px 14px; border-top:1px solid #F1F5F9; }
-    .stale { color:#B91C1C; font-weight:700; } .fresh { color:#15803D; font-weight:700; }
-    .retry-btn{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;min-height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--vcms-brand,#C00000);color:#fff;font-weight:800;cursor:pointer}
-    /* self-contained responsive grids (don't depend on prebuilt Tailwind subset) */
-    .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
-    .sitegrid { display:grid; grid-template-columns:1fr; gap:12px; }
-    @media (min-width:768px){ .sitegrid{ grid-template-columns:repeat(2,1fr); } }
-    @media (min-width:1024px){ .kpis{ grid-template-columns:repeat(4,1fr); } .sitegrid{ grid-template-columns:repeat(3,1fr); } }
+    body.site-board{background:#eef3f9;color:#172033}
+    .sb-wrap{width:min(1500px,calc(100% - 32px));margin:0 auto;padding:20px 0 44px}
+    .sb-card{background:#fff;border:1px solid #d9e2ee;border-radius:16px;box-shadow:0 5px 18px rgba(23,32,51,.06)}
+    .sb-controls{display:grid;grid-template-columns:minmax(240px,1fr) 190px 120px;gap:12px;align-items:end;padding:16px}
+    .sb-label{display:block;font-size:12px;font-weight:800;color:#5a6880;text-transform:uppercase;letter-spacing:.04em}
+    .sb-field{display:block;width:100%;height:46px;margin-top:6px;padding:0 13px;border:1px solid #cbd6e3;border-radius:10px;background:#fff;color:#172033;font:inherit}
+    .sb-btn{height:46px;border:0;border-radius:10px;padding:0 18px;background:var(--vcms-brand,#1565c0);color:#fff;font-weight:800;cursor:pointer}
+    .sb-btn.secondary{background:#202b3d}.sb-btn:disabled{opacity:.55;cursor:not-allowed}
+    .sb-status{min-height:38px;margin:12px 0;padding:10px 14px;border-radius:10px;background:#fff7dd;color:#8a4b09;font-size:13px}
+    .sb-status.ok{background:#eaf8ef;color:#147a38}.sb-status.error{background:#fff0f0;color:#a51919}
+    .sb-status:empty{display:none}
+    .sb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+    .sb-kpi{padding:16px 18px;border-top:4px solid var(--tone,#1565c0)}
+    .sb-kpi strong{display:block;font-size:29px;line-height:1;color:#151b27}
+    .sb-kpi span{display:block;margin-top:7px;color:#617086;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+    .sb-overview{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,.65fr);gap:14px;margin-top:14px}
+    .sb-latest{padding:18px}.sb-eyebrow{font-size:12px;font-weight:900;color:#5f6f85;text-transform:uppercase;letter-spacing:.06em}
+    .sb-latest h2{margin:7px 0 2px;font-size:21px}.sb-muted{color:#68778c;font-size:13px}.sb-activity{white-space:pre-wrap;margin:14px 0 0;line-height:1.5}
+    .sb-trend{padding:18px;overflow:hidden}.sb-bars{height:118px;display:flex;align-items:end;gap:5px;margin-top:14px;border-bottom:1px solid #dce4ee}
+    .sb-bar{position:relative;flex:1;min-width:4px;max-width:22px;height:var(--h);min-height:3px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#2f75e8,#1558c0)}
+    .sb-bar:hover:after{content:attr(data-tip);position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);z-index:2;white-space:nowrap;padding:4px 7px;border-radius:6px;background:#172033;color:#fff;font-size:10px}
+    .sb-search-panel{margin-top:16px;overflow:hidden}.sb-search-head{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:center;padding:15px 16px;border-bottom:1px solid #dfe7f0}
+    .sb-search{position:relative}.sb-search input{width:100%;height:46px;border:1px solid #cbd6e3;border-radius:11px;padding:0 44px 0 15px;font:inherit}
+    .sb-search button{position:absolute;right:6px;top:6px;width:34px;height:34px;border:0;border-radius:8px;background:#eef2f7;color:#425067;font-size:18px;cursor:pointer}
+    .sb-count{font-size:13px;font-weight:800;color:#5d6c82;white-space:nowrap}
+    .sb-table-wrap{overflow:auto}.sb-table{width:100%;border-collapse:collapse;table-layout:fixed}
+    .sb-table th{padding:13px 14px;background:#1c2b46;color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+    .sb-table td{padding:14px;border-bottom:1px solid #e1e8f0;vertical-align:top;font-size:14px}
+    .sb-table tbody tr:nth-child(even){background:#f7f9fc}.sb-date{font-weight:800;white-space:nowrap}.sb-location{font-weight:700;color:#34445e}
+    .sb-work{font-weight:800;margin-bottom:5px;color:#172033}.sb-description{white-space:pre-wrap;line-height:1.45;color:#425067;overflow-wrap:anywhere}
+    .sb-photo{width:128px;height:90px;border:0;border-radius:10px;overflow:hidden;background:#edf1f6;padding:0;cursor:pointer;position:relative}
+    .sb-photo img{width:100%;height:100%;object-fit:cover;display:block}.sb-photo span{position:absolute;right:5px;bottom:5px;padding:3px 7px;border-radius:999px;background:#172033dc;color:#fff;font-size:10px;font-weight:800}
+    .sb-no-photo{display:flex;width:128px;height:90px;align-items:center;justify-content:center;border:1px dashed #c9d4e1;border-radius:10px;color:#8a97a8;font-size:12px;text-align:center}
+    .sb-empty{padding:52px 18px;text-align:center;color:#6b788b}.sb-empty strong{display:block;color:#28364b;font-size:18px;margin-bottom:5px}
+    .sb-modal{display:none;position:fixed;inset:0;z-index:1000;background:#0e1521e8;padding:22px;align-items:center;justify-content:center}.sb-modal.open{display:flex}
+    .sb-modal figure{margin:0;max-width:min(1100px,96vw);max-height:92vh;text-align:center}.sb-modal img{max-width:100%;max-height:82vh;border-radius:12px;background:#fff}.sb-modal figcaption{margin-top:8px;color:#fff}.sb-close{position:fixed;top:16px;right:18px;width:44px;height:44px;border:0;border-radius:50%;background:#fff;color:#111827;font-size:25px;cursor:pointer}
+    @media(max-width:900px){.sb-wrap{width:min(100% - 20px,760px);padding-top:12px}.sb-controls{grid-template-columns:1fr 1fr}.sb-controls label:first-child{grid-column:1/-1}.sb-btn{width:100%}.sb-kpis{grid-template-columns:1fr 1fr}.sb-overview{grid-template-columns:1fr}}
+    @media(max-width:700px){.sb-table,.sb-table tbody{display:block;width:100%}.sb-table thead,.sb-table colgroup{display:none}.sb-table tbody{padding:10px}.sb-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:7px 10px;margin-bottom:10px;padding:12px;border:1px solid #dbe4ef;border-radius:12px;background:#fff!important}.sb-table td{display:block;padding:0;border:0}.sb-table td:nth-child(1),.sb-table td:nth-child(2),.sb-table td:nth-child(3){grid-column:1}.sb-table td:nth-child(4){grid-column:2;grid-row:1/4}.sb-photo,.sb-no-photo{width:112px;height:88px}.sb-description{font-size:13px}.sb-date{color:#1558c0}}
+    @media(max-width:520px){.sb-controls{grid-template-columns:1fr}.sb-controls label:first-child{grid-column:auto}.sb-kpis{grid-template-columns:1fr 1fr}.sb-kpi{padding:13px}.sb-kpi strong{font-size:24px}.sb-search-head{grid-template-columns:1fr}.sb-count{white-space:normal}}
   </style>
 </head>
-<body class="db min-h-screen flex flex-col">
+<body class="site-board min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
-    <div class="flex items-center gap-3 wrap mx-auto w-full">
-      <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
-      <div class="flex-1"><h1 class="text-lg font-bold">Site Progress</h1><p class="text-red-100 text-xs">Manpower &amp; activity across sites</p></div>
-      <select id="f-days" class="rounded-lg p-2 text-gray-800 text-sm" onchange="load()">
-        <option value="7">Last 7 days</option><option value="14" selected>Last 14 days</option><option value="30">Last 30 days</option>
-      </select>
+    <div class="flex items-center gap-3 mx-auto w-full" style="max-width:1500px">
+      <a href="home.html" class="text-2xl font-bold leading-none" aria-label="Back to Home">‹</a>
+      <div class="flex-1"><h1 class="text-lg font-bold">Site Board</h1><p class="text-red-100 text-xs">Dashboard and searchable Daily Progress Reports</p></div>
     </div>
   </header>
 
-  <main class="flex-1 p-4 wrap mx-auto w-full pb-12">
-    <div id="msg" class="text-center text-gray-500 mt-8">Loading…</div>
-    <div id="body" class="hidden">
-      <div class="kpis">
-        <div class="card kpi" style="--ac:#16A34A"><div class="n" id="k-men">—</div><div class="l">Manpower on site</div></div>
-        <div class="card kpi" style="--ac:#2563EB"><div class="n" id="k-sites">—</div><div class="l">Active sites</div></div>
-        <div class="card kpi" style="--ac:#7C3AED"><div class="n" id="k-dprs">—</div><div class="l">DPRs (period)</div></div>
-        <div class="card kpi" style="--ac:#D97706"><div class="n" id="k-photos">—</div><div class="l">Latest-day photos</div></div>
-      </div>
+  <main class="flex-1 sb-wrap">
+    <section class="sb-card sb-controls" aria-label="Site Board filters">
+      <label class="sb-label" for="f-site">Site name
+        <select id="f-site" class="sb-field"><option value="">Select a site…</option></select>
+      </label>
+      <label class="sb-label" for="f-days">Report period
+        <select id="f-days" class="sb-field">
+          <option value="30">Last 30 days</option><option value="90">Last 90 days</option>
+          <option value="180" selected>Last 6 months</option><option value="365">Last 12 months</option>
+          <option value="730">All available reports</option>
+        </select>
+      </label>
+      <button id="load-btn" class="sb-btn" type="button">Load</button>
+    </section>
+    <div id="status" class="sb-status" role="status"></div>
 
-      <div class="card p-4 mt-4">
-        <p class="sect-h mb-2">Daily manpower trend</p>
-        <div class="chart-h"><canvas id="ch-men"></canvas></div>
-      </div>
+    <div id="board" hidden>
+      <section class="sb-kpis" aria-label="DPR dashboard summary">
+        <div class="sb-card sb-kpi" style="--tone:#1565c0"><strong id="k-reports">0</strong><span>Daily reports</span></div>
+        <div class="sb-card sb-kpi" style="--tone:#13a05f"><strong id="k-days">0</strong><span>Reported days</span></div>
+        <div class="sb-card sb-kpi" style="--tone:#e07a00"><strong id="k-men">0</strong><span>Latest manpower</span></div>
+        <div class="sb-card sb-kpi" style="--tone:#7348d6"><strong id="k-photos">0</strong><span>DPR photos</span></div>
+      </section>
 
-      <p class="sect-h mt-5 mb-2">SITES</p>
-      <div id="sites" class="sitegrid"></div>
+      <section class="sb-overview">
+        <article class="sb-card sb-latest">
+          <div class="sb-eyebrow">Latest Daily Progress Report</div>
+          <h2 id="latest-title">—</h2>
+          <div id="latest-meta" class="sb-muted">—</div>
+          <p id="latest-activity" class="sb-activity">—</p>
+        </article>
+        <article class="sb-card sb-trend">
+          <div class="sb-eyebrow">Manpower trend · latest 30 reports</div>
+          <div id="trend" class="sb-bars" aria-label="Daily manpower trend"></div>
+        </article>
+      </section>
 
-      <div class="card mt-5" style="overflow:hidden">
-        <p class="sect-h p-3 border-b border-gray-100">Recent activity</p>
-        <div id="feed"></div>
-      </div>
+      <section class="sb-card sb-search-panel">
+        <div class="sb-search-head">
+          <div class="sb-search">
+            <label class="sr-only" for="search">Search daily reports</label>
+            <input id="search" type="search" placeholder="Search date, location, item of work, activity, reporter or photo caption…" autocomplete="off">
+            <button id="clear-search" type="button" aria-label="Clear search">×</button>
+          </div>
+          <div id="result-count" class="sb-count">0 reports</div>
+        </div>
+        <div class="sb-table-wrap">
+          <table class="sb-table">
+            <colgroup><col style="width:130px"><col style="width:190px"><col><col style="width:170px"></colgroup>
+            <thead><tr><th>Date</th><th>Location</th><th>Detailed activity description</th><th>Relevant DPR photo</th></tr></thead>
+            <tbody id="report-rows"></tbody>
+          </table>
+          <div id="empty" class="sb-empty" hidden><strong>No matching Daily Reports</strong><span>Try another keyword, period, or site.</span></div>
+        </div>
+      </section>
     </div>
   </main>
 
+  <div id="photo-modal" class="sb-modal" role="dialog" aria-modal="true" aria-label="DPR photo preview">
+    <button class="sb-close" type="button" aria-label="Close photo preview">×</button>
+    <figure><img id="modal-image" alt=""><figcaption id="modal-caption"></figcaption></figure>
+  </div>
+
   <script>
     requireLogin();
-    let DATA=null, CH=null;
-    function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
-    function daysAgo(iso, today){ try{ return Math.round((new Date(today)-new Date(iso))/86400000); }catch(e){ return 0; } }
+    let REPORTS=[];
+    const $=id=>document.getElementById(id);
+    const safe=v=>window.esc?window.esc(v):String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    function fmtDate(iso){if(!iso)return"—";const p=String(iso).split("-");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso}
+    function setStatus(text,type=""){$("status").textContent=text||"";$("status").className="sb-status "+type}
+    function searchText(row){const photo=row.photo||{};return [row.date,fmtDate(row.date),row.location,row.item_of_work,row.description,row.prepared_by,row.status,photo.caption].join(" ").toLowerCase()}
 
-    function loadError(message){
-      const msg=document.getElementById("msg");
-      msg.classList.remove("hidden"); msg.textContent="";
-      const text=document.createElement("div"); text.textContent=message;
-      const retry=document.createElement("button"); retry.type="button"; retry.className="retry-btn"; retry.textContent="Retry"; retry.onclick=load;
-      msg.append(text,retry);
-    }
-    async function load(){
-      const days=document.getElementById("f-days").value;
-      document.getElementById("msg").classList.remove("hidden"); document.getElementById("msg").textContent="Loading…";
-      document.getElementById("body").classList.add("hidden");
-      const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),25000);
+    async function boot(){
+      setStatus("Loading site names…");
       try{
-        const r=await vmmsApi("/api/v1/site-progress?days="+days,{signal:controller.signal});
-        if(!r.ok){
-          const error=await r.json().catch(()=>({}));
-          loadError(error.detail||("Could not load Site Board ("+r.status+").")); return;
-        }
-        DATA=await r.json();
-        document.getElementById("msg").classList.add("hidden");
-        document.getElementById("body").classList.remove("hidden");
-        render();
-      }catch(error){
-        loadError(error&&error.name==="AbortError"?"Site Board took too long to respond. Please retry.":"Could not connect to Site Board. Check the connection and retry.");
-      }finally{ clearTimeout(timeout); }
+        const r=await vmmsApi("/api/v1/sites");
+        if(!r.ok)throw Error("Could not load sites");
+        const sites=(await r.json()).slice().sort((a,b)=>(a.site_name||"").localeCompare(b.site_name||""));
+        $("f-site").innerHTML='<option value="">Select a site…</option>'+sites.map(s=>`<option value="${safe(s.id)}">${safe(s.site_name)}</option>`).join("");
+        const saved=localStorage.getItem("vcms_site_board_site");
+        if(saved&&sites.some(s=>String(s.id)===saved))$("f-site").value=saved;
+        if($("f-site").value)load();
+        else setStatus("Select a site to build its dashboard from saved Daily Progress Reports.");
+      }catch(e){setStatus("Could not load site names. Check your connection and refresh.","error")}
     }
-    function render(){
-      document.getElementById("k-men").textContent=DATA.manpower_latest;
-      document.getElementById("k-sites").textContent=DATA.active_sites;
-      document.getElementById("k-dprs").textContent=DATA.dprs;
-      document.getElementById("k-photos").textContent=(DATA.sites||[]).reduce((a,s)=>a+(s.photos||0),0);
-      const t=DATA.trend||[];
-      if(typeof Chart==="function"){
-        if(CH) CH.destroy();
-        CH=new Chart(document.getElementById("ch-men"),{type:"line",
-          data:{labels:t.map(x=>fmtDMY(x.date).slice(0,5)),datasets:[{data:t.map(x=>x.manpower),borderColor:"#16A34A",backgroundColor:"rgba(22,163,74,.12)",fill:true,tension:.35,pointRadius:2,borderWidth:2}]},
-          options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:"#EEF2F7"},ticks:{font:{size:10}}},x:{grid:{display:false},ticks:{font:{size:10}}}}}});
-      }else{
-        document.querySelector(".chart-h").innerHTML='<p class="text-sm text-gray-400 text-center mt-8">Trend chart is temporarily unavailable. Site data is shown below.</p>';
-      }
-      document.getElementById("sites").innerHTML=(DATA.sites||[]).map(s=>{
-        const ago=daysAgo(s.latest_date, DATA.today);
-        const tag=ago>=2?`<span class="stale">${ago}d ago</span>`:(ago===1?`<span>yesterday</span>`:`<span class="fresh">today</span>`);
-        return `<div class="card stile p-4">
-          <div class="flex items-start gap-2">
-            <div class="flex-1 min-w-0"><div class="hd">${esc(s.site_name)}</div><div class="sub">${esc(s.item_of_work||"—")}</div></div>
-            <span class="badge b-men">${s.manpower} men</span>
-          </div>
-          <p class="text-xs text-gray-500 mt-2">Latest: ${fmtDMY(s.latest_date)} · ${tag} &nbsp;·&nbsp; ${s.photos} photos</p>
-          <p class="text-sm text-gray-700 mt-2 clamp3">${esc(s.activity||"—")}</p>
-        </div>`;}).join("") || '<p class="text-gray-400 text-sm">No site reports in this period.</p>';
-      document.getElementById("feed").innerHTML=(DATA.feed||[]).map(f=>`
-        <div class="feed-item">
-          <div class="flex justify-between"><span class="font-bold text-sm text-gray-800">${esc(f.site_name)}</span><span class="text-xs text-gray-400">${fmtDMY(f.date)} · ${f.manpower} men</span></div>
-          <div class="text-xs text-gray-500">${esc(f.item_of_work||"")}</div>
-          <div class="text-sm text-gray-700 mt-1 clamp2">${esc(f.activity||"—")}</div>
-        </div>`).join("") || '<p class="text-gray-400 text-sm p-4">No recent activity.</p>';
+
+    async function load(){
+      const siteId=$("f-site").value;
+      if(!siteId){$("board").hidden=true;setStatus("Select a site to build its dashboard from saved Daily Progress Reports.");return}
+      localStorage.setItem("vcms_site_board_site",siteId);
+      $("load-btn").disabled=true;$("load-btn").textContent="Loading…";$("board").hidden=true;
+      setStatus("Loading Daily Progress Reports…");
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+      try{
+        const url=`/api/v1/site-progress?site_id=${encodeURIComponent(siteId)}&days=${encodeURIComponent($("f-days").value)}`;
+        const r=await vmmsApi(url,{signal:controller.signal});
+        const data=await r.json().catch(()=>({}));
+        if(!r.ok)throw Error(data.detail||"Could not load Daily Reports");
+        REPORTS=Array.isArray(data.reports)?data.reports:[];
+        renderDashboard(data);$("search").value="";renderRows();$("board").hidden=false;
+        setStatus(data.partial?"Daily Report text loaded, but some manpower or photos could not be loaded. Tap Load to retry.":"Dashboard generated from saved Daily Progress Reports.",data.partial?"":"ok");
+      }catch(e){
+        REPORTS=[];$("board").hidden=true;
+        setStatus(e&&e.name==="AbortError"?"The request took too long. Tap Load to retry.":(e.message||"Could not connect. Tap Load to retry."),"error");
+      }finally{clearTimeout(timer);$("load-btn").disabled=false;$("load-btn").textContent="Load"}
     }
-    load();
-    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+    function renderDashboard(data){
+      const s=data.summary||{},latest=REPORTS[0]||{};
+      $("k-reports").textContent=s.reports||0;$("k-days").textContent=s.reported_days||0;
+      $("k-men").textContent=s.latest_manpower||0;$("k-photos").textContent=s.photos||0;
+      $("latest-title").textContent=latest.item_of_work||"No activity recorded";
+      $("latest-meta").textContent=latest.date?`${fmtDate(latest.date)} · ${latest.location||"Location not entered"} · Reported by ${latest.prepared_by||"—"}`:"No Daily Report in this period";
+      $("latest-activity").textContent=latest.description||"No detailed activity description entered.";
+      const trend=data.trend||[],max=Math.max(1,...trend.map(x=>Number(x.manpower)||0));
+      $("trend").innerHTML=trend.length?trend.map(x=>`<div class="sb-bar" style="--h:${Math.max(3,Math.round((Number(x.manpower)||0)/max*100))}%" data-tip="${safe(fmtDate(x.date))}: ${Number(x.manpower)||0} men"></div>`).join(""):'<span class="sb-muted">No manpower data</span>';
+    }
+
+    function renderRows(){
+      const q=$("search").value.trim().toLowerCase();
+      const rows=q?REPORTS.filter(r=>searchText(r).includes(q)):REPORTS;
+      $("result-count").textContent=`${rows.length} of ${REPORTS.length} report${REPORTS.length===1?"":"s"}`;
+      $("report-rows").innerHTML=rows.map(r=>{
+        const p=r.photo||{},photo=p.url?`<button type="button" class="sb-photo" data-url="${safe(p.url)}" data-caption="${safe(p.caption||r.item_of_work||r.date||"")}"><img loading="lazy" decoding="async" src="${safe(p.url)}" alt="DPR photo for ${safe(r.item_of_work||r.date||"")}">${r.photo_count>1?`<span>+${r.photo_count-1}</span>`:""}</button>`:'<div class="sb-no-photo">No DPR photo</div>';
+        return `<tr><td><div class="sb-date">${safe(fmtDate(r.date))}</div><div class="sb-muted">${r.manpower||0} men</div></td><td><div class="sb-location">${safe(r.location||"—")}</div></td><td><div class="sb-work">${safe(r.item_of_work||"Activity")}</div><div class="sb-description">${safe(r.description||"No detailed description entered")}</div><div class="sb-muted" style="margin-top:7px">Reported by ${safe(r.prepared_by||"—")}</div></td><td>${photo}</td></tr>`;
+      }).join("");
+      $("empty").hidden=rows.length>0;$("report-rows").closest("table").style.display=rows.length?"table":"none";
+      document.querySelectorAll(".sb-photo").forEach(btn=>btn.onclick=()=>openPhoto(btn.dataset.url,btn.dataset.caption));
+    }
+    function openPhoto(url,caption){$("modal-image").src=url;$("modal-caption").textContent=caption||"Daily Report photo";$("photo-modal").classList.add("open")}
+    function closePhoto(){$("photo-modal").classList.remove("open");$("modal-image").src=""}
+    $("load-btn").onclick=load;$("f-site").onchange=load;$("f-days").onchange=()=>$("f-site").value&&load();
+    $("search").oninput=renderRows;$("clear-search").onclick=()=>{$("search").value="";renderRows();$("search").focus()};
+    $("photo-modal").onclick=e=>{if(e.target===$("photo-modal")||e.target.closest(".sb-close"))closePhoto()};
+    document.addEventListener("keydown",e=>{if(e.key==="Escape")closePhoto()});
+    boot();
+    if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
   </script>
 </body>
 </html>
