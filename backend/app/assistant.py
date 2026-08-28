@@ -214,7 +214,7 @@ async def run_assistant(message: str, user: dict, today: str) -> dict:
             except Exception:
                 return {"reply": "The assistant timed out. Please try again.", "error": True}
             if r.status_code != 200:
-                _m = await client.get("https://generativelanguage.googleapis.com/v1beta/models?key=" + GEMINI_API_KEY); return {"reply": str(r.status_code) + " MODELS " + _m.text[:800],
+                _m = await client.get("https://generativelanguage.googleapis.com/v1beta/models?key=" + GEMINI_API_KEY); return {"reply": str(r.status_code) + " MODELS " + _m.text[:3000],
                         "error": True}
             data = r.json()
             cand = (data.get("candidates") or [{}])[0]
