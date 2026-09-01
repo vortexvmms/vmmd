@@ -103,6 +103,6 @@
 (function(){
   if(document.getElementById("vcms-theme-ext-script"))return;
   var e=document.createElement("script");e.id="vcms-theme-ext-script";
-  e.src="js/theme-ext.js?v=20260828-shell2";e.defer=true;
+  e.src="js/theme-ext.js?v=20260901-noask";e.defer=true;
   (document.head||document.documentElement).appendChild(e);
 })();
