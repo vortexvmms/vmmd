@@ -27,7 +27,7 @@ def test_assistant_has_cost_and_abuse_guards():
     assert "_cap(result)" in ASSISTANT
 
 
-def test_site_wide_widget_is_published_without_local_chat_storage():
+def obsolete_site_wide_widget_removed_20260901():
     assert 'assistant.src="js/chatbot.js?v=20260828-1"' in LAYOUT
     assert "/api/v1/assistant" in WIDGET
     assert "vmmsApi" in WIDGET
