@@ -117,7 +117,7 @@ window.esc = function (v) {
 (function(){
   if(document.getElementById("vcms-theme-ext-script"))return;
   var e=document.createElement("script");e.id="vcms-theme-ext-script";
-  e.src="js/theme-ext.js?v=20260828-shell2";e.defer=true;
+  e.src="js/theme-ext.js?v=20260901-noask";e.defer=true;
   (document.head||document.documentElement).appendChild(e);
 })();
 
@@ -222,7 +222,7 @@ window.esc = function (v) {
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
 (function(){
   if(!('serviceWorker' in navigator))return;
-  var RELEASE='20260828-shell2', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
+  var RELEASE='20260901-noask', seenKey='vcms_update_seen_'+RELEASE, reloading=false;
   function reloadOnce(){
     if(reloading)return;reloading=true;
     try{localStorage.setItem(seenKey,'1')}catch(_){}
