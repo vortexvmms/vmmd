@@ -24,7 +24,7 @@
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
         full:null,
-        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","timesheet.html","settings.html","help.html"]),
+        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","timesheet.html","tipper-trucks.html","settings.html","help.html"]),
         supervisor:new Set(["home.html","todo.html","request.html","attendance.html","dpr.html","dprlist.html","camera.html","camera-photos.html","pr-new.html","whatsapp.html","dashboard.html","settings.html","help.html"]),
         payroll:new Set(["home.html","todo.html","verify.html","timesheet.html","manhours.html","settings.html","help.html"])
       };
@@ -34,22 +34,27 @@
         calendar:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/>',clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
         grid:'<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9h17M9 9v10.5M14.5 9v10.5"/>',document:'<path d="M7 3.5h8l3.5 3.5V20.5H7z"/><path d="M9.5 12h5M9.5 15h5"/>',
         list:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 12.5h8M8 16h5"/>',chart:'<path d="M5 20V11M10 20V5M15 20v-8M20 20v-5"/>',
-        cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>',chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
+        cart:'<path d="M6 6h13l-1.5 8H8z"/><circle cx="9" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/>',truck:'<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',chat:'<path d="M20 12a8 8 0 01-11.6 7.1L4 20l.9-4.3A8 8 0 1120 12z"/>',
         shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>',gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',
         help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>'
       };
       function navFor(viewRole) {
         var tier = TIER[viewRole] || "full";
-        if (tier === "supervisor") return [
+        if (tier === "supervisor") {
+          var supervisorSections = [
           {items:[["Home","home.html","home"],["To-do","todo.html","check"]]},
           {group:"Daily",items:[["Request manpower","request.html","calendar"],["Attendance","attendance.html","check"],["WhatsApp","whatsapp.html","chat"]]},
           {group:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Daily report","dpr.html","document"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]]},
           {group:"Procurement",items:[["New PR","pr-new.html","cart"]]},
           {group:"More",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]}
-        ];
+          ];
+          if (viewRole === "logistics_sup") supervisorSections.splice(2,0,{group:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"]]});
+          return supervisorSections;
+        }
         var sections = [
           {items:[["Home","home.html","home"],["To-do","todo.html","check"]]},
           {group:"Manpower",items:[["Workers","workers.html","user"],["Sites","sites.html","building"],["Allocation","allocation.html","calendar"],["Attendance","attendance.html","check"],["End-time","verify.html","clock"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]]},
+          {group:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"]]},
           {group:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","building"],["Daily report","dpr.html","document"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
           {group:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
           {group:"More",items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]]}

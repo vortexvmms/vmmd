@@ -43,6 +43,7 @@ from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
 from .modules.planning.router import PlanningContext, build_planning_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
+from .modules.equipment.router import EquipmentContext, build_equipment_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
@@ -102,6 +103,10 @@ app.include_router(build_projects_router(ProjectModuleContext(
 app.include_router(build_planning_router(PlanningContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit,
+)))
+app.include_router(build_equipment_router(EquipmentContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
 )))
 
 

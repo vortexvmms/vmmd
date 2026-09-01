@@ -1,3 +1,6 @@
 .venv-audit/
 test-results/
 playwright-report/
+__pycache__/
+*.py[cod]
+.pytest_cache/
