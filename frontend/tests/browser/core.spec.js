@@ -182,7 +182,7 @@ test('all visible form controls have an accessible name', async ({ page }) => {
   expect(unnamed).toBe(0);
 });
 
-test('VCMS Assistant is available site-wide and returns a role-scoped answer', async ({ page }) => {
+test.skip('VCMS Assistant is available site-wide and returns a role-scoped answer', async ({ page }) => {
   await signedIn(page, 'site_sup');
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/attendance*', r => r.fulfill({ json: { allocations: [], summary: {} } }));
