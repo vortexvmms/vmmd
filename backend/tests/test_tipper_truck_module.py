@@ -7,6 +7,7 @@ from app.modules.equipment.router import (
     _month_bounds,
     _normalise_extraction,
     _parse_date,
+    _parse_model_json,
     _valid_public_image,
 )
 
@@ -55,6 +56,14 @@ def test_extraction_normalisation_is_conservative():
     assert value["unit_type"] == "load"
     assert value["confidence"] == 100
     assert value["warnings"] == ["rate unclear"]
+
+
+def test_model_json_parser_ignores_markdown_and_leading_explanation():
+    assert _parse_model_json('```json\n{"truck_no":"XF1"}\n```') == {"truck_no": "XF1"}
+    assert _parse_model_json('Result follows:\n{"trip_sheet_no":"287"}\nDone') == {
+        "trip_sheet_no": "287"
+    }
+    assert _parse_model_json("not json") is None
 
 
 @pytest.mark.parametrize(("raw", "expected"), [

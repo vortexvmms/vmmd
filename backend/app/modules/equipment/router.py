@@ -127,6 +127,26 @@ def _normalise_extraction(raw: dict) -> dict:
     return result
 
 
+def _parse_model_json(text: str) -> dict | None:
+    """Accept strict JSON plus the harmless wrappers some vision models add."""
+    cleaned = (text or "").strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    try:
+        value = json.loads(cleaned)
+        return value if isinstance(value, dict) else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    start = cleaned.find("{")
+    if start < 0:
+        return None
+    try:
+        value, _ = json.JSONDecoder().raw_decode(cleaned[start:])
+        return value if isinstance(value, dict) else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
 def _valid_public_image(public_base: str, image_url: str, key: str) -> bool:
     """Only allow the exact uploaded R2 object, never an arbitrary public URL."""
     try:
@@ -166,7 +186,32 @@ async def _gemini_extract(image: bytes, mime: str, masters: dict) -> dict:
             {"text": prompt},
             {"inlineData": {"mimeType": mime, "data": base64.b64encode(image).decode("ascii")}},
         ]}],
-        "generationConfig": {"temperature": 0, "maxOutputTokens": 1200, "responseMimeType": "application/json"},
+        "generationConfig": {
+            "temperature": 0,
+            "maxOutputTokens": 2400,
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "OBJECT",
+                "properties": {
+                    "client": {"type": "STRING"},
+                    "transport_provider": {"type": "STRING"},
+                    "work_type": {"type": "STRING"},
+                    "driver_name": {"type": "STRING"},
+                    "trip_sheet_no": {"type": "STRING"},
+                    "trip_date": {"type": "STRING"},
+                    "do_no": {"type": "STRING"},
+                    "truck_no": {"type": "STRING"},
+                    "pickup_location": {"type": "STRING"},
+                    "delivery_location": {"type": "STRING"},
+                    "material_type": {"type": "STRING"},
+                    "quantity": {"type": "NUMBER"},
+                    "unit_type": {"type": "STRING"},
+                    "transport_rate": {"type": "NUMBER"},
+                    "confidence": {"type": "NUMBER"},
+                    "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+            },
+        },
     }
     async with httpx.AsyncClient(timeout=90) as client:
         try:
@@ -180,12 +225,19 @@ async def _gemini_extract(image: bytes, mime: str, masters: dict) -> dict:
     if response.status_code != 200:
         raise HTTPException(status_code=502, detail="Could not read this trip sheet")
     parts = (((response.json().get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
-    text = "".join(str(part.get("text") or "") for part in parts).strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
-    try:
-        return _normalise_extraction(json.loads(text))
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=502, detail="The image was read but the extracted result was invalid") from exc
+    # Thinking-capable Gemini models may return private thought text before the
+    # structured answer. Concatenating those parts makes otherwise valid JSON
+    # impossible to parse, so only consume answer parts.
+    text = "".join(str(part.get("text") or "") for part in parts if not part.get("thought")).strip()
+    parsed = _parse_model_json(text)
+    if parsed is not None:
+        return _normalise_extraction(parsed)
+    # Keep the uploaded sheet in the safe review workflow instead of throwing
+    # it away. The user can complete the fields manually and still import it.
+    return _normalise_extraction({
+        "confidence": 0,
+        "warnings": ["Automatic reading was unclear. Please complete the highlighted fields manually."],
+    })
 
 
 def build_equipment_router(context: EquipmentContext) -> APIRouter:
