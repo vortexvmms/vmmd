@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PCS Dashboard and Planning - VCMS</title><link rel="stylesheet" href="css/app.css">
+<script src="js/core-bundle.js?v=20260828-shell3"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e7eaf0;color:#20242c;font-family:Arial,sans-serif}.page{max-width:1500px;margin:auto;padding:16px 20px 90px}
+.bar{display:flex;flex-wrap:wrap;align-items:end;gap:10px;background:#fff;border-radius:12px;padding:12px;margin-bottom:12px}
+.fld{height:42px;border:1px solid #cfd5de;border-radius:8px;padding:0 11px;background:#fff;font:14px Arial}
+.btn{border:0;border-radius:9px;padding:11px 15px;font-weight:800;cursor:pointer;background:#252b35;color:#fff}.btn.red{background:#c00000}.btn.light{background:#fff;color:#9f1111;border:1px solid #e0b2b2}.btn.sm{padding:7px 10px;font-size:12px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tab{padding:9px 14px;border-radius:9px;background:#fff;border:1px solid #dce1e8;cursor:pointer;font-weight:800;color:#475467}.tab.on{background:#c00000;color:#fff;border-color:#c00000}
+.pane{display:none}.pane.on{display:block}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}.kpi{background:#fff;border:1px solid #dfe3e8;border-top:3px solid #c00000;border-radius:12px;padding:13px}.kpi b{font-size:24px}.kpi span{display:block;margin-top:3px;color:#667085;font-size:12px;font-weight:700}
+.card{background:#fff;border:1px solid #dce1e8;border-radius:12px;padding:14px;margin-bottom:12px}.card h3{margin:0 0 10px;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid #eef0f3;text-align:left;vertical-align:top}th{background:#f5f6f8;font-size:11px;text-transform:uppercase;color:#667085}
+.pill{padding:4px 8px;border-radius:99px;font-size:11px;font-weight:800;text-transform:uppercase}.active,.submitted,.published{background:#dcfce7;color:#16713a}.stopped,.draft{background:#fff1c7;color:#95500b}.completed{background:#dbeafe;color:#1d4f91}
+.tin{width:100%;border:1px solid #cfd5de;border-radius:6px;padding:6px 7px;font:13px Arial}
+textarea.tin{min-height:90px}
+.muted{color:#667085;font-size:12px}.right{text-align:right}
+.wamsg{white-space:pre-wrap;font:13px/1.5 Arial;background:#f5f6f8;border:1px solid #dce1e8;border-radius:8px;padding:12px;min-height:220px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#252b35;color:#fff;padding:10px 16px;border-radius:8px;z-index:120;display:none}
+@media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.page{padding:12px}}
+</style></head><body>
+<header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10"><div class="flex items-center gap-3 max-w-3xl mx-auto w-full"><a href="home.html" class="text-2xl font-bold">&lt;</a><div class="flex-1"><h1 class="text-lg font-bold">PCS Dashboard and Planning</h1><p class="text-red-100 text-xs">Multi-location DPR control</p></div></div></header>
+<main class="page">
+<div class="bar"><div><label class="muted">Site</label><br><select id="site" class="fld" onchange="onSite()"></select></div><div><label class="muted">Date</label><br><input id="date" type="date" class="fld"></div><button class="btn red" onclick="loadAll()">Load</button><span id="modeNote" class="muted"></span></div>
+<div class="tabs"><div class="tab on" data-p="dash" onclick="tab('dash')">Dashboard</div><div class="tab" data-p="plan" onclick="tab('plan')">Plan tomorrow</div><div class="tab" data-p="wa" onclick="tab('wa')">WhatsApp plan</div></div>
+
+<section id="pane-dash" class="pane on">
+  <div class="kpis"><div class="kpi"><b id="k-loc">0</b><span>Active locations</span></div><div class="kpi"><b id="k-sub">0</b><span>Submitted</span></div><div class="kpi"><b id="k-pend">0</b><span>Pending</span></div><div class="kpi"><b id="k-dist">0</b><span>Workers distributed</span></div><div class="kpi"><b id="k-req">0</b><span>Open requests</span></div></div>
+  <div class="card"><h3>Work locations</h3><div id="dashLocs" class="muted">Load a site to begin.</div></div>
+  <div class="card"><h3>Outstanding resource requests</h3><div id="dashReq" class="muted">-</div></div>
+</section>
+
+<section id="pane-plan" class="pane">
+  <div class="card">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px"><h3 style="margin:0;flex:1">Tomorrow work plan</h3><span id="planStatus" class="pill draft">no plan</span><button class="btn light sm" onclick="copyPrev()">Copy from date</button><button class="btn light sm" onclick="toggleBulk()">Bulk paste</button><button class="btn sm" onclick="addRow()">+ Activity</button></div>
+    <div id="bulkWrap" style="display:none;margin-bottom:10px"><textarea id="bulk" class="tin" placeholder="Paste from Excel: Location, Activity, Prev%, Priority, Manpower separated by tabs - one row per line"></textarea><button class="btn light sm" onclick="applyBulk()">Add pasted rows</button></div>
+    <div style="overflow:auto"><table><thead><tr><th style="width:18%">Location</th><th>Activity</th><th style="width:8%">Prev %</th><th style="width:14%">Supervisor</th><th style="width:11%">Priority</th><th style="width:9%">Manpower</th><th style="width:5%"></th></tr></thead><tbody id="planRows"></tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn red" onclick="saveDraft()">Save draft</button><button class="btn" onclick="publishPlan()">Publish to supervisors</button><span id="planMsg" class="muted"></span></div>
+    <p class="muted">Percent is cumulative completion as of the report date. Publishing snapshots a revision and notifies supervisors; it never overwrites submitted supervisor DPR data.</p>
+  </div>
+</section>
+
+<section id="pane-wa" class="pane">
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn red" onclick="genWa('short')">Short format</button><button class="btn red" onclick="genWa('detailed')">Detailed format</button><button class="btn light sm" onclick="copyWa()">Copy message</button><button class="btn light sm" onclick="openWa()">Open WhatsApp</button><button class="btn light sm" onclick="saveWa()">Save to audit</button></div>
+    <div id="waOut" class="wamsg" contenteditable="true">Generate a message from tomorrow's plan.</div>
+    <p class="muted">Review and edit before sending. Messages are never sent automatically. Generated deterministically from the saved plan - no external AI.</p>
+  </div>
+</section>
+</main><div id="toast" class="toast"></div>
+<script>
+requireLogin();
+var NL=String.fromCharCode(10), TAB=String.fromCharCode(9);
+function $(id){return document.getElementById(id)}
+function esc(s){s=(s==null?'':String(s));return s.replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}
+function msg(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(function(){$('toast').style.display='none'},2400)}
+function fmt(d){if(!d)return'';var a=String(d).split('-');return a.length===3?(a[2]+'/'+a[1]+'/'+a[0]):d}
+var SITES=[],SID=null,PID=null,LOCS=[],USERS=[],PLAN=null,ROWS=[],WAFMT='detailed',WATEXT='';
+function tab(p){var ts=document.querySelectorAll('.tab');for(var i=0;i<ts.length;i++)ts[i].classList.toggle('on',ts[i].dataset.p===p);var ps=document.querySelectorAll('.pane');for(var j=0;j<ps.length;j++)ps[j].classList.remove('on');$('pane-'+p).classList.add('on')}
+async function boot(){var r=await vmmsApi('/api/v1/sites');SITES=r.ok?await r.json():[];$('site').innerHTML=SITES.map(function(s){return '<option value="'+s.id+'">'+esc(s.site_name)+'</option>'}).join('');var t=new Date();t.setDate(t.getDate()+1);$('date').value=t.toISOString().slice(0,10);if(SITES.length){SID=SITES[0].id;onSite()}try{var ru=await vmmsApi('/api/v1/users');if(ru.ok)USERS=await ru.json()}catch(e){}}
+function onSite(){SID=$('site').value}
+function uname(id){for(var i=0;i<USERS.length;i++){if(USERS[i].id===id)return USERS[i].name||USERS[i].full_name||USERS[i].email||''}return ''}
+async function loadAll(){SID=$('site').value;if(!SID)return msg('Choose a site');await Promise.all([loadDash(),loadLocs(),loadPlan()]);renderPlan()}
+async function loadLocs(){var r=await vmmsApi('/api/v1/pcs/locations?site_id='+encodeURIComponent(SID));LOCS=r.ok?await r.json():[]}
+async function loadDash(){var d=$('date').value;var r=await vmmsApi('/api/v1/pcs/dashboard?site_id='+encodeURIComponent(SID)+'&date='+d);if(!r.ok){$('modeNote').textContent='(apply migration 0017 to activate)';return}var j=await r.json();PID=j.project_id;$('k-loc').textContent=j.active_location_count;$('k-sub').textContent=j.submitted_count;$('k-pend').textContent=j.pending_count;$('k-dist').textContent=j.distribution_count;$('k-req').textContent=(j.open_requests||[]).length;
+var locs=j.locations||[];$('dashLocs').innerHTML=locs.length?('<table><thead><tr><th>Location</th><th>Status</th><th>Reminder</th></tr></thead><tbody>'+locs.map(function(l){return '<tr><td>'+esc(l.name)+'</td><td><span class="pill '+esc(l.status)+'">'+esc(l.status)+'</span></td><td>'+(l.dpr_reminder?'On':'Off')+'</td></tr>'}).join('')+'</tbody></table>'):'<span class="muted">No work locations yet.</span>';
+var rq=j.open_requests||[];$('dashReq').innerHTML=rq.length?('<table><thead><tr><th>Item</th><th>Type</th><th>Priority</th><th>Status</th><th>Required by</th></tr></thead><tbody>'+rq.map(function(q){return '<tr><td>'+esc(q.item_name)+'</td><td>'+esc(q.request_type)+'</td><td>'+esc(q.priority)+'</td><td>'+esc(q.status)+'</td><td>'+fmt(q.required_by)+'</td></tr>'}).join('')+'</tbody></table>'):'<span class="muted">None outstanding.</span>'}
+async function loadPlan(){var d=$('date').value;var r=await vmmsApi('/api/v1/pcs/plan?site_id='+encodeURIComponent(SID)+'&plan_date='+d);if(!r.ok){PLAN=null;ROWS=[];return}var j=await r.json();PID=j.project_id;PLAN=j.plan;ROWS=(j.activities||[]).map(function(a){return {id:a.id,location_id:a.location_id,description:a.description,previous_completion:a.previous_completion,supervisor_id:a.supervisor_id,priority:a.priority||'normal',planned_manpower:a.planned_manpower}});var st=(PLAN&&PLAN.status)||'draft';$('planStatus').className='pill '+st;$('planStatus').textContent=(PLAN&&PLAN.status)||'no plan'}
+function opt(v,label,sel){return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(label)+'</option>'}
+function locOpts(sel){var o='<option value="">- location -</option>';for(var i=0;i<LOCS.length;i++)o+=opt(LOCS[i].id,LOCS[i].name,sel);return o}
+function supOpts(sel){var o='<option value="">-</option>';for(var i=0;i<USERS.length;i++){var u=USERS[i];o+=opt(u.id,u.name||u.full_name||u.email||u.id,sel)}return o}
+function priOpts(sel){var a=['normal','urgent','critical'],o='';for(var i=0;i<a.length;i++)o+=opt(a[i],a[i],sel);return o}
+function renderPlan(){if(!ROWS.length){$('planRows').innerHTML='<tr><td colspan="7" class="muted">No activities. Add rows, copy a previous plan, or bulk-paste.</td></tr>';return}
+var h='';for(var i=0;i<ROWS.length;i++){var r=ROWS[i];
+h+='<tr><td><select class="tin js-u" data-i="'+i+'" data-k="location_id">'+locOpts(r.location_id)+'</select></td>';
+h+='<td><input class="tin js-u" data-i="'+i+'" data-k="description" value="'+esc(r.description||'')+'"></td>';
+h+='<td><input class="tin js-u" type="number" min="0" max="100" data-i="'+i+'" data-k="previous_completion" value="'+(r.previous_completion==null?'':r.previous_completion)+'"></td>';
+h+='<td><select class="tin js-u" data-i="'+i+'" data-k="supervisor_id">'+supOpts(r.supervisor_id)+'</select></td>';
+h+='<td><select class="tin js-u" data-i="'+i+'" data-k="priority">'+priOpts(r.priority)+'</select></td>';
+h+='<td><input class="tin js-u" type="number" min="0" data-i="'+i+'" data-k="planned_manpower" value="'+(r.planned_manpower==null?'':r.planned_manpower)+'"></td>';
+h+='<td class="right"><button class="btn light sm js-d" data-i="'+i+'">x</button></td></tr>'}
+$('planRows').innerHTML=h;
+var us=$('planRows').querySelectorAll('.js-u');for(var a=0;a<us.length;a++){us[a].addEventListener('change',function(){upd(Number(this.dataset.i),this.dataset.k,this.value)})}
+var ds=$('planRows').querySelectorAll('.js-d');for(var b=0;b<ds.length;b++){ds[b].addEventListener('click',function(){delRow(Number(this.dataset.i))})}}
+function upd(i,k,v){if(k==='previous_completion'||k==='planned_manpower')v=(v===''?null:Number(v));ROWS[i][k]=v}
+function addRow(){ROWS.push({location_id:'',description:'',previous_completion:null,supervisor_id:'',priority:'normal',planned_manpower:null});renderPlan()}
+function delRow(i){var r=ROWS[i];if(r.id){vmmsApi('/api/v1/pcs/plan/activities/'+r.id,{method:'DELETE'})}ROWS.splice(i,1);renderPlan()}
+function toggleBulk(){$('bulkWrap').style.display=$('bulkWrap').style.display==='none'?'block':'none'}
+function findLoc(name){name=(name||'').trim().toLowerCase();for(var i=0;i<LOCS.length;i++){if((LOCS[i].name||'').toLowerCase()===name)return LOCS[i].id}return ''}
+function applyBulk(){var lines=$('bulk').value.split(NL);var n=0;for(var i=0;i<lines.length;i++){var line=lines[i].trim();if(!line)continue;var c=line.split(TAB);if(!c[1])continue;ROWS.push({location_id:findLoc(c[0]),description:(c[1]||'').trim(),previous_completion:c[2]?Number(c[2]):null,supervisor_id:'',priority:(c[3]||'normal').trim().toLowerCase(),planned_manpower:c[4]?Number(c[4]):null});n++}$('bulk').value='';toggleBulk();renderPlan();msg(n+' row(s) added')}
+async function copyPrev(){var d=prompt('Copy plan from date (YYYY-MM-DD)');if(!d)return;var r=await vmmsApi('/api/v1/pcs/plan?site_id='+encodeURIComponent(SID)+'&plan_date='+d);if(!r.ok)return msg('Could not load that plan');var j=await r.json();var acts=j.activities||[];if(!acts.length)return msg('No activities on that date');for(var i=0;i<acts.length;i++){var a=acts[i];ROWS.push({location_id:a.location_id,description:a.description,previous_completion:a.previous_completion,supervisor_id:a.supervisor_id,priority:a.priority||'normal',planned_manpower:a.planned_manpower})}renderPlan();msg(acts.length+' activities copied (unsaved)')}
+async function ensurePlan(){if(PLAN&&PLAN.id)return PLAN;var r=await vmmsApi('/api/v1/pcs/plan',{method:'POST',body:JSON.stringify({site_id:SID,plan_date:$('date').value})});if(!r.ok){var e=await r.json().catch(function(){return {}});throw new Error(e.detail||'Could not create plan')}PLAN=await r.json();return PLAN}
+async function saveDraft(){try{if(!ROWS.length)return msg('Add at least one activity');for(var k=0;k<ROWS.length;k++){if(!ROWS[k].location_id||!ROWS[k].description)return msg('Every row needs a location and description')}await ensurePlan();$('planMsg').textContent='Saving...';for(var i=0;i<ROWS.length;i++){var r=ROWS[i];var payload={location_id:r.location_id,description:r.description,previous_completion:r.previous_completion,supervisor_id:r.supervisor_id||null,priority:r.priority,planned_manpower:r.planned_manpower,display_order:i};if(r.id){await vmmsApi('/api/v1/pcs/plan/activities/'+r.id,{method:'PATCH',body:JSON.stringify(payload)})}else{var rr=await vmmsApi('/api/v1/pcs/plan/'+PLAN.id+'/activities',{method:'POST',body:JSON.stringify(payload)});if(rr.ok){r.id=(await rr.json()).id}}}$('planMsg').textContent='';msg('Draft saved');await loadPlan();renderPlan()}catch(e){msg(e.message||'Could not save')}}
+async function publishPlan(){try{await saveDraft();if(!PLAN||!PLAN.id)return;if(!confirm('Publish this plan to supervisors?'))return;var r=await vmmsApi('/api/v1/pcs/plan/'+PLAN.id+'/publish',{method:'POST'});if(!r.ok){var e=await r.json().catch(function(){return {}});return msg(e.detail||'Could not publish')}msg('Plan published');await loadPlan();renderPlan()}catch(e){msg(e.message||'Could not publish')}}
+function byLoc(){var m={};for(var i=0;i<ROWS.length;i++){var k=ROWS[i].location_id||'?';(m[k]=m[k]||[]).push(ROWS[i])}return m}
+function cap(s){s=s||'';return s.charAt(0).toUpperCase()+s.slice(1)}
+function genWa(format){WAFMT=format;var d=fmt($('date').value);var out='*TOMORROW WORK PLAN - PCS*'+NL+'*Date:* '+d+NL;var groups=byLoc();var list=LOCS.concat([{id:'?',name:'Unassigned'}]);var n=0;
+for(var li=0;li<list.length;li++){var l=list[li];var rs=groups[l.id];if(!rs||!rs.length)continue;n++;out+=NL+'*'+n+'. Location: '+l.name+'*'+NL;
+var sup=null;for(var s1=0;s1<rs.length;s1++){if(rs[s1].supervisor_id){sup=rs[s1];break}}if(sup&&uname(sup.supervisor_id))out+='*Supervisor:* '+uname(sup.supervisor_id)+NL;
+var pr=null;for(var p1=0;p1<rs.length;p1++){if(rs[p1].priority&&rs[p1].priority!=='normal'){pr=rs[p1];break}}if(pr)out+='*Priority:* '+cap(pr.priority)+NL;
+out+='*Activities:*'+NL;for(var a1=0;a1<rs.length;a1++)out+='- '+(rs[a1].description||'')+NL;
+if(format==='detailed'){var mp=0;for(var m1=0;m1<rs.length;m1++)mp+=Number(rs[m1].planned_manpower)||0;if(mp)out+='*Manpower:* '+mp+' workers'+NL}}
+out+=NL+'Please review your assigned location and confirm readiness.';WATEXT=out;$('waOut').textContent=out;tab('wa');msg((format==='short'?'Short':'Detailed')+' message generated')}
+function currentWa(){return $('waOut').innerText||WATEXT}
+async function copyWa(){try{await navigator.clipboard.writeText(currentWa());msg('Copied')}catch(e){msg('Select and copy manually')}}
+function openWa(){window.open('https://wa.me/?text='+encodeURIComponent(currentWa()),'_blank')}
+async function saveWa(){if(!SID)return;var r=await vmmsApi('/api/v1/pcs/whatsapp',{method:'POST',body:JSON.stringify({site_id:SID,plan_date:$('date').value,format:WAFMT,generated_text:WATEXT,final_text:currentWa()})});if(!r.ok){var e=await r.json().catch(function(){return {}});return msg(e.detail||'Could not save')}msg('Saved to audit')}
+boot();
+</script></body></html>
