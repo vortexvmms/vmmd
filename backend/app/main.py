@@ -41,7 +41,7 @@ from .settings import (
 )
 from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
-from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router
+from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router; from .modules.pcs_plan_router import PcsPlanContext, build_pcs_plan_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
 
@@ -100,7 +100,7 @@ app.include_router(build_projects_router(ProjectModuleContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit,
 )))
-app.include_router(build_pcs_router(PcsContext(get_current_user=get_current_user, shared_client=shared_client, rest_url=REST, supabase_headers=supabase_headers, audit=audit))); app.include_router(build_planning_router(PlanningContext(
+app.include_router(build_pcs_plan_router(PcsPlanContext(get_current_user=get_current_user, shared_client=shared_client, rest_url=REST, supabase_headers=supabase_headers, audit=audit))); app.include_router(build_pcs_router(PcsContext(get_current_user=get_current_user, shared_client=shared_client, rest_url=REST, supabase_headers=supabase_headers, audit=audit))); app.include_router(build_planning_router(PlanningContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit,
 )))
