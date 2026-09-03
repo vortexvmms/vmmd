@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PCS Consolidated Report - VCMS</title><link rel="stylesheet" href="css/app.css">
+<script src="js/core-bundle.js?v=20260828-shell3"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e7eaf0;color:#20242c;font-family:Arial,sans-serif}.page{max-width:1000px;margin:auto;padding:14px 18px 90px}
+.bar{display:flex;flex-wrap:wrap;align-items:end;gap:10px;background:#fff;border-radius:12px;padding:12px;margin-bottom:12px}
+.fld{height:42px;border:1px solid #cfd5de;border-radius:8px;padding:0 11px;background:#fff;font:14px Arial}
+.btn{border:0;border-radius:9px;padding:11px 15px;font-weight:800;cursor:pointer;background:#252b35;color:#fff}.btn.red{background:#c00000}.btn.light{background:#fff;color:#9f1111;border:1px solid #e0b2b2}.btn.sm{padding:7px 10px;font-size:12px}
+.card{background:#fff;border:1px solid #dce1e8;border-radius:12px;padding:14px;margin-bottom:12px}.card h3{margin:0 0 10px;font-size:15px}
+.ready{display:inline-block;padding:5px 10px;border-radius:99px;font-weight:800;font-size:12px}.ok{background:#dcfce7;color:#16713a}.no{background:#fee2e2;color:#991b1b}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 8px;border:1px solid #d7dbe0;text-align:left;vertical-align:top}th{background:#f3f4f6;font-size:11px;text-transform:uppercase;color:#4b5563}
+.muted{color:#667085;font-size:12px}.conf{color:#991b1b;font-weight:800}
+.sheet{background:#fff;border:1px solid #dce1e8;border-radius:12px;padding:20px}
+.rhead{border-bottom:3px solid #c00000;padding-bottom:8px;margin-bottom:12px}.rhead h1{margin:0;color:#c00000;font-size:22px}.rhead .m{font-size:12px;color:#374151}
+.loc-sec{margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb}.loc-sec h2{font-size:16px;margin:0 0 6px}
+.sech{font-weight:800;font-size:12px;text-transform:uppercase;color:#6b7280;margin:10px 0 4px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:8px;z-index:120;display:none}
+@media print{body{background:#fff}.noprint{display:none!important}.page{max-width:none;padding:0}.sheet{border:0;border-radius:0;padding:0}.card{box-shadow:none}}
+</style></head><body>
+<header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10 noprint"><div class="flex items-center gap-3 max-w-3xl mx-auto w-full"><a href="home.html" class="text-2xl font-bold">&lt;</a><div class="flex-1"><h1 class="text-lg font-bold">PCS Consolidated Report</h1><p class="text-red-100 text-xs">Distribution, readiness and print/PDF</p></div></div></header>
+<main class="page">
+<div class="bar noprint"><div><label class="muted">Site</label><br><select id="site" class="fld"></select></div><div><label class="muted">Date</label><br><input id="date" type="date" class="fld"></div><button class="btn red" onclick="loadAll()">Load</button><span id="modeNote" class="muted"></span></div>
+
+<div class="card noprint"><h3>Readiness</h3><div id="ready">Load a site and date.</div></div>
+
+<div class="card noprint"><h3>Manpower distribution</h3>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><select id="d-worker" class="fld"></select><select id="d-loc" class="fld"></select><select id="d-seg" class="fld"><option value="morning">Morning</option><option value="afternoon">Afternoon</option><option value="night">Night</option><option value="custom">Custom</option></select><input id="d-start" class="fld" placeholder="Start HH:MM" style="max-width:110px"><input id="d-end" class="fld" placeholder="End HH:MM" style="max-width:110px"><button class="btn sm" onclick="assignWorker()">Assign</button></div>
+  <div id="distList" class="muted">-</div>
+</div>
+
+<div class="card noprint" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b style="flex:1">Consolidated report</b><select id="locFilter" class="fld"><option value="">All locations (consolidated)</option></select><button class="btn light sm" onclick="renderSheet()">Preview</button><button class="btn red sm" onclick="window.print()">Print / Save PDF</button></div>
+
+<div id="sheet" class="sheet"><div class="muted">Load a site and date, then Preview.</div></div>
+</main><div id="toast" class="toast"></div>
+<script>
+requireLogin();
+function $(id){return document.getElementById(id)}
+function esc(s){s=(s==null?"":String(s));return s.replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}
+function msg(s){$('toast').textContent=s;$('toast').style.display='block';setTimeout(function(){$('toast').style.display='none'},2400)}
+function fmt(d){if(!d)return'';var a=String(d).split('-');return a.length===3?(a[2]+'/'+a[1]+'/'+a[0]):d}
+var SITES=[],SID=null,PID=null,REPORT=null,DIST=null,LOCS=[];
+async function boot(){var r=await vmmsApi('/api/v1/sites');SITES=r.ok?await r.json():[];$('site').innerHTML=SITES.map(function(s){return '<option value="'+s.id+'">'+esc(s.site_name)+'</option>'}).join('');var t=new Date();$('date').value=t.toISOString().slice(0,10);if(SITES.length)SID=SITES[0].id}
+async function loadAll(){SID=$('site').value;if(!SID)return msg('Choose a site');await Promise.all([loadReady(),loadDist(),loadReport()]);buildLocFilter();renderSheet()}
+async function loadReady(){var d=$('date').value;var r=await vmmsApi('/api/v1/pcs/readiness?site_id='+encodeURIComponent(SID)+'&report_date='+d);if(!r.ok){$('modeNote').textContent='(apply migrations 0017-0018 to activate)';$('ready').textContent='-';return}var j=await r.json();PID=j.project_id;var cls=j.overall_ready?'ready ok':'ready no';var txt=j.overall_ready?'READY - all active locations submitted':'NOT READY';var pend=(j.pending_locations||[]).map(function(l){return esc(l.name)}).join(', ')||'none';var exc=(j.excluded_locations||[]).map(function(l){return esc(l.name)+' ('+esc(l.status)+')'}).join(', ')||'none';$('ready').innerHTML='<span class="'+cls+'">'+txt+'</span><div class="muted" style="margin-top:8px">Expected active: <b>'+j.expected_locations+'</b> &nbsp; Submitted: <b>'+j.submitted_locations+'</b><br>Pending: '+pend+'<br>Excluded/stopped: '+exc+'</div>'}
+async function loadDist(){var d=$('date').value;var r=await vmmsApi('/api/v1/pcs/distribution?site_id='+encodeURIComponent(SID)+'&distribution_date='+d);DIST=r.ok?await r.json():null;if(!DIST){$('distList').textContent='-';return}PID=DIST.project_id;LOCS=DIST.locations||[];$('d-worker').innerHTML=(DIST.workers||[]).map(function(w){return '<option value="'+w.id+'">'+esc(w.name)+'</option>'}).join('');$('d-loc').innerHTML=LOCS.map(function(l){return '<option value="'+l.id+'">'+esc(l.name)+'</option>'}).join('');renderDist()}
+function locName(id){for(var i=0;i<LOCS.length;i++)if(LOCS[i].id===id)return LOCS[i].name;return id}
+function wName(id){var ws=(DIST&&DIST.workers)||[];for(var i=0;i<ws.length;i++)if(ws[i].id===id)return ws[i].name;return id}
+function renderDist(){if(!DIST)return;var confIds={};(DIST.conflicts||[]).forEach(function(c){confIds[c.a]=1;confIds[c.b]=1});var rows=DIST.distributions||[];if(!rows.length){$('distList').innerHTML='<span class="muted">No workers distributed yet.</span>';return}var h='<table><thead><tr><th>Worker</th><th>Location</th><th>Segment</th><th>Time</th><th></th></tr></thead><tbody>';rows.forEach(function(d){var t=d.segment==='custom'?((d.start_time||'')+'-'+(d.end_time||'')):'';h+='<tr'+(confIds[d.id]?' class="conf"':'')+'><td>'+esc(wName(d.worker_id))+(confIds[d.id]?' (conflict)':'')+'</td><td>'+esc(locName(d.location_id))+'</td><td>'+esc(d.segment)+'</td><td>'+esc(t)+'</td><td><button class="btn light sm" data-del="'+d.id+'">Remove</button></td></tr>'});h+='</tbody></table>';$('distList').innerHTML=h;var b=$('distList').querySelectorAll('[data-del]');for(var i=0;i<b.length;i++)b[i].addEventListener('click',function(){delDist(this.getAttribute('data-del'))})}
+async function assignWorker(){var body={site_id:SID,distribution_date:$('date').value,location_id:$('d-loc').value,worker_id:$('d-worker').value,segment:$('d-seg').value};if(body.segment==='custom'){body.start_time=$('d-start').value;body.end_time=$('d-end').value}if(!body.location_id||!body.worker_id)return msg('Pick a worker and location');var r=await vmmsApi('/api/v1/pcs/distribution',{method:'POST',body:JSON.stringify(body)});if(!r.ok){var e=await r.json().catch(function(){return {}});return msg(e.detail||'Could not assign')}msg('Assigned');await loadDist()}
+async function delDist(id){var r=await vmmsApi('/api/v1/pcs/distribution/'+id,{method:'DELETE'});if(!r.ok)return msg('Could not remove');await loadDist()}
+async function loadReport(){var d=$('date').value;var r=await vmmsApi('/api/v1/pcs/report?site_id='+encodeURIComponent(SID)+'&report_date='+d);REPORT=r.ok?(await r.json()).report:null}
+function buildLocFilter(){var lrs=(REPORT&&REPORT.pcs_location_reports)||[];var opts='<option value="">All locations (consolidated)</option>';lrs.forEach(function(lr){opts+='<option value="'+lr.location_id+'">'+esc(locName(lr.location_id))+'</option>'});$('locFilter').innerHTML=opts}
+function actRows(acts,kind){var r=(acts||[]).filter(function(a){return a.kind===kind});if(!r.length)return '<div class="muted">-</div>';var h='<table><thead><tr><th>Description</th>'+(kind==='today'?'<th style="width:80px">Cum %</th>':'')+'</tr></thead><tbody>';r.forEach(function(a){h+='<tr><td>'+esc(a.description)+'</td>'+(kind==='today'?'<td>'+(a.percent_complete==null?'':esc(a.percent_complete))+'</td>':'')+'</tr>'});return h+'</tbody></table>'}
+function itemRows(items,cols){if(!items||!items.length)return '<div class="muted">-</div>';var h='<table><thead><tr>'+cols.map(function(c){return '<th>'+c.t+'</th>'}).join('')+'</tr></thead><tbody>';items.forEach(function(it){h+='<tr>'+cols.map(function(c){return '<td>'+esc(it[c.k]==null?'':it[c.k])+'</td>'}).join('')+'</tr>'});return h+'</tbody></table>'}
+function renderSheet(){if(!REPORT){$('sheet').innerHTML='<div class="muted">No PCS report for this date yet.</div>';return}var site=(function(){for(var i=0;i<SITES.length;i++)if(SITES[i].id===SID)return SITES[i].site_name;return ''})();var filt=$('locFilter').value;var lrs=(REPORT.pcs_location_reports||[]).filter(function(lr){return !filt||lr.location_id===filt});
+var h='<div class="rhead"><h1>VORTEX - PCS DAILY PROGRESS REPORT</h1><div class="m">Site: <b>'+esc(site)+'</b> &nbsp; Date: <b>'+esc(fmt($('date').value))+'</b> &nbsp; Locations: <b>'+lrs.length+'</b></div></div>';
+if(DIST){var total=(DIST.distributions||[]).length;h+='<div class="sech">Manpower distribution</div><div class="muted">Total distributed: <b>'+total+'</b></div>'}
+lrs.forEach(function(lr,idx){var acts=lr.pcs_location_activities||[];h+='<div class="loc-sec"><h2>'+(idx+1)+'. '+esc(locName(lr.location_id))+'</h2><div class="muted">Reported by: '+esc(lr.reported_by||'')+' &nbsp; Status: '+esc(lr.status||'')+'</div>';
+h+='<div class="sech">Today activities</div>'+actRows(acts,'today');
+h+='<div class="sech">Tomorrow activities</div>'+actRows(acts,'tomorrow');
+h+='<div class="sech">Materials used</div>'+itemRows(lr.pcs_actual_materials,[{t:'Material',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Unit',k:'unit'}]);
+h+='<div class="sech">Plant / equipment used</div>'+itemRows(lr.pcs_actual_plant,[{t:'Plant',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Hrs',k:'usage_hours'}]);
+h+='</div>'});
+if(!lrs.length)h+='<div class="muted">No submitted location reports for this date.</div>';
+h+='<div class="loc-sec"><div class="muted">Prepared by: '+esc((REPORT.overall_prepared_by)||'')+' &nbsp; Approved by: '+esc((REPORT.overall_approved_by)||'')+'</div></div>';
+$('sheet').innerHTML=h}
+boot();
+</script></body></html>
