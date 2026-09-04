@@ -16,7 +16,7 @@ def test_critical_supervisor_pages_use_shared_header_and_release():
         assert "vcms-page-header__row" in html
         assert "vcms-page-toolbar" in html
         assert "vcms-control" in html
-        assert "core-bundle.js?v=20260828-shell3" in html
+        assert "core-bundle.js?v=20260904-history1" in html
 
 
 def test_critical_workflows_use_shared_mobile_actions_and_toast():
@@ -35,7 +35,7 @@ def test_supervisor_home_remains_reduced_to_daily_work_and_support():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v53-tipper-bulk-fix" in page("sw.js")
+    assert "vcms-v54-historical-sites" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
