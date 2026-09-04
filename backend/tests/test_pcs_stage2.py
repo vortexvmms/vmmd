@@ -50,7 +50,7 @@ def test_priority3_manager_resources_and_request_review():
         assert frag in ROUTER
     for frag in ("/resource-requests", "/resource-request/{request_id}", "manager_remarks"):
         assert frag in report_router
-    for frag in ("Planned materials", "Planned plant / equipment", "previewPlan()",
+    for frag in ("Planned materials", "Planned tools &amp; equipment", "previewPlan()",
                  "reopenPlan()", "reviewRequest("):
         assert frag in PAGE
 
