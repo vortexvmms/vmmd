@@ -123,7 +123,7 @@ test('DPR readiness uses a dedicated desktop column without covering the form', 
   expect(boxes.progressLeft).toBeGreaterThanOrEqual(boxes.contentRight + 12);
 });
 
-test('PCS DPR replaces only work description and preserves the established report', async ({ page }) => {
+test('PCS DPR keeps the established report structure inside each location', async ({ page }) => {
   await signedIn(page, 'admin');
   await page.addInitScript(() => localStorage.setItem('vcms_draft_dpr.html', JSON.stringify({t:Date.now(),v:{'f-desc':'obsolete'}})));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', async r => { await new Promise(ok => setTimeout(ok, 900)); await r.fulfill({ json: [{ id:'pcs', site_name:'PCS', project_id:'p1' }] }); });
@@ -144,10 +144,10 @@ test('PCS DPR replaces only work description and preserves the established repor
   await expect(page.getByText('Materials required').first()).toBeVisible();
   await expect(page.getByText('Plant, equipment & tools required').first()).toBeVisible();
   await expect(page.getByRole('button', { name:'WhatsApp update' }).first()).toBeVisible();
-  await expect(page.getByText('Photos for this location').first()).toBeVisible();
+  await expect(page.getByText('Activity photos').first()).toBeVisible();
   if (page.viewportSize().width <= 600) await expect(page.locator('.pcs-loc').nth(1)).toHaveClass(/collapsed/);
-  await expect(page.getByRole('heading', { name:'Manpower' })).toBeVisible();
-  await expect(page.getByRole('heading', { name:'Activity photos' })).toBeVisible();
+  await expect(page.getByText('Manpower assigned to this location').first()).toBeVisible();
+  await expect(page.getByRole('button', { name:'+ Add photos' }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name:'Sign-off' })).toBeVisible();
   await expect(page.locator('#dprbar')).toBeVisible();
   await page.waitForTimeout(1300);

@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260904-pcsmanpower"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260904-locationlayout"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     body.dpr { background:#F3F4F6; }
@@ -94,12 +94,19 @@
       #dpr-content>.panel{border-color:#dce1e8;box-shadow:0 6px 18px rgba(15,23,42,.06)}
       #dpr-main>.sect{font-size:12px;color:#303847;margin-top:22px}
       #dpr-progress{display:block;position:static;width:100%;margin:0 0 16px;background:#fff;border:1px solid #dce1e8;border-radius:14px;overflow:hidden;box-shadow:0 10px 28px rgba(15,23,42,.10);z-index:7}
-      #dpr-progress h2{margin:0;padding:14px 16px;background:#252b35;color:#fff;font-size:14px;font-weight:800}
+      #dpr-progress h2{margin:0;padding:14px 16px;background:#252b35;color:#fff;font-size:14px;font-weight:800;cursor:pointer}
       .dpr-prog-body{padding:15px}.dpr-meter{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}.dpr-meter i{display:block;height:100%;background:#c00000;transition:width .3s}
       #dpr-checks{margin-top:12px}.dpr-check{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #edf0f4;font-size:12px;color:#4b5563}.dpr-check:last-child{border:0}.dpr-ok{color:#15803d;font-weight:800}.dpr-miss{color:#b45309;font-weight:800}
       .dpr-missing-box{border-top:1px solid #e5e7eb;padding:13px 15px;background:#fff8f8}.dpr-missing-title{display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;color:#991b1b}.dpr-missing-list{margin-top:8px;max-height:150px;overflow:auto}.dpr-missing-day{display:flex;justify-content:space-between;gap:8px;width:100%;padding:7px 0;border:0;border-bottom:1px solid #fee2e2;background:transparent;text-align:left;font-size:12px;color:#374151;cursor:pointer}.dpr-missing-day:last-child{border:0}.dpr-missing-day b{color:#b91c1c}.dpr-missing-ok{font-size:12px;color:#15803d;font-weight:800;margin-top:7px}
       table.edt{min-width:0}.pgrid2{grid-template-columns:repeat(4,minmax(0,1fr))}
       #dprbar>div{max-width:none!important;padding-left:24px;padding-right:24px}
+      body.pcs-mode .pcs-global-duplicate{display:none!important}
+      body.pcs-mode #dpr-progress{width:230px;justify-self:end}
+      body.pcs-mode #dpr-progress h2{padding:9px 12px;font-size:12px}
+      body.pcs-mode #dpr-progress .dpr-prog-body{padding:10px 12px}
+      body.pcs-mode #dpr-progress #dpr-checks{display:none}
+      body.pcs-mode #dpr-progress.pcs-ready-open{width:282px}
+      body.pcs-mode #dpr-progress.pcs-ready-open #dpr-checks{display:block}
     }
     @media(min-width:1200px){
       #dpr-main{display:grid!important;grid-template-columns:minmax(0,1fr) 282px;gap:18px;align-items:start}
@@ -124,7 +131,7 @@
   </header>
 
   <main id="dpr-main" class="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
-    <aside id="dpr-progress"><h2>DPR readiness</h2><div class="dpr-prog-body"><div style="display:flex;justify-content:space-between;margin-bottom:7px"><b id="dpr-percent">0% complete</b><span id="dpr-draftstate" style="font-size:11px;color:#64748b">Draft</span></div><div class="dpr-meter"><i id="dpr-meter-fill" style="width:0"></i></div><div id="dpr-checks"></div></div><div id="dpr-missing-wrap" class="dpr-missing-box" style="display:none"><div class="dpr-missing-title"><span>Missing DPR dates</span><span id="dpr-missing-count"></span></div><div id="dpr-missing" class="dpr-missing-list"></div></div></aside>
+    <aside id="dpr-progress"><h2 onclick="this.parentElement.classList.toggle('pcs-ready-open')">DPR readiness <span style="float:right">⌄</span></h2><div class="dpr-prog-body"><div style="display:flex;justify-content:space-between;margin-bottom:7px"><b id="dpr-percent">0% complete</b><span id="dpr-draftstate" style="font-size:11px;color:#64748b">Draft</span></div><div class="dpr-meter"><i id="dpr-meter-fill" style="width:0"></i></div><div id="dpr-checks"></div></div><div id="dpr-missing-wrap" class="dpr-missing-box" style="display:none"><div class="dpr-missing-title"><span>Missing DPR dates</span><span id="dpr-missing-count"></span></div><div id="dpr-missing" class="dpr-missing-list"></div></div></aside>
     <div id="dpr-content">
     <div id="banner" class="hidden panel p-3 mb-3 text-sm text-center"></div>
 
@@ -164,11 +171,11 @@
       <div class="panel p-3 mt-2"><div id="planning-progress-list" class="text-sm text-gray-500">Choose a mapped project activity.</div></div>
     </section>
 
-    <div class="flex items-center justify-between mt-5">
+    <div class="flex items-center justify-between mt-5 pcs-global-duplicate">
       <h2 class="sect" style="margin:0">Manpower</h2>
       <button onclick="prefill()" class="text-xs font-bold text-white bg-red-700 rounded-lg px-3 py-2">⟳ Auto-fill from attendance</button>
     </div>
-    <div class="panel p-3">
+    <div class="panel p-3 pcs-global-duplicate">
       <div class="tblwrap">
         <table class="edt">
           <thead><tr><th style="min-width:150px">Name</th><th style="min-width:120px">Role / Trade</th><th>No.</th><th>From</th><th>To</th><th>Total h</th><th style="min-width:100px">Remarks</th><th></th></tr></thead>
@@ -179,13 +186,13 @@
       <button class="addbtn" onclick="addMp()">+ Add person (PM / CM / other)</button>
     </div>
 
-    <h2 class="sect">Plant &amp; equipment</h2>
-    <div class="panel p-3" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <h2 class="sect pcs-global-duplicate">Plant &amp; equipment</h2>
+    <div class="panel p-3 pcs-global-duplicate" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
       <span class="text-sm text-gray-600">Copy plant &amp; materials from</span>
       <input id="copydate" type="date" class="fld" style="max-width:170px;flex:0 1 auto">
       <button type="button" class="addbtn" style="width:auto;padding:8px 16px" onclick="copyEquipMat()">Copy</button>
     </div>
-    <div class="panel p-3">
+    <div class="panel p-3 pcs-global-duplicate">
       <div class="tblwrap">
         <table class="edt">
           <thead><tr><th style="min-width:150px">Item</th><th>No.</th><th>From</th><th>To</th><th>Total h</th><th style="min-width:110px">Remarks</th><th></th></tr></thead>
@@ -195,8 +202,8 @@
       <button class="addbtn" onclick="addEq()">+ Add equipment row</button>
     </div>
 
-    <h2 class="sect">Material / tools</h2>
-    <div class="panel p-3">
+    <h2 class="sect pcs-global-duplicate">Material / tools</h2>
+    <div class="panel p-3 pcs-global-duplicate">
       <div class="tblwrap">
         <table class="edt">
           <thead><tr><th style="min-width:170px">Item</th><th>Qty</th><th>Unit</th><th style="min-width:120px">Remarks</th><th></th></tr></thead>
@@ -206,8 +213,8 @@
       <button class="addbtn" onclick="addMt()">+ Add material row</button>
     </div>
 
-    <h2 class="sect">Activity photos</h2>
-    <div class="panel p-3">
+    <h2 class="sect pcs-global-duplicate">Activity photos</h2>
+    <div class="panel p-3 pcs-global-duplicate">
       <div id="dropzone" class="dropzone mb-3">
         On a computer: <b>copy a photo (e.g. from WhatsApp) and paste it here</b>, or drag &amp; drop images.
       </div>

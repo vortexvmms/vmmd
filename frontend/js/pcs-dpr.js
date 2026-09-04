@@ -2,9 +2,8 @@
 // Loaded on dpr.html. It stays completely inert unless the selected site's
 // project is configured as Multi-location DPR AND that mode is confirmed by the
 // backend. On any error or Standard mode it does nothing, so the existing
-// Standard DPR page is never affected. In PCS mode ONLY the ordinary
-// "Description of works" editor is replaced; project particulars, manpower,
-// resources, photos, sign-off and the normal VCMS exports remain available.
+// Standard DPR page is never affected. PCS keeps project particulars and
+// sign-off once, while operational DPR items live inside each location.
 (function(){
   "use strict";
   if(typeof vmmsApi!=="function")return;
@@ -23,8 +22,8 @@
   function loadDraft(locId){try{return JSON.parse(localStorage.getItem(draftKey(locId))||"null")}catch(e){return null}}
   function clearDraft(locId){try{localStorage.removeItem(draftKey(locId))}catch(e){}}
 
-  // PCS replaces only Description of works. Everything else in the established
-  // DPR (including Activity photos and exports) deliberately remains untouched.
+  // Standard-site sections remain untouched and are only visually hidden by
+  // dpr.html while PCS location cards are active.
   function standardEls(){return [$("standard-description-panel")].filter(Boolean)}
   function hideStandard(){standardEls().forEach(function(e){if(e.dataset.pcsHidden!=="1"){e.dataset.pcsPrevDisplay=e.style.display;e.style.display="none";e.dataset.pcsHidden="1"}})}
   function showStandard(){standardEls().forEach(function(e){if(e.dataset.pcsHidden==="1"){e.style.display=e.dataset.pcsPrevDisplay||"";e.dataset.pcsHidden="0"}})}
@@ -45,13 +44,14 @@
     ACTIVE=true;document.body.classList.add("pcs-mode");hideStandard();
     var oldDraft=$("vmms-draft-banner");if(oldDraft)oldDraft.remove();
     if(!PANEL){PANEL=ce("div","pcs-panel");var host=$("pcs-description-host")||$("dpr-main")||document.body;host.appendChild(PANEL);host.style.display="block";
-      var st=ce("style",null,".pcs-panel{margin-top:12px}.pcs-panel h2{font-size:18px;margin:6px 0}.pcs-loc{background:#fff;border:1px solid #e3e6ea;border-radius:12px;margin-bottom:12px;overflow:hidden}.pcs-loc-head{display:flex;align-items:center;gap:8px;width:100%;padding:12px;border:0;background:#f8fafc;text-align:left;cursor:pointer}.pcs-loc-head h3{margin:0;font-size:16px;color:#111827;flex:1}.pcs-loc-body{padding:0 12px 12px}.pcs-loc.collapsed .pcs-loc-body{display:none}.pcs-chevron{font-size:18px;transition:transform .2s}.pcs-loc.collapsed .pcs-chevron{transform:rotate(-90deg)}.pcs-loc .sub{font-size:12px;color:#6b7280;margin:0 0 8px}.pcs-row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.pcs-in{flex:1;min-width:120px;border:1px solid #cfd5de;border-radius:8px;padding:9px;font:14px Arial}.pcs-in[type=number]{max-width:90px;flex:0 0 auto}.pcs-btn{border:0;border-radius:9px;min-height:40px;padding:9px 12px;font-weight:800;cursor:pointer;background:#252b35;color:#fff}.pcs-btn:disabled{opacity:.6}.pcs-btn.red{background:#c00000}.pcs-btn.lite{background:#fff;color:#9f1111;border:1px solid #e0b2b2}.pcs-btn.sm{padding:6px 9px;font-size:12px}.pcs-sech{font-weight:800;font-size:12px;text-transform:uppercase;color:#6b7280;margin:10px 0 4px}.pcs-x{background:#fee2e2;color:#991b1b;border:0;border-radius:8px;width:40px;min-height:40px;cursor:pointer}.pcs-status{font-size:12px;font-weight:800;padding:3px 8px;border-radius:99px}.pcs-status.draft{background:#fff1c7;color:#95500b}.pcs-status.submitted{background:#dcfce7;color:#16713a}.pcs-status.pending{background:#dbeafe;color:#1d4ed8}.pcs-hint{font-size:12px;color:#6b7280;margin-bottom:10px}.pcs-sync{font-size:11px;color:#64748b;margin:5px 0 8px}@media(max-width:600px){.pcs-row>.pcs-in{min-width:calc(60% - 8px)}.pcs-in[type=number]{min-width:72px}.pcs-loc{margin-left:-4px;margin-right:-4px}}");
+      var st=ce("style",null,".pcs-panel{margin-top:12px}.pcs-panel h2{font-size:18px;margin:6px 0}.pcs-loc{background:#fff;border:1px solid #e3e6ea;border-radius:12px;margin-bottom:12px;overflow:hidden}.pcs-loc-head{display:flex;align-items:center;gap:8px;width:100%;padding:12px;border:0;background:#f8fafc;text-align:left;cursor:pointer}.pcs-loc-head h3{margin:0;font-size:16px;color:#111827;flex:1}.pcs-loc-body{padding:0 12px 12px}.pcs-loc.collapsed .pcs-loc-body{display:none}.pcs-chevron{font-size:18px;transition:transform .2s}.pcs-loc.collapsed .pcs-chevron{transform:rotate(-90deg)}.pcs-loc .sub{font-size:12px;color:#6b7280;margin:0 0 8px}.pcs-row{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.pcs-row.activity-row{align-items:flex-start}.pcs-in{flex:1;min-width:120px;border:1px solid #cfd5de;border-radius:8px;padding:9px;font:14px Arial}.pcs-in.pcs-wide{flex:3 1 420px;min-height:46px;line-height:1.35;resize:vertical;overflow:hidden;white-space:pre-wrap}.pcs-in[type=number]{max-width:105px;flex:0 0 auto}.pcs-btn{border:0;border-radius:9px;min-height:40px;padding:9px 12px;font-weight:800;cursor:pointer;background:#252b35;color:#fff}.pcs-btn:disabled{opacity:.6}.pcs-btn.red{background:#c00000}.pcs-btn.lite{background:#fff;color:#9f1111;border:1px solid #e0b2b2}.pcs-btn.sm{padding:6px 9px;font-size:12px}.pcs-sech{font-weight:800;font-size:12px;text-transform:uppercase;color:#6b7280;margin:14px 0 6px;padding-top:8px;border-top:1px solid #eef0f3}.pcs-x{background:#fee2e2;color:#991b1b;border:0;border-radius:8px;width:40px;min-height:40px;cursor:pointer}.pcs-status{font-size:12px;font-weight:800;padding:3px 8px;border-radius:99px}.pcs-status.draft{background:#fff1c7;color:#95500b}.pcs-status.submitted{background:#dcfce7;color:#16713a}.pcs-status.pending{background:#dbeafe;color:#1d4ed8}.pcs-hint{font-size:12px;color:#6b7280;margin-bottom:10px}.pcs-sync{font-size:11px;color:#64748b;margin:5px 0 8px}@media(max-width:600px){.pcs-row>.pcs-in{min-width:calc(60% - 8px)}.pcs-in.pcs-wide{min-width:100%;min-height:72px}.pcs-in[type=number]{min-width:84px}.pcs-loc{margin-left:-4px;margin-right:-4px}}");
       document.head.appendChild(st);
       var tn=ce("div","",'<div id="pcs-note" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 16px;border-radius:8px;z-index:9999"></div>');document.body.appendChild(tn);
     }
     PANEL.style.display="block";
     var ph=$("pcs-description-host");if(ph)ph.style.display="block";
-    PANEL.innerHTML='<h2>Work locations & activities</h2><div class="pcs-hint">Complete each location below. Project particulars, manpower, photos and sign-off continue in the normal DPR sections.</div><div id="pcs-blocks">Loading locations...</div>';
+    var cl=$("camlib");if(cl&&cl.parentElement!==document.body)document.body.appendChild(cl);
+    PANEL.innerHTML='<div style="display:flex;align-items:center;gap:8px"><h2 style="flex:1">Location Daily Reports</h2><button class="pcs-btn lite sm" type="button" onclick="document.querySelectorAll(\'.pcs-loc\').forEach(function(x){x.classList.remove(\'collapsed\')})">Expand all</button><button class="pcs-btn lite sm" type="button" onclick="document.querySelectorAll(\'.pcs-loc\').forEach(function(x){x.classList.add(\'collapsed\')})">Collapse all</button></div><div class="pcs-hint">Complete the full DPR separately for each work location. Project particulars and final sign-off remain once for the consolidated report.</div><div id="pcs-blocks">Loading locations...</div>';
     await loadBlocks();
   }
 
@@ -75,6 +75,7 @@
   function mergeUnique(target,items){items.forEach(function(x){if(!target.some(function(y){return sameRow(x,y)}))target.push(x)})}
   function workerName(id){var a=(DIST&&DIST.workers)||[];for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i].name+(a[i].worker_code?' · '+a[i].worker_code:'');return id}
   function locationWorkers(locId){return ((DIST&&DIST.distributions)||[]).filter(function(x){return x.location_id===locId}).map(function(x){return {name:workerName(x.worker_id),segment:x.segment,start:x.start_time,end:x.end_time}})}
+  function periodLabel(w){if(w.segment==='custom'&&String(w.start||'').slice(0,5)==='06:00'&&String(w.end||'').slice(0,5)==='18:00')return 'Full day';return w.segment==='custom'?((w.start||'')+'-'+(w.end||'')):(w.segment||'').replace('_',' ')}
   function buildBlock(loc,saved){
     var submitted=!!(saved&&saved.status==="submitted");if(submitted)clearDraft(loc.id);var d=submitted?serverState(saved):(loadDraft(loc.id)||serverState(saved));
     var box=ce("div","pcs-loc");
@@ -88,34 +89,36 @@
       '<div class="pcs-sech">Plant, equipment & tools used</div><div data-plant></div><button class="pcs-btn sm" data-addplant>+ Plant / equipment / tool</button>'+
       '<div class="pcs-sech">Materials required</div><div data-mreq></div><button class="pcs-btn sm" data-addmreq>+ Material request</button>'+
       '<div class="pcs-sech">Plant, equipment & tools required</div><div data-preq></div><button class="pcs-btn sm" data-addpreq>+ Plant / equipment / tool request</button>'+
-      '<div class="pcs-sech">Photos for this location</div><div data-locphotos class="pcs-hint"></div><button class="pcs-btn lite sm" data-refreshphotos>Refresh photo list</button>'+
+      '<div class="pcs-sech">Activity photos</div><div data-locphotos class="pcs-hint"></div><div class="pcs-row"><button class="pcs-btn sm" data-addphotos>+ Add photos</button><button class="pcs-btn lite sm" data-camera>VCMS Camera photos</button><button class="pcs-btn lite sm" data-refreshphotos>Refresh list</button></div>'+
       '<div class="pcs-row" style="margin-top:12px"><button class="pcs-btn red" data-submit style="flex:1">'+(submitted?'Submitted':'Submit '+esc(loc.name))+'</button><button class="pcs-btn" data-whatsapp style="background:#128c4a;flex:1">WhatsApp update</button></div></div>';
     var state=d;state.materialRequests=state.materialRequests||state.requests||[];state.plantRequests=state.plantRequests||[];state.photos=state.photos||[];delete state.requests;
     var meta={loc:loc,state:state,box:box,submitted:submitted};BLOCKS.push(meta);
     function persist(){saveDraft(loc.id,state);submitted=false;meta.submitted=false;var se=box.querySelector('[data-st]');se.textContent='draft';se.className='pcs-status draft';var sy=box.querySelector('[data-sync]');if(sy)sy.textContent='Saved on this device · waiting to submit';var sb=box.querySelector('[data-submit]');if(sb){sb.disabled=false;sb.textContent='Submit '+loc.name}syncLegacyDescription();updatePcsReadiness()}
+    function grow(inp){if(inp.tagName==='TEXTAREA'){inp.style.height='auto';inp.style.height=Math.max(46,inp.scrollHeight)+'px'}}
     function renderList(host,arr,cols,kind){
       host.innerHTML="";
       arr.forEach(function(item,idx){
-        var row=ce("div","pcs-row");
+        var row=ce("div","pcs-row"+(kind==="activity"?" activity-row":""));
         cols.forEach(function(col){
-          var inp=ce(col.options?"select":"input","pcs-in");inp.placeholder=col.ph;if(col.type)inp.type=col.type;if(col.min!=null)inp.min=col.min;if(col.max!=null)inp.max=col.max;if(col.options){col.options.forEach(function(v){var o=ce("option");o.value=v;o.textContent=v.replace(/_/g," ");inp.appendChild(o)})}inp.value=item[col.k]==null?"":item[col.k];
-          inp.addEventListener("input",function(){item[col.k]=(col.type==="number"?(inp.value===""?null:Number(inp.value)):inp.value);persist()});
+          var inp=ce(col.options?"select":(col.multiline?"textarea":"input"),"pcs-in"+(col.wide?" pcs-wide":""));inp.placeholder=col.ph;if(col.type)inp.type=col.type;if(col.min!=null)inp.min=col.min;if(col.max!=null)inp.max=col.max;if(col.options){col.options.forEach(function(v){var o=ce("option");o.value=v;o.textContent=v.replace(/_/g," ");inp.appendChild(o)})}inp.value=item[col.k]==null?"":item[col.k];grow(inp);
+          inp.addEventListener("input",function(){item[col.k]=(col.type==="number"?(inp.value===""?null:Number(inp.value)):inp.value);grow(inp);persist()});
           row.appendChild(inp);
         });
         var x=ce("button","pcs-x",'x');x.addEventListener("click",function(){arr.splice(idx,1);persist();renderList(host,arr,cols,kind)});
         row.appendChild(x);host.appendChild(row);
       });
     }
-    var todayCols=[{k:"description",ph:"Activity description"},{k:"previous_percent",ph:"Previous cumulative %",type:"number",min:0,max:100},{k:"percent_complete",ph:"Current cumulative %",type:"number",min:0,max:100},{k:"activity_status",options:["planned","manual","in_progress","completed","deferred","cancelled"]},{k:"remark",ph:"Remark / defer reason"}];
-    var tomCols=[{k:"description",ph:"Tomorrow activity"},{k:"remark",ph:"Remark"}];
+    var todayCols=[{k:"description",ph:"Detailed activity description",multiline:true,wide:true},{k:"previous_percent",ph:"Previous %",type:"number",min:0,max:100},{k:"percent_complete",ph:"Current %",type:"number",min:0,max:100},{k:"activity_status",options:["planned","manual","in_progress","completed","deferred","cancelled"]},{k:"remark",ph:"Remark / defer reason",multiline:true}];
+    var tomCols=[{k:"description",ph:"Tomorrow activity description",multiline:true,wide:true},{k:"remark",ph:"Remark",multiline:true}];
     var matCols=[{k:"item_name",ph:"Material"},{k:"quantity",ph:"Qty",type:"number"},{k:"unit",ph:"Unit"},{k:"delivery_ref",ph:"Delivery ref"},{k:"remarks",ph:"Remarks"}];
     var plantCols=[{k:"item_name",ph:"Plant / equipment / tool"},{k:"quantity",ph:"Qty",type:"number"},{k:"usage_hours",ph:"Hours",type:"number"},{k:"usage_days",ph:"Days",type:"number"},{k:"provider",ph:"Provider"},{k:"remarks",ph:"Remarks"}];
     var mreqCols=[{k:"item_name",ph:"Material required"},{k:"quantity",ph:"Qty",type:"number"},{k:"unit",ph:"Unit"},{k:"required_by",ph:"Required by"},{k:"priority",options:["normal","urgent","critical"]}];
     var preqCols=[{k:"item_name",ph:"Plant / equipment / tool required"},{k:"quantity",ph:"Qty",type:"number"},{k:"required_from",ph:"From"},{k:"required_until",ph:"Until"},{k:"priority",options:["normal","urgent","critical"]}];
-    function renderManpower(){var host=box.querySelector('[data-manpower]'),rows=locationWorkers(loc.id);host.innerHTML=rows.length?rows.map(function(w){var period=w.segment==='custom'?((w.start||'')+'-'+(w.end||'')):w.segment;return '<div style="padding:6px 8px;margin-bottom:4px;border:1px solid #e5e7eb;border-radius:8px"><b>'+esc(w.name)+'</b><span style="float:right">'+esc(period||'')+'</span></div>'}).join(''):'No workers have been assigned to this location. Ask the manager to assign names in Tomorrow Plan.'}
+    function renderManpower(){var host=box.querySelector('[data-manpower]'),rows=locationWorkers(loc.id);host.innerHTML=rows.length?rows.map(function(w){return '<div style="padding:6px 8px;margin-bottom:4px;border:1px solid #e5e7eb;border-radius:8px"><b>'+esc(w.name)+'</b><span style="float:right">'+esc(periodLabel(w))+'</span></div>'}).join(''):'No workers have been assigned to this location. Ask the manager to assign names in Tomorrow Plan.'}
     meta.refreshManpower=renderManpower;
-    function renderLocPhotos(){var host=box.querySelector('[data-locphotos]'),all=[];try{all=Array.isArray(PHOTOS)?PHOTOS:[]}catch(e){}var usable=all.filter(function(p){return p.camera_photo_id});if(!usable.length){host.innerHTML='Add photos in the normal Activity Photos section. Camera photos can then be assigned here.';return}host.innerHTML=usable.map(function(p,i){var on=state.photos.some(function(x){return x.photo_id===p.camera_photo_id});return '<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 8px 3px 0"><input type="checkbox" data-pid="'+esc(p.camera_photo_id)+'" '+(on?'checked':'')+'> Photo '+(i+1)+' · '+esc(p.caption||'')+'</label>'}).join('');host.querySelectorAll('input').forEach(function(ch){ch.addEventListener('change',function(){var id=this.dataset.pid;if(this.checked){if(!state.photos.some(function(x){return x.photo_id===id}))state.photos.push({photo_id:id,caption:(usable.find(function(x){return x.camera_photo_id===id})||{}).caption||''})}else state.photos=state.photos.filter(function(x){return x.photo_id!==id});persist()})})}
-    function rAll(){renderList(box.querySelector("[data-today]"),state.today,todayCols);renderList(box.querySelector("[data-tom]"),state.tomorrow,tomCols);renderManpower();renderList(box.querySelector("[data-mat]"),state.materials,matCols);renderList(box.querySelector("[data-plant]"),state.plant,plantCols);renderList(box.querySelector("[data-mreq]"),state.materialRequests,mreqCols);renderList(box.querySelector("[data-preq]"),state.plantRequests,preqCols);renderLocPhotos()}
+    function renderLocPhotos(){var host=box.querySelector('[data-locphotos]'),all=[];try{all=Array.isArray(PHOTOS)?PHOTOS:[]}catch(e){}var usable=all.filter(function(p){return p.camera_photo_id});if(!usable.length){host.innerHTML='No Camera photos available yet. Add or select photos, then refresh this list.';return}host.innerHTML=usable.map(function(p,i){var on=state.photos.some(function(x){return x.photo_id===p.camera_photo_id});return '<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 8px 3px 0"><input type="checkbox" data-pid="'+esc(p.camera_photo_id)+'" '+(on?'checked':'')+'> Photo '+(i+1)+' · '+esc(p.caption||'')+'</label>'}).join('');host.querySelectorAll('input').forEach(function(ch){ch.addEventListener('change',function(){var id=this.dataset.pid;if(this.checked){if(!state.photos.some(function(x){return x.photo_id===id}))state.photos.push({photo_id:id,caption:(usable.find(function(x){return x.camera_photo_id===id})||{}).caption||''})}else state.photos=state.photos.filter(function(x){return x.photo_id!==id});persist()})})}
+    meta.refreshPhotos=renderLocPhotos;
+    function rAll(){renderList(box.querySelector("[data-today]"),state.today,todayCols,"activity");renderList(box.querySelector("[data-tom]"),state.tomorrow,tomCols,"activity");renderManpower();renderList(box.querySelector("[data-mat]"),state.materials,matCols);renderList(box.querySelector("[data-plant]"),state.plant,plantCols);renderList(box.querySelector("[data-mreq]"),state.materialRequests,mreqCols);renderList(box.querySelector("[data-preq]"),state.plantRequests,preqCols);renderLocPhotos()}
     box.querySelector("[data-addtoday]").addEventListener("click",function(){state.today.push({description:"",previous_percent:null,percent_complete:null,origin:"manual",activity_status:"manual",remark:""});persist();rAll()});
     box.querySelector("[data-addtom]").addEventListener("click",function(){state.tomorrow.push({description:""});persist();rAll()});
     box.querySelector("[data-addmat]").addEventListener("click",function(){state.materials.push({item_name:"",quantity:null,unit:""});persist();rAll()});
@@ -123,6 +126,8 @@
     box.querySelector("[data-addmreq]").addEventListener("click",function(){state.materialRequests.push({item_name:"",quantity:null,unit:"",required_by:"",priority:"normal"});persist();rAll()});
     box.querySelector("[data-addpreq]").addEventListener("click",function(){state.plantRequests.push({item_name:"",quantity:null,required_from:"",required_until:"",priority:"normal"});persist();rAll()});
     box.querySelector("[data-refreshphotos]").addEventListener("click",renderLocPhotos);
+    box.querySelector("[data-addphotos]").addEventListener("click",function(){var f=$("pfile");if(f)f.click()});
+    box.querySelector("[data-camera]").addEventListener("click",function(){if(typeof openCameraLibrary==="function")openCameraLibrary()});
     box.querySelector("[data-loadplan]").addEventListener("click",async function(){await loadPlanInto(loc,state);rAll();note("Manager plan loaded")});
     box.querySelector("[data-copyprev]").addEventListener("click",async function(){var dt=prompt("Copy from date (YYYY-MM-DD)");if(!dt)return;await copyInto(loc,state,dt,false,box);rAll()});
     box.querySelector("[data-copylatest]").addEventListener("click",async function(){await copyInto(loc,state,DATE,true,box);rAll()});
@@ -142,7 +147,7 @@
     var prep=($("f-prep")&&$("f-prep").value)||"Supervisor";
     var lines=["*PCS LOCATION DAILY UPDATE*","*Date:* "+DATE.split('-').reverse().join('/'),"*Site:* "+siteName,"*Location:* "+loc.name,"*Reported By:* "+prep];
     var today=(state.today||[]).filter(function(x){return (x.description||'').trim()});lines.push("","*Today's Activities:*");if(today.length)today.forEach(function(x,i){lines.push((i+1)+". "+x.description+(x.percent_complete==null?'':' — '+x.percent_complete+'% complete'))});else lines.push('- None entered');
-    var workers=locationWorkers(loc.id);lines.push("","*Manpower ("+workers.length+"):*");if(workers.length)workers.forEach(function(x){lines.push('- '+x.name+(x.segment?' ('+x.segment.replace('_',' ')+')':''))});else lines.push('- No workers assigned');
+    var workers=locationWorkers(loc.id);lines.push("","*Manpower ("+workers.length+"):*");if(workers.length)workers.forEach(function(x){lines.push('- '+x.name+(periodLabel(x)?' ('+periodLabel(x)+')':''))});else lines.push('- No workers assigned');
     var mats=(state.materials||[]).filter(function(x){return x.item_name});if(mats.length){lines.push("","*Materials Used:*");mats.forEach(function(x){lines.push('- '+x.item_name+(x.quantity!=null?' '+x.quantity:'')+(x.unit?' '+x.unit:''))})}
     var plants=(state.plant||[]).filter(function(x){return x.item_name});if(plants.length){lines.push("","*Plant / Equipment / Tools:*");plants.forEach(function(x){lines.push('- '+x.item_name+(x.quantity!=null?' x'+x.quantity:'')+(x.usage_hours!=null?' · '+x.usage_hours+' hrs':''))})}
     var tomorrow=(state.tomorrow||[]).filter(function(x){return x.description});if(tomorrow.length){lines.push("","*Tomorrow's Activities:*");tomorrow.forEach(function(x){lines.push('- '+x.description)})}
@@ -198,7 +203,7 @@
       [has("f-project")&&has("f-item"),"Project particulars"],
       [BLOCKS.length>0&&locationContent===BLOCKS.length,"Location activities ("+locationContent+"/"+BLOCKS.length+")"],
       [BLOCKS.length>0&&locationReady===BLOCKS.length,"Locations submitted ("+locationReady+"/"+BLOCKS.length+")"],
-      [document.querySelectorAll("#mp tr").length>0,"Manpower"],
+      [BLOCKS.length>0&&BLOCKS.every(function(b){return locationWorkers(b.loc.id).length>0}),"Location manpower"],
       [BLOCKS.length>0&&BLOCKS.every(function(b){return (b.state.photos||[]).length>0}),"Location photos"],
       [has("f-prep"),"Prepared by"],
       [!!(sig&&sig.src&&!sig.classList.contains("hidden")),"Signature"]
@@ -213,6 +218,6 @@
   window.vcmsPcsDpr={isActive:function(){return ACTIVE},updateReadiness:updatePcsReadiness};
   window.addEventListener("online",function(){setTimeout(flushPending,500)});
 
-  function hook(){var s=$("site"),d=$("date");if(s)s.addEventListener("change",refresh);if(d)d.addEventListener("change",refresh);var main=$("dpr-main");if(main){main.addEventListener("input",function(){if(ACTIVE)updatePcsReadiness()});main.addEventListener("change",function(){if(ACTIVE)updatePcsReadiness()})}/* Reference data can arrive slowly on 4G/cold start. Recheck without requiring the supervisor to change the site manually. */[600,1600,3500].forEach(function(ms){setTimeout(refresh,ms)})}
+  function hook(){var s=$("site"),d=$("date"),pf=$("pfile");if(s)s.addEventListener("change",refresh);if(d)d.addEventListener("change",refresh);if(pf)pf.addEventListener("change",function(){setTimeout(function(){BLOCKS.forEach(function(b){if(b.refreshPhotos)b.refreshPhotos()})},1200)});var main=$("dpr-main");if(main){main.addEventListener("input",function(){if(ACTIVE)updatePcsReadiness()});main.addEventListener("change",function(){if(ACTIVE)updatePcsReadiness()})}/* Reference data can arrive slowly on 4G/cold start. Recheck without requiring the supervisor to change the site manually. */[600,1600,3500].forEach(function(ms){setTimeout(refresh,ms)})}
   if(document.readyState!=="loading")hook();else document.addEventListener("DOMContentLoaded",hook);
 })();
