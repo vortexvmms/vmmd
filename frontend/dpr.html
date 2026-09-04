@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260904-locationlayout"></script>
+  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260905-columns"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     body.dpr { background:#F3F4F6; }
@@ -101,6 +101,7 @@
       table.edt{min-width:0}.pgrid2{grid-template-columns:repeat(4,minmax(0,1fr))}
       #dprbar>div{max-width:none!important;padding-left:24px;padding-right:24px}
       body.pcs-mode .pcs-global-duplicate{display:none!important}
+      body.pcs-mode #dpr-main{max-width:calc(100vw - 32px)!important;width:100%}
       body.pcs-mode #dpr-progress{width:230px;justify-self:end}
       body.pcs-mode #dpr-progress h2{padding:9px 12px;font-size:12px}
       body.pcs-mode #dpr-progress .dpr-prog-body{padding:10px 12px}
