@@ -3,7 +3,7 @@
 -- No existing rows are rewritten; existing DPR behaviour is unchanged until an
 -- administrator sets a project's dpr_mode to 'multi_location'.
 -- Test on a non-production Supabase project before production use.
-begin;
+begin; set local check_function_bodies = off;
 
 -- ---------------------------------------------------------------------------
 -- 1. DPR Mode flag (Section 2). Lives on the canonical Project so every DPR for
