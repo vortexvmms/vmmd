@@ -94,6 +94,17 @@ class ResourceRequestIn(BaseModel):
     priority: str = Field(default="normal", pattern="^(normal|urgent|critical)$")
 
 
+class ResourceRequestPatch(BaseModel):
+    status: str = Field(pattern="^(requested|reviewed|approved|partially_arranged|arranged|rejected)$")
+    manager_remarks: Optional[str] = None
+
+
+class LocationPhotoIn(BaseModel):
+    photo_id: str
+    caption: Optional[str] = None
+    display_order: int = 0
+
+
 class SubmitIn(BaseModel):
     record_version: int
 
@@ -151,12 +162,43 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
             rp = await client.get(f"{c.rest_url}/pcs_daily_reports",
                                   params={"project_id": f"eq.{pid}", "report_date": f"eq.{report_date}",
                                           "select": "*,pcs_location_reports(*,pcs_location_activities(*),"
-                                                    "pcs_actual_materials(*),pcs_actual_plant(*),pcs_location_photos(*))",
+                                                    "pcs_actual_materials(*),pcs_actual_plant(*),"
+                                                    "pcs_resource_requests(*),pcs_location_photos(*))",
                                           "limit": "1"}, headers=headers(user))
             if rp.status_code != 200:
                 raise HTTPException(status_code=500, detail="Could not load report")
             rows = rp.json()
+            if rows:
+                links = [p for lr in rows[0].get("pcs_location_reports", [])
+                         for p in lr.get("pcs_location_photos", [])]
+                ids = [p.get("photo_id") for p in links if p.get("photo_id")]
+                if ids:
+                    cp = await client.get(f"{c.rest_url}/camera_photos",
+                                          params={"photo_id": f"in.({','.join(ids)})",
+                                                  "select": "photo_id,public_url"},
+                                          headers=headers(user))
+                    urls = {p.get("photo_id"): p.get("public_url") for p in (cp.json() if cp.status_code == 200 else [])}
+                    for p in links:
+                        p["public_url"] = urls.get(p.get("photo_id"))
             return {"project_id": pid, "report": rows[0] if rows else None}
+
+    @router.get("/report/latest-location")
+    async def latest_location_report(location_id: str, before_date: str,
+                                     user: dict = Depends(c.get_current_user)):
+        """Latest earlier report for exactly one location; never crosses locations."""
+        async with c.shared_client() as client:
+            r = await client.get(
+                f"{c.rest_url}/pcs_location_reports",
+                params={"location_id": f"eq.{location_id}",
+                        "select": "*,pcs_daily_reports!inner(report_date),pcs_location_activities(*),"
+                                  "pcs_actual_materials(*),pcs_actual_plant(*),pcs_resource_requests(*)",
+                        "pcs_daily_reports.report_date": f"lt.{before_date}", "limit": "100"},
+                headers=headers(user))
+            if r.status_code != 200:
+                raise HTTPException(status_code=500, detail="Could not load the latest location report")
+            rows = r.json()
+            rows.sort(key=lambda x: (x.get("pcs_daily_reports") or {}).get("report_date", ""), reverse=True)
+            return {"report": rows[0] if rows else None}
 
     @router.post("/report/{parent_id}/location", status_code=201)
     async def ensure_location_report(parent_id: str, body: LocationRef,
@@ -182,7 +224,8 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
             r = await client.get(f"{c.rest_url}/pcs_location_reports",
                                  params={"id": f"eq.{lr_id}",
                                          "select": "*,pcs_location_activities(*),pcs_actual_materials(*),"
-                                                   "pcs_actual_plant(*),pcs_location_photos(*)", "limit": "1"},
+                                                   "pcs_actual_plant(*),pcs_resource_requests(*),"
+                                                   "pcs_location_photos(*)", "limit": "1"},
                                  headers=headers(user))
             if r.status_code != 200 or not r.json():
                 raise HTTPException(status_code=404, detail="Location report not found")
@@ -222,6 +265,13 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
     # ---- Activities (today / tomorrow) -----------------------------------
     @router.post("/location-report/{lr_id}/activity", status_code=201)
     async def add_activity(lr_id: str, body: ActivityIn, user: dict = Depends(c.get_current_user)):
+        if body.percent_complete is not None and not 0 <= body.percent_complete <= 100:
+            raise HTTPException(status_code=422, detail="Completion must be between 0 and 100")
+        if body.previous_percent is not None and body.percent_complete is not None \
+                and body.percent_complete < body.previous_percent and not (body.reduction_reason or "").strip():
+            raise HTTPException(status_code=422, detail="Give a reason when cumulative completion is reduced")
+        if body.activity_status in ("deferred", "cancelled") and not (body.remark or "").strip():
+            raise HTTPException(status_code=422, detail="Deferred or cancelled work requires a remark")
         async with c.shared_client() as client:
             payload = body.model_dump()
             payload["description"] = payload["description"].strip()
@@ -297,6 +347,18 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
                 raise HTTPException(status_code=400, detail="Could not delete plant/equipment")
             return {"ok": True}
 
+    @router.post("/location-report/{lr_id}/photo", status_code=201)
+    async def add_location_photo(lr_id: str, body: LocationPhotoIn,
+                                 user: dict = Depends(c.get_current_user)):
+        async with c.shared_client() as client:
+            payload = {"location_report_id": lr_id, "photo_id": body.photo_id,
+                       "caption": body.caption, "display_order": body.display_order,
+                       "created_by": user["user_id"]}
+            row = await insert(client, user, "pcs_location_photos", payload,
+                               "Could not link location photo")
+            await c.audit(client, user, "create", "pcs_location_photo", row["id"], None, row)
+            return row
+
     # ---- Resource requests (no cost) -------------------------------------
     @router.post("/resource-request", status_code=201)
     async def add_request(body: ResourceRequestIn, user: dict = Depends(c.get_current_user)):
@@ -312,6 +374,37 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
                        "created_by": user["user_id"], "updated_by": user["user_id"]}
             row = await insert(client, user, "pcs_resource_requests", payload, "Could not submit request")
             await c.audit(client, user, "create", "pcs_resource_request", row["id"], None, row)
+            return row
+
+    @router.get("/resource-requests")
+    async def list_requests(project_id: Optional[str] = None, site_id: Optional[str] = None,
+                            status: Optional[str] = None, user: dict = Depends(c.get_current_user)):
+        async with c.shared_client() as client:
+            pid = await resolve_pid(client, user, project_id, site_id)
+            params = {"project_id": f"eq.{pid}", "select": "*", "order": "created_at.desc"}
+            if status:
+                params["status"] = f"eq.{status}"
+            r = await client.get(f"{c.rest_url}/pcs_resource_requests", params=params,
+                                 headers=headers(user))
+            if r.status_code != 200:
+                raise HTTPException(status_code=500, detail="Could not load resource requests")
+            return r.json()
+
+    @router.patch("/resource-request/{request_id}")
+    async def review_request(request_id: str, body: ResourceRequestPatch,
+                             user: dict = Depends(c.get_current_user)):
+        if user.get("role") not in {"admin", "general_manager", "operation_manager", "main_sup"}:
+            raise HTTPException(status_code=403, detail="Only authorised managers can review requests")
+        async with c.shared_client() as client:
+            patch = {"status": body.status, "manager_remarks": body.manager_remarks,
+                     "updated_by": user["user_id"]}
+            r = await client.patch(f"{c.rest_url}/pcs_resource_requests",
+                                   params={"id": f"eq.{request_id}"},
+                                   headers=headers(user, True), json=patch)
+            if r.status_code != 200 or not r.json():
+                raise HTTPException(status_code=404, detail="Resource request not found")
+            row = r.json()[0]
+            await c.audit(client, user, "update", "pcs_resource_request", request_id, None, patch)
             return row
 
     # ---- Submit with optimistic concurrency + idempotency ----------------

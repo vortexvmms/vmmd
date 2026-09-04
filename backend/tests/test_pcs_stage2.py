@@ -43,6 +43,18 @@ def test_planning_page_uses_stage2_endpoints():
         assert frag in PAGE, f"missing {frag}"
 
 
+def test_priority3_manager_resources_and_request_review():
+    report_router = (ROOT / "backend/app/modules/pcs_report_router.py").read_text()
+    for frag in ("/plan/{plan_id}/material", "/plan/{plan_id}/plant",
+                 "/plan/{plan_id}/reopen", "planned_materials", "planned_plant"):
+        assert frag in ROUTER
+    for frag in ("/resource-requests", "/resource-request/{request_id}", "manager_remarks"):
+        assert frag in report_router
+    for frag in ("Planned materials", "Planned plant / equipment", "previewPlan()",
+                 "reopenPlan()", "reviewRequest("):
+        assert frag in PAGE
+
+
 def test_standard_dpr_still_untouched():
     dpr = (ROOT / "frontend/dpr.html").read_text()
     assert "Description of works" in dpr

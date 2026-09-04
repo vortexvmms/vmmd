@@ -37,6 +37,13 @@ def test_report_page_has_readiness_distribution_and_pdf():
         assert frag in PAGE, f"missing {frag}"
 
 
+def test_priority3_report_outputs_and_location_resources():
+    for frag in ("Image PDF", "Excel", "imagePdf()", "excelExport()",
+                 "Requirements for upcoming work", "Location photos",
+                 "All locations (consolidated)"):
+        assert frag in PAGE
+
+
 def test_standard_dpr_still_untouched():
     dpr = (ROOT / "frontend/dpr.html").read_text()
     assert "Description of works" in dpr

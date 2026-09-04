@@ -72,6 +72,13 @@ class WhatsAppIn(BaseModel):
     final_text: Optional[str] = None
 
 
+class PlannedResourceIn(BaseModel):
+    location_id: Optional[str] = None
+    item_name: str = Field(min_length=1)
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+
+
 def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
     router = APIRouter(prefix="/api/v1/pcs", tags=["pcs-plan"])
 
@@ -116,7 +123,7 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
         async with c.shared_client() as client:
             pid = await resolve_pid(client, user, project_id, site_id)
             plan = await get_plan_row(client, user, pid, plan_date)
-            activities = []
+            activities, materials, plant = [], [], []
             if plan:
                 ra = await client.get(f"{c.rest_url}/pcs_planned_activities",
                                      params={"plan_id": f"eq.{plan['id']}", "select": "*",
@@ -124,7 +131,18 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
                                      headers=headers(user))
                 if ra.status_code == 200:
                     activities = ra.json()
-            return {"project_id": pid, "plan": plan, "activities": activities}
+                rm = await client.get(f"{c.rest_url}/pcs_planned_materials",
+                                      params={"plan_id": f"eq.{plan['id']}", "select": "*"},
+                                      headers=headers(user))
+                if rm.status_code == 200:
+                    materials = rm.json()
+                re = await client.get(f"{c.rest_url}/pcs_planned_plant",
+                                      params={"plan_id": f"eq.{plan['id']}", "select": "*"},
+                                      headers=headers(user))
+                if re.status_code == 200:
+                    plant = re.json()
+            return {"project_id": pid, "plan": plan, "activities": activities,
+                    "materials": materials, "plant": plant}
 
     @router.post("/plan", status_code=201)
     async def ensure_plan(body: PlanRef, user: dict = Depends(c.get_current_user)):
@@ -195,6 +213,84 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
             await c.audit(client, user, "delete", "pcs_planned_activity", activity_id, None, None)
             return {"ok": True}
 
+    @router.post("/plan/{plan_id}/material", status_code=201)
+    async def add_planned_material(plan_id: str, body: PlannedResourceIn,
+                                   user: dict = Depends(c.get_current_user)):
+        management(user)
+        async with c.shared_client() as client:
+            payload = body.model_dump()
+            payload.update({"plan_id": plan_id, "item_name": body.item_name.strip(),
+                            "created_by": user["user_id"]})
+            row = await insert_resource(client, user, "pcs_planned_materials", payload,
+                                        "Could not add planned material")
+            await c.audit(client, user, "create", "pcs_planned_material", row["id"], None, row)
+            return row
+
+    @router.post("/plan/{plan_id}/plant", status_code=201)
+    async def add_planned_plant(plan_id: str, body: PlannedResourceIn,
+                                user: dict = Depends(c.get_current_user)):
+        management(user)
+        async with c.shared_client() as client:
+            payload = body.model_dump(exclude={"unit"})
+            payload.update({"plan_id": plan_id, "item_name": body.item_name.strip(),
+                            "created_by": user["user_id"]})
+            row = await insert_resource(client, user, "pcs_planned_plant", payload,
+                                        "Could not add planned plant/equipment")
+            await c.audit(client, user, "create", "pcs_planned_plant", row["id"], None, row)
+            return row
+
+    async def insert_resource(client, user, table, payload, message):
+        r = await client.post(f"{c.rest_url}/{table}", headers=headers(user, True), json=payload)
+        if r.status_code not in (200, 201) or not r.json():
+            raise HTTPException(status_code=400, detail=message)
+        return r.json()[0]
+
+    @router.delete("/plan/resource/{kind}/{resource_id}")
+    async def delete_planned_resource(kind: str, resource_id: str,
+                                      user: dict = Depends(c.get_current_user)):
+        management(user)
+        table = {"material": "pcs_planned_materials", "plant": "pcs_planned_plant"}.get(kind)
+        if not table:
+            raise HTTPException(status_code=400, detail="Unknown resource type")
+        async with c.shared_client() as client:
+            r = await client.delete(f"{c.rest_url}/{table}", params={"id": f"eq.{resource_id}"},
+                                    headers=headers(user))
+            if r.status_code not in (200, 204):
+                raise HTTPException(status_code=400, detail="Could not remove planned resource")
+            await c.audit(client, user, "delete", "pcs_planned_resource", resource_id, None,
+                          {"kind": kind})
+            return {"ok": True}
+
+    @router.patch("/plan/resource/{kind}/{resource_id}")
+    async def edit_planned_resource(kind: str, resource_id: str, body: PlannedResourceIn,
+                                    user: dict = Depends(c.get_current_user)):
+        management(user)
+        table = {"material": "pcs_planned_materials", "plant": "pcs_planned_plant"}.get(kind)
+        if not table:
+            raise HTTPException(status_code=400, detail="Unknown resource type")
+        patch = body.model_dump(exclude={"unit"} if kind == "plant" else set())
+        patch["item_name"] = body.item_name.strip()
+        async with c.shared_client() as client:
+            r = await client.patch(f"{c.rest_url}/{table}", params={"id": f"eq.{resource_id}"},
+                                   headers=headers(user, True), json=patch)
+            if r.status_code != 200 or not r.json():
+                raise HTTPException(status_code=404, detail="Planned resource not found")
+            await c.audit(client, user, "update", "pcs_planned_resource", resource_id, None,
+                          {"kind": kind, **patch})
+            return r.json()[0]
+
+    @router.post("/plan/{plan_id}/reopen")
+    async def reopen_plan(plan_id: str, user: dict = Depends(c.get_current_user)):
+        management(user)
+        async with c.shared_client() as client:
+            r = await client.patch(f"{c.rest_url}/pcs_daily_plans",
+                                   params={"id": f"eq.{plan_id}"}, headers=headers(user, True),
+                                   json={"status": "draft", "updated_by": user["user_id"]})
+            if r.status_code != 200 or not r.json():
+                raise HTTPException(status_code=404, detail="Plan not found")
+            await c.audit(client, user, "reopen", "pcs_daily_plan", plan_id, None, None)
+            return r.json()[0]
+
     # ---- Publish + revision snapshot -------------------------------------
     @router.post("/plan/{plan_id}/publish")
     async def publish_plan(plan_id: str, user: dict = Depends(c.get_current_user)):
@@ -210,8 +306,16 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
                                  params={"plan_id": f"eq.{plan_id}", "select": "*",
                                          "order": "display_order.asc"}, headers=headers(user))
             activities = ra.json() if ra.status_code == 200 else []
+            rm = await client.get(f"{c.rest_url}/pcs_planned_materials",
+                                  params={"plan_id": f"eq.{plan_id}", "select": "*"},
+                                  headers=headers(user))
+            re = await client.get(f"{c.rest_url}/pcs_planned_plant",
+                                  params={"plan_id": f"eq.{plan_id}", "select": "*"},
+                                  headers=headers(user))
             revno = int(plan.get("revision") or 1)
-            snapshot = {"plan": plan, "activities": activities}
+            snapshot = {"plan": plan, "activities": activities,
+                        "materials": rm.json() if rm.status_code == 200 else [],
+                        "plant": re.json() if re.status_code == 200 else []}
             rr = await client.post(f"{c.rest_url}/pcs_daily_plan_revisions",
                                    headers=headers(user, True),
                                    json={"plan_id": plan_id, "revision": revno,
@@ -247,9 +351,15 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
                                 {"project_id": f"eq.{pid}", "select": "*", "order": "display_order.asc"})
             plan = await get_plan_row(client, user, pid, date)
             plan_activities = []
+            planned_materials = []
+            planned_plant = []
             if plan:
                 plan_activities = await q("pcs_planned_activities",
                                           {"plan_id": f"eq.{plan['id']}", "select": "*"})
+                planned_materials = await q("pcs_planned_materials",
+                                            {"plan_id": f"eq.{plan['id']}", "select": "*"})
+                planned_plant = await q("pcs_planned_plant",
+                                        {"plan_id": f"eq.{plan['id']}", "select": "*"})
             parent = await q("pcs_daily_reports",
                              {"project_id": f"eq.{pid}", "report_date": f"eq.{date}",
                               "select": "*,pcs_location_reports(id,location_id,status,supervisor_id)", "limit": "1"})
@@ -269,6 +379,7 @@ def build_pcs_plan_router(c: PcsPlanContext) -> APIRouter:
                 "locations": locations,
                 "active_location_count": len(active_locs),
                 "plan": plan, "plan_activities": plan_activities,
+                "planned_materials": planned_materials, "planned_plant": planned_plant,
                 "location_reports": location_reports,
                 "submitted_count": len(submitted),
                 "pending_count": max(0, len(active_locs) - len(submitted)),
