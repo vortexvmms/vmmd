@@ -17,6 +17,7 @@ def test_report_router_flow_and_guards():
     for frag in ('prefix="/api/v1/pcs"', "/report/ensure", "/report/{parent_id}/location",
                  "/location-report/{lr_id}/activity", "/location-report/{lr_id}/actual-material",
                  "/location-report/{lr_id}/actual-plant", "/resource-request",
+                 "/location-report/{lr_id}/reset-draft",
                  "/location-report/{lr_id}/submit", "await c.audit("):
         assert frag in ROUTER, f"missing {frag}"
 
@@ -52,3 +53,13 @@ def test_dpr_page_only_gains_the_loader_and_is_otherwise_intact():
     assert 'js/pcs-dpr.js' in DPR               # one-line loader added
     assert "Description of works" in DPR         # standard block still present
     assert 'onclick="save()"' in DPR             # standard save path untouched
+
+
+def test_pcs_replaces_only_description_and_has_retry_safety():
+    assert 'standard-description-panel' in DPR
+    assert 'pcs-description-host' in DPR
+    assert 'function standardEls(){return [$("standard-description-panel")]' in JS
+    assert '$("dpr-content")' not in JS.split("function standardEls()", 1)[1].split("function hideStandard", 1)[0]
+    assert 'reset-draft' in JS
+    assert '_pendingSubmit' in JS and 'window.addEventListener("online"' in JS
+    assert 'Locations submitted (' in JS

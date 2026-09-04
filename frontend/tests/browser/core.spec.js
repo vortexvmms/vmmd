@@ -123,6 +123,31 @@ test('DPR readiness uses a dedicated desktop column without covering the form', 
   expect(boxes.progressLeft).toBeGreaterThanOrEqual(boxes.contentRight + 12);
 });
 
+test('PCS DPR replaces only work description and preserves the established report', async ({ page }) => {
+  await signedIn(page, 'admin');
+  await page.addInitScript(() => localStorage.setItem('vcms_draft_dpr.html', JSON.stringify({t:Date.now(),v:{'f-desc':'obsolete'}})));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'pcs', site_name:'PCS', project_id:'p1' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/projects*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/reminders*', r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/dpr\?.*/, r => r.fulfill({ json: {} }));
+  await page.route(/.*\/api\/v1\/pcs\/dpr-config.*/, r => r.fulfill({ json: { project_id:'p1', dpr_mode:'multi_location' } }));
+  await page.route(/.*\/api\/v1\/pcs\/locations.*/, r => r.fulfill({ json: [{ id:'l1', name:'Work Location 1', code:'WL-1', status:'active' }] }));
+  await page.route(/.*\/api\/v1\/pcs\/report\?.*/, r => r.fulfill({ json: { project_id:'p1', report:null } }));
+  await page.goto('/dpr.html?site=pcs&date=2026-09-04');
+  await expect(page.locator('body')).toHaveClass(/pcs-mode/);
+  await expect(page.locator('#standard-description-panel')).toBeHidden();
+  await expect(page.locator('#pcs-description-host')).toBeVisible();
+  await expect(page.locator('.pcs-loc-head h3', { hasText:'Work Location 1' })).toBeVisible();
+  await expect(page.getByRole('heading', { name:'Manpower' })).toBeVisible();
+  await expect(page.getByRole('heading', { name:'Activity photos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name:'Sign-off' })).toBeVisible();
+  await expect(page.locator('#dprbar')).toBeVisible();
+  await page.waitForTimeout(1300);
+  await expect(page.locator('#vmms-draft-banner')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+});
+
 test('DPR History opens an archived site without falling back to an active site', async ({ page }) => {
   await signedIn(page, 'admin');
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [

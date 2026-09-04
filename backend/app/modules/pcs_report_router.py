@@ -188,6 +188,37 @@ def build_pcs_report_router(c: PcsReportContext) -> APIRouter:
                 raise HTTPException(status_code=404, detail="Location report not found")
             return r.json()[0]
 
+    @router.post("/location-report/{lr_id}/reset-draft")
+    async def reset_location_draft(lr_id: str, body: SubmitIn,
+                                   user: dict = Depends(c.get_current_user)):
+        """Make a retry replace-safe before the client re-sends draft rows.
+
+        A weak connection can stop after some child rows were written.  Clearing
+        the still-draft children makes the next attempt deterministic instead of
+        duplicating activities/resources. Submitted reports are never cleared.
+        """
+        async with c.shared_client() as client:
+            cur = await client.get(
+                f"{c.rest_url}/pcs_location_reports",
+                params={"id": f"eq.{lr_id}", "select": "id,status,record_version", "limit": "1"},
+                headers=headers(user))
+            if cur.status_code != 200 or not cur.json():
+                raise HTTPException(status_code=404, detail="Location report not found")
+            row = cur.json()[0]
+            if row.get("status") == "submitted":
+                return {"ok": True, "status": "submitted", "idempotent": True}
+            if int(row.get("record_version") or 1) != int(body.record_version):
+                raise HTTPException(status_code=409, detail="This location changed. Reload before retrying.")
+            for table in ("pcs_location_activities", "pcs_actual_materials",
+                          "pcs_actual_plant", "pcs_resource_requests",
+                          "pcs_location_photos"):
+                r = await client.delete(
+                    f"{c.rest_url}/{table}",
+                    params={"location_report_id": f"eq.{lr_id}"}, headers=headers(user))
+                if r.status_code not in (200, 204):
+                    raise HTTPException(status_code=500, detail="Could not safely prepare this draft for retry")
+            return {"ok": True, "status": "draft", "record_version": row.get("record_version")}
+
     # ---- Activities (today / tomorrow) -----------------------------------
     @router.post("/location-report/{lr_id}/activity", status_code=201)
     async def add_activity(lr_id: str, body: ActivityIn, user: dict = Depends(c.get_current_user)):
