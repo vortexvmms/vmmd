@@ -134,6 +134,7 @@ test('PCS DPR replaces only work description and preserves the established repor
   await page.route(/.*\/api\/v1\/pcs\/dpr-config.*/, r => r.fulfill({ json: { project_id:'p1', dpr_mode:'multi_location' } }));
   await page.route(/.*\/api\/v1\/pcs\/locations.*/, r => r.fulfill({ json: [{ id:'l1', name:'Work Location 1', code:'WL-1', status:'active' }, { id:'l2', name:'Work Location 2', code:'WL-2', status:'active' }] }));
   await page.route(/.*\/api\/v1\/pcs\/report\?.*/, r => r.fulfill({ json: { project_id:'p1', report:null } }));
+  await page.route(/.*\/api\/v1\/pcs\/distribution.*/, r => r.fulfill({ json: { project_id:'p1', distributions:[], workers:[], locations:[] } }));
   await page.goto('/dpr.html?site=pcs&date=2026-09-04');
   await expect(page.locator('body')).toHaveClass(/pcs-mode/);
   await expect(page.locator('#standard-description-panel')).toBeHidden();
@@ -141,7 +142,8 @@ test('PCS DPR replaces only work description and preserves the established repor
   await expect(page.locator('.pcs-loc-head h3', { hasText:'Work Location 1' })).toBeVisible();
   await expect(page.getByRole('button', { name:'Copy latest' }).first()).toBeVisible();
   await expect(page.getByText('Materials required').first()).toBeVisible();
-  await expect(page.getByText('Plant / equipment required').first()).toBeVisible();
+  await expect(page.getByText('Plant, equipment & tools required').first()).toBeVisible();
+  await expect(page.getByRole('button', { name:'WhatsApp update' }).first()).toBeVisible();
   await expect(page.getByText('Photos for this location').first()).toBeVisible();
   if (page.viewportSize().width <= 600) await expect(page.locator('.pcs-loc').nth(1)).toHaveClass(/collapsed/);
   await expect(page.getByRole('heading', { name:'Manpower' })).toBeVisible();
