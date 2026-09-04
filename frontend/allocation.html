@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
-  <script src="js/core-bundle.js?v=20260828-shell3"></script>
+  <script src="js/core-bundle.js?v=20260904-history1"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
@@ -117,7 +117,7 @@
   <script>
     requireLogin();
 
-    let ME = null, SITES = [], WORKERS = [], ALLOC = [];
+    let ME = null, SITES = [], ALL_SITES = [], WORKERS = [], ALLOC = [];
     let MODE = "requests";             // "requests" (default) · "worker" · "site"
     let SELECTED = new Set();          // site-mode: workers ticked for the chosen site
     let ASSIGN = {}, ORIG = {};        // worker-mode: worker_id -> site_id ("" = not working)
@@ -161,7 +161,8 @@
       document.getElementById("date").value = fmtDate(tmr);
 
       const [rs, rw] = await Promise.all([vmmsApi("/api/v1/sites"), vmmsApi("/api/v1/workers")]);
-      SITES = (await rs.json()).filter(s => s.status === "active");
+      ALL_SITES = await rs.json();
+      SITES = VCMS_SITES.forOperationalDate(ALL_SITES, document.getElementById("date").value, []);
       WORKERS = (await rw.json()).filter(w => w.status !== "inactive");
       document.getElementById("site").innerHTML =
         SITES.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
@@ -218,6 +219,14 @@
         (REQBYSITE[x.site_id] = REQBYSITE[x.site_id] || new Set()).add(x.worker_id);
         (REQANY[x.worker_id] = REQANY[x.worker_id] || []).push(x.site_name);
       });
+      // Completed/archived sites remain visible on historical days where they
+      // actually had allocations, requests or a site-off record. They are still
+      // hidden for current/future operational work.
+      const previousSite=document.getElementById("site").value;
+      const historicalSiteIds=[...ALLOC.map(x=>x.site_id),...REQROWS.map(x=>x.site_id),...SITE_OFF];
+      SITES=VCMS_SITES.forOperationalDate(ALL_SITES,date,historicalSiteIds);
+      document.getElementById("site").innerHTML=SITES.map(s=>`<option value="${s.id}">${esc(VCMS_SITES.label(s))}</option>`).join("");
+      if(previousSite && SITES.some(s=>String(s.id)===String(previousSite))) document.getElementById("site").value=previousSite;
       // Copy is an Admin recovery tool and remains available even when the
       // target day already contains allocations; the server performs a safe merge.
       document.getElementById("copybar").classList.toggle("hidden", ME.role !== "admin");

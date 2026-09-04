@@ -123,6 +123,64 @@ test('DPR readiness uses a dedicated desktop column without covering the form', 
   expect(boxes.progressLeft).toBeGreaterThanOrEqual(boxes.contentRight + 12);
 });
 
+test('DPR History opens an archived site without falling back to an active site', async ({ page }) => {
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [
+    { id:'active-site', site_name:'LOGISTICS', status:'active', supervisors:[] },
+    { id:'old-pokb', site_name:'POKB - P2 DRAIN', status:'archived', supervisors:[] }
+  ] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/projects*', r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/dpr\?.*/, async r => {
+    expect(r.request().url()).toContain('site_id=old-pokb');
+    await r.fulfill({ json: {
+      id:'d-old', project_title:'POKB project', to_party:'POKB', attention:'Representative',
+      item_of_work:'Drain regrading', location:'P2', date_job_carried:'2026-08-16',
+      description:'Completed work', prepared_by_name:'Test Administrator', conformed_by_party:'POKB',
+      manpower:[], equipment:[], materials:[], signature_url:null,
+      photos:[{ url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', caption:'Historical site photo' }]
+    } });
+  });
+  await page.goto('/dpr.html?site=old-pokb&date=2026-08-16');
+  await expect(page.locator('#site')).toHaveValue('old-pokb');
+  await expect(page.locator('#site option:checked')).toContainText('POKB - P2 DRAIN');
+  await expect(page.locator('#photos img')).toHaveCount(1);
+});
+
+test('allocation keeps archived sites hidden for future work but shows recorded historical days', async ({ page }) => {
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [
+    { id:'active-site', site_name:'LOGISTICS', status:'active' },
+    { id:'old-pokb', site_name:'POKB - P2 DRAIN', status:'archived' }
+  ] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', r => r.fulfill({ json: [
+    { id:'w1', name:'Worker One', worker_code:'V001', status:'active' }
+  ] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/allocations\?.*/, r => {
+    const old=r.request().url().includes('date=2026-08-16');
+    return r.fulfill({ json: old ? [{ id:'a1',work_date:'2026-08-16',site_id:'old-pokb',worker_id:'w1',site_name:'POKB - P2 DRAIN',worker_name:'Worker One',worker_code:'V001',worker_status:'active' }] : [] });
+  });
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/requests\?.*/, r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/site_off\?.*/, r => r.fulfill({ json: [] }));
+  await page.goto('/allocation.html');
+  await expect(page.locator('#site option[value="old-pokb"]')).toHaveCount(0);
+  await page.locator('#date').fill('2026-08-16');
+  await page.locator('#date').dispatchEvent('change');
+  await expect(page.locator('#site option[value="old-pokb"]')).toHaveCount(1);
+  await expect(page.locator('#site option[value="old-pokb"]')).toContainText('Archived');
+});
+
+test('historical attendance keeps sites supplied by recorded allocations', async ({ page }) => {
+  await signedIn(page, 'admin');
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/attendance\?.*/, r => r.fulfill({ json: [{
+    allocation_id:'a1',site_id:'old-pokb',site_name:'POKB - P2 DRAIN',worker_name:'Worker One',worker_code:'V001',
+    marked:true,present:true,start_time:'08:00',end_time:'17:00',normal_hours:8,ot_hours:0,submitted:true,absence_type:'absent'
+  }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/holidays*', r => r.fulfill({ json: [] }));
+  await page.goto('/attendance.html');
+  await expect(page.locator('#site option[value="old-pokb"]')).toContainText('POKB - P2 DRAIN');
+});
+
 test('Resource Summary desktop controls are compact and aligned', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium', 'Desktop layout only');
   await signedIn(page, 'admin');

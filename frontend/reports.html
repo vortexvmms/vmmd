@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/app.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="js/core-bundle.js?v=20260828-shell3"></script>
+  <script src="js/core-bundle.js?v=20260904-history1"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <style>
     .report-attendance-row > label { display:block; min-width:0; }
@@ -112,10 +112,10 @@
       if(window.innerWidth>=900 && !document.querySelector('#report-type option[value="monthly_timesheet"]')) document.getElementById("report-type").insertAdjacentHTML("beforeend",'<option value="monthly_timesheet">Monthly attendance sheet</option>');
       const rs = await vmmsApi("/api/v1/sites");
       if (rs.ok) {
-        const sites = (await rs.json()).filter(s => s.status === "active");
+        const sites = await rs.json();
         document.getElementById("site").innerHTML =
           '<option value="">All sites</option>' +
-          sites.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
+          sites.map(s => `<option value="${s.id}">${esc(VCMS_SITES.label(s))}</option>`).join("");
       }
     }
 
