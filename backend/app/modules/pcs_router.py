@@ -16,6 +16,7 @@ MANAGEMENT_ROLES = {
     "admin", "general_manager", "operation_manager", "hr_assistant",
     "main_sup", "wshc_lead",
 }
+SUPERVISOR_ROLES = {"site_sup", "safety_sup", "wshc", "logistics_sup"}
 
 
 @dataclass(frozen=True)
@@ -142,7 +143,16 @@ def build_pcs_router(c: PcsContext) -> APIRouter:
                                  params=params, headers=headers(user))
             if r.status_code != 200:
                 raise HTTPException(status_code=500, detail="Could not load work locations")
-            return r.json()
+            rows = r.json()
+            # A PCS supervisor works only on locations explicitly assigned to
+            # them. Managers retain the complete directory for consolidation.
+            if user.get("role") in SUPERVISOR_ROLES:
+                uid = user.get("user_id")
+                rows = [row for row in rows if any(
+                    assignment.get("user_id") == uid
+                    for assignment in (row.get("pcs_location_supervisors") or [])
+                )]
+            return rows
 
     @router.post("/locations", status_code=201)
     async def create_location(body: LocationIn, user: dict = Depends(c.get_current_user)):

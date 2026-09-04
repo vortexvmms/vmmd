@@ -57,6 +57,8 @@ def test_pcs_router_mounted_and_role_guarded():
     assert "MANAGEMENT_ROLES" in ROUTER
     assert "def management(user)" in ROUTER
     assert "await c.audit(" in ROUTER  # mutations are audited
+    assert "SUPERVISOR_ROLES" in ROUTER
+    assert 'row.get("pcs_location_supervisors")' in ROUTER
 
 
 def test_dpr_projects_page_has_feature_flagged_pcs_ui():

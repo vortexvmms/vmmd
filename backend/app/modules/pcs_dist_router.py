@@ -3,7 +3,9 @@ from __future__ import annotations
 # PCS Multi-Location DPR — Stage 4 backend: operational worker distribution
 # across work locations (with time-overlap conflict detection) and the PCS
 # report readiness summary. Distribution is operational reporting only and does
-# not modify any workforce source-of-truth records. No cost data is exposed.
+# does not modify workforce source-of-truth records. The picker reads the
+# selected site's daily allocation so managers cannot accidentally distribute a
+# worker who was not allocated to PCS. No cost data is exposed.
 
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -108,7 +110,32 @@ def build_pcs_dist_router(c: PcsDistContext) -> APIRouter:
             locations = await q("pcs_work_locations",
                                 {"project_id": f"eq.{pid}", "status": "eq.active",
                                  "select": "id,name,status", "order": "display_order.asc"})
-            workers = await q("workers", {"select": "id,name", "order": "name.asc", "limit": "1000"})
+            # Worker choices are deliberately limited to the PCS site's main
+            # allocation for this date. This is a read-only dependency: location
+            # distribution never changes the source roster.
+            resolved_site_id = site_id
+            if not resolved_site_id:
+                sites = await q("sites", {"project_id": f"eq.{pid}", "select": "id", "limit": "1"})
+                resolved_site_id = sites[0].get("id") if sites else None
+            allocations = []
+            if resolved_site_id:
+                allocations = await q(
+                    "allocations",
+                    {"site_id": f"eq.{resolved_site_id}",
+                     "work_date": f"eq.{distribution_date}", "status": "eq.allocated",
+                     "select": "worker_id,workers(id,name,worker_code,status)"},
+                )
+            workers = []
+            seen = set()
+            for allocation in allocations:
+                worker = allocation.get("workers") or {}
+                worker_id = worker.get("id") or allocation.get("worker_id")
+                if worker_id and worker_id not in seen:
+                    seen.add(worker_id)
+                    workers.append({"id": worker_id, "name": worker.get("name") or "?",
+                                    "worker_code": worker.get("worker_code") or "",
+                                    "status": worker.get("status") or ""})
+            workers.sort(key=lambda row: (row.get("name") or "").lower())
             # Flag duplicate/overlap conflicts for the same worker on this date.
             by_worker = {}
             for d in dist:
@@ -122,7 +149,8 @@ def build_pcs_dist_router(c: PcsDistContext) -> APIRouter:
                         if _overlap(wa, wb):
                             conflicts.append({"worker_id": wid, "a": rows[i]["id"], "b": rows[j]["id"]})
             return {"project_id": pid, "distributions": dist, "locations": locations,
-                    "workers": workers, "conflicts": conflicts}
+                    "workers": workers, "allocated_worker_count": len(workers),
+                    "conflicts": conflicts}
 
     @router.post("/distribution", status_code=201)
     async def add_distribution(body: DistIn, user: dict = Depends(c.get_current_user)):
@@ -132,6 +160,22 @@ def build_pcs_dist_router(c: PcsDistContext) -> APIRouter:
             raise HTTPException(status_code=400, detail="Provide a valid segment or start/end time")
         async with c.shared_client() as client:
             pid = await resolve_pid(client, user, body.project_id, body.site_id)
+            resolved_site_id = body.site_id
+            if not resolved_site_id:
+                sr = await client.get(f"{c.rest_url}/sites",
+                                      params={"project_id": f"eq.{pid}", "select": "id", "limit": "1"},
+                                      headers=headers(user))
+                resolved_site_id = sr.json()[0].get("id") if sr.status_code == 200 and sr.json() else None
+            roster = await client.get(
+                f"{c.rest_url}/allocations",
+                params={"site_id": f"eq.{resolved_site_id}",
+                        "work_date": f"eq.{body.distribution_date}",
+                        "worker_id": f"eq.{body.worker_id}", "status": "eq.allocated",
+                        "select": "id", "limit": "1"},
+                headers=headers(user))
+            if roster.status_code != 200 or not roster.json():
+                raise HTTPException(status_code=422,
+                                    detail="Choose a worker allocated to PCS for this date.")
             ex = await client.get(f"{c.rest_url}/pcs_worker_distributions",
                                   params={"project_id": f"eq.{pid}", "distribution_date": f"eq.{body.distribution_date}",
                                           "worker_id": f"eq.{body.worker_id}", "select": "*"}, headers=headers(user))

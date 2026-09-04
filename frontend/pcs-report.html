@@ -59,7 +59,7 @@ lrs.forEach(function(lr,idx){var acts=lr.pcs_location_activities||[];h+='<div cl
 h+='<div class="sech">Today activities</div>'+actRows(acts,'today');
 h+='<div class="sech">Tomorrow activities</div>'+actRows(acts,'tomorrow');
 h+='<div class="sech">Materials used</div>'+itemRows(lr.pcs_actual_materials,[{t:'Material',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Unit',k:'unit'}]);
-h+='<div class="sech">Plant / equipment used</div>'+itemRows(lr.pcs_actual_plant,[{t:'Plant',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Hrs',k:'usage_hours'}]);
+h+='<div class="sech">Plant, equipment &amp; tools used</div>'+itemRows(lr.pcs_actual_plant,[{t:'Item',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Hrs',k:'usage_hours'}]);
 h+='<div class="sech">Requirements for upcoming work</div>'+itemRows(lr.pcs_resource_requests,[{t:'Type',k:'request_type'},{t:'Item',k:'item_name'},{t:'Qty',k:'quantity'},{t:'Priority',k:'priority'},{t:'Status',k:'status'}]);
 var ph=lr.pcs_location_photos||[];h+='<div class="sech">Location photos</div>'+(ph.length?'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">'+ph.map(function(x){return '<figure style="margin:0;border:1px solid #ddd;padding:5px;break-inside:avoid">'+(x.public_url?'<img crossorigin="anonymous" src="'+esc(x.public_url)+'" style="width:100%;height:130px;object-fit:cover">':'')+'<figcaption class="muted">'+esc(x.caption||'Photo attached')+'</figcaption></figure>'}).join('')+'</div>':'<div class="muted">No location-linked photos.</div>');
 h+='</div>'});

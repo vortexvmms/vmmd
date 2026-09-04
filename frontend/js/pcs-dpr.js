@@ -16,7 +16,7 @@
   function dateV(){try{if(typeof dateVal==="function")return dateVal()}catch(e){}return $("date")?$("date").value:""}
   function note(s){try{if(typeof toast==="function")return toast(s)}catch(e){}var t=$("pcs-note");if(t){t.textContent=s;t.style.display="block";setTimeout(function(){t.style.display="none"},2600)}}
 
-  var PID=null, LOCS=[], PANEL=null, ACTIVE=false, DATE="", SITE="", REPORT=null, BLOCKS=[];
+  var PID=null, LOCS=[], PANEL=null, ACTIVE=false, DATE="", SITE="", REPORT=null, DIST=null, BLOCKS=[];
 
   function draftKey(locId){return "pcs_dpr_draft_"+SITE+"_"+DATE+"_"+locId}
   function saveDraft(locId,data){try{localStorage.setItem(draftKey(locId),JSON.stringify(data))}catch(e){}}
@@ -56,9 +56,10 @@
   }
 
   async function loadBlocks(){
-    LOCS=[];REPORT=null;BLOCKS=[];
+    LOCS=[];REPORT=null;DIST=null;BLOCKS=[];
     try{var r=await vmmsApi("/api/v1/pcs/locations?site_id="+encodeURIComponent(SITE));if(r.ok)LOCS=(await r.json()).filter(function(l){return l.status==="active"})}catch(e){}
     try{var rr=await vmmsApi("/api/v1/pcs/report?site_id="+encodeURIComponent(SITE)+"&report_date="+encodeURIComponent(DATE));if(rr.ok)REPORT=(await rr.json()).report||null}catch(e){}
+    try{var dr=await vmmsApi("/api/v1/pcs/distribution?site_id="+encodeURIComponent(SITE)+"&distribution_date="+encodeURIComponent(DATE));if(dr.ok)DIST=await dr.json()}catch(e){}
     var wrap=$("pcs-blocks");if(!wrap)return;
     if(!LOCS.length){wrap.innerHTML='<div class="pcs-loc">No active work locations for this site. Ask your manager to add locations in the DPR Project Directory.</div>';return}
     wrap.innerHTML="";
@@ -70,6 +71,8 @@
   function reqState(x){return {item_name:x.item_name,quantity:x.quantity,unit:x.unit||"",required_by:x.required_by||"",required_from:x.required_from||"",required_until:x.required_until||"",priority:x.priority||"normal",status:x.status||"requested"}}
   function sameRow(a,b){return String(a.item_name||a.description||"").trim().toLowerCase()===String(b.item_name||b.description||"").trim().toLowerCase()}
   function mergeUnique(target,items){items.forEach(function(x){if(!target.some(function(y){return sameRow(x,y)}))target.push(x)})}
+  function workerName(id){var a=(DIST&&DIST.workers)||[];for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i].name+(a[i].worker_code?' · '+a[i].worker_code:'');return id}
+  function locationWorkers(locId){return ((DIST&&DIST.distributions)||[]).filter(function(x){return x.location_id===locId}).map(function(x){return {name:workerName(x.worker_id),segment:x.segment,start:x.start_time,end:x.end_time}})}
   function buildBlock(loc,saved){
     var submitted=!!(saved&&saved.status==="submitted");if(submitted)clearDraft(loc.id);var d=submitted?serverState(saved):(loadDraft(loc.id)||serverState(saved));
     var box=ce("div","pcs-loc");
@@ -78,12 +81,13 @@
       '<div class="pcs-row"><button class="pcs-btn lite sm" data-loadplan>Load manager plan</button><button class="pcs-btn lite sm" data-copyprev>Copy from date</button><button class="pcs-btn lite sm" data-copylatest>Copy latest</button><button class="pcs-btn lite sm" data-undo style="display:none">Undo copy</button></div>'+
       '<div class="pcs-sech">Today activities (cumulative % as of today)</div><div data-today></div><button class="pcs-btn sm" data-addtoday>+ Activity</button>'+
       '<div class="pcs-sech">Tomorrow activities</div><div data-tom></div><button class="pcs-btn sm" data-addtom>+ Activity</button>'+
+      '<div class="pcs-sech">Manpower assigned to this location</div><div data-manpower class="pcs-hint"></div>'+
       '<div class="pcs-sech">Materials used</div><div data-mat></div><button class="pcs-btn sm" data-addmat>+ Material</button>'+
-      '<div class="pcs-sech">Plant / equipment used</div><div data-plant></div><button class="pcs-btn sm" data-addplant>+ Plant</button>'+
+      '<div class="pcs-sech">Plant, equipment & tools used</div><div data-plant></div><button class="pcs-btn sm" data-addplant>+ Plant / equipment / tool</button>'+
       '<div class="pcs-sech">Materials required</div><div data-mreq></div><button class="pcs-btn sm" data-addmreq>+ Material request</button>'+
-      '<div class="pcs-sech">Plant / equipment required</div><div data-preq></div><button class="pcs-btn sm" data-addpreq>+ Plant/equipment request</button>'+
+      '<div class="pcs-sech">Plant, equipment & tools required</div><div data-preq></div><button class="pcs-btn sm" data-addpreq>+ Plant / equipment / tool request</button>'+
       '<div class="pcs-sech">Photos for this location</div><div data-locphotos class="pcs-hint"></div><button class="pcs-btn lite sm" data-refreshphotos>Refresh photo list</button>'+
-      '<div class="pcs-row" style="margin-top:12px"><button class="pcs-btn red" data-submit style="flex:1">'+(submitted?'Submitted':'Submit '+esc(loc.name))+'</button></div></div>';
+      '<div class="pcs-row" style="margin-top:12px"><button class="pcs-btn red" data-submit style="flex:1">'+(submitted?'Submitted':'Submit '+esc(loc.name))+'</button><button class="pcs-btn" data-whatsapp style="background:#128c4a;flex:1">WhatsApp update</button></div></div>';
     var state=d;state.materialRequests=state.materialRequests||state.requests||[];state.plantRequests=state.plantRequests||[];state.photos=state.photos||[];delete state.requests;
     var meta={loc:loc,state:state,box:box,submitted:submitted};BLOCKS.push(meta);
     function persist(){saveDraft(loc.id,state);submitted=false;meta.submitted=false;var se=box.querySelector('[data-st]');se.textContent='draft';se.className='pcs-status draft';var sy=box.querySelector('[data-sync]');if(sy)sy.textContent='Saved on this device · waiting to submit';var sb=box.querySelector('[data-submit]');if(sb){sb.disabled=false;sb.textContent='Submit '+loc.name}syncLegacyDescription();updatePcsReadiness()}
@@ -103,11 +107,12 @@
     var todayCols=[{k:"description",ph:"Activity description"},{k:"previous_percent",ph:"Previous cumulative %",type:"number",min:0,max:100},{k:"percent_complete",ph:"Current cumulative %",type:"number",min:0,max:100},{k:"activity_status",options:["planned","manual","in_progress","completed","deferred","cancelled"]},{k:"remark",ph:"Remark / defer reason"}];
     var tomCols=[{k:"description",ph:"Tomorrow activity"},{k:"remark",ph:"Remark"}];
     var matCols=[{k:"item_name",ph:"Material"},{k:"quantity",ph:"Qty",type:"number"},{k:"unit",ph:"Unit"},{k:"delivery_ref",ph:"Delivery ref"},{k:"remarks",ph:"Remarks"}];
-    var plantCols=[{k:"item_name",ph:"Plant/equipment"},{k:"quantity",ph:"Qty",type:"number"},{k:"usage_hours",ph:"Hours",type:"number"},{k:"usage_days",ph:"Days",type:"number"},{k:"provider",ph:"Provider"},{k:"remarks",ph:"Remarks"}];
+    var plantCols=[{k:"item_name",ph:"Plant / equipment / tool"},{k:"quantity",ph:"Qty",type:"number"},{k:"usage_hours",ph:"Hours",type:"number"},{k:"usage_days",ph:"Days",type:"number"},{k:"provider",ph:"Provider"},{k:"remarks",ph:"Remarks"}];
     var mreqCols=[{k:"item_name",ph:"Material required"},{k:"quantity",ph:"Qty",type:"number"},{k:"unit",ph:"Unit"},{k:"required_by",ph:"Required by"},{k:"priority",options:["normal","urgent","critical"]}];
-    var preqCols=[{k:"item_name",ph:"Plant/equipment required"},{k:"quantity",ph:"Qty",type:"number"},{k:"required_from",ph:"From"},{k:"required_until",ph:"Until"},{k:"priority",options:["normal","urgent","critical"]}];
+    var preqCols=[{k:"item_name",ph:"Plant / equipment / tool required"},{k:"quantity",ph:"Qty",type:"number"},{k:"required_from",ph:"From"},{k:"required_until",ph:"Until"},{k:"priority",options:["normal","urgent","critical"]}];
+    function renderManpower(){var host=box.querySelector('[data-manpower]'),rows=locationWorkers(loc.id);host.innerHTML=rows.length?rows.map(function(w){var period=w.segment==='custom'?((w.start||'')+'-'+(w.end||'')):w.segment;return '<div style="padding:6px 8px;margin-bottom:4px;border:1px solid #e5e7eb;border-radius:8px"><b>'+esc(w.name)+'</b><span style="float:right">'+esc(period||'')+'</span></div>'}).join(''):'No workers have been assigned to this location. Ask the manager to assign names in Tomorrow Plan.'}
     function renderLocPhotos(){var host=box.querySelector('[data-locphotos]'),all=[];try{all=Array.isArray(PHOTOS)?PHOTOS:[]}catch(e){}var usable=all.filter(function(p){return p.camera_photo_id});if(!usable.length){host.innerHTML='Add photos in the normal Activity Photos section. Camera photos can then be assigned here.';return}host.innerHTML=usable.map(function(p,i){var on=state.photos.some(function(x){return x.photo_id===p.camera_photo_id});return '<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 8px 3px 0"><input type="checkbox" data-pid="'+esc(p.camera_photo_id)+'" '+(on?'checked':'')+'> Photo '+(i+1)+' · '+esc(p.caption||'')+'</label>'}).join('');host.querySelectorAll('input').forEach(function(ch){ch.addEventListener('change',function(){var id=this.dataset.pid;if(this.checked){if(!state.photos.some(function(x){return x.photo_id===id}))state.photos.push({photo_id:id,caption:(usable.find(function(x){return x.camera_photo_id===id})||{}).caption||''})}else state.photos=state.photos.filter(function(x){return x.photo_id!==id});persist()})})}
-    function rAll(){renderList(box.querySelector("[data-today]"),state.today,todayCols);renderList(box.querySelector("[data-tom]"),state.tomorrow,tomCols);renderList(box.querySelector("[data-mat]"),state.materials,matCols);renderList(box.querySelector("[data-plant]"),state.plant,plantCols);renderList(box.querySelector("[data-mreq]"),state.materialRequests,mreqCols);renderList(box.querySelector("[data-preq]"),state.plantRequests,preqCols);renderLocPhotos()}
+    function rAll(){renderList(box.querySelector("[data-today]"),state.today,todayCols);renderList(box.querySelector("[data-tom]"),state.tomorrow,tomCols);renderManpower();renderList(box.querySelector("[data-mat]"),state.materials,matCols);renderList(box.querySelector("[data-plant]"),state.plant,plantCols);renderList(box.querySelector("[data-mreq]"),state.materialRequests,mreqCols);renderList(box.querySelector("[data-preq]"),state.plantRequests,preqCols);renderLocPhotos()}
     box.querySelector("[data-addtoday]").addEventListener("click",function(){state.today.push({description:"",previous_percent:null,percent_complete:null,origin:"manual",activity_status:"manual",remark:""});persist();rAll()});
     box.querySelector("[data-addtom]").addEventListener("click",function(){state.tomorrow.push({description:""});persist();rAll()});
     box.querySelector("[data-addmat]").addEventListener("click",function(){state.materials.push({item_name:"",quantity:null,unit:""});persist();rAll()});
@@ -122,9 +127,25 @@
     box.querySelector("[data-toggle]").addEventListener("click",function(){box.classList.toggle("collapsed")});
     box.querySelector("[data-submit]").disabled=submitted;
     box.querySelector("[data-submit]").addEventListener("click",function(){submitBlock(loc,state,box,meta)});
+    box.querySelector("[data-whatsapp]").addEventListener("click",function(){openLocationWhatsApp(loc,state,meta)});
     rAll();
-    if(submitted){box.classList.add("collapsed");box.querySelectorAll(".pcs-loc-body input,.pcs-loc-body button").forEach(function(e){e.disabled=true})}
+    if(!submitted&&!state.today.some(function(x){return (x.description||'').trim()})){loadPlanInto(loc,state).then(function(){rAll()})}
+    if(submitted){box.classList.add("collapsed");box.querySelectorAll(".pcs-loc-body input,.pcs-loc-body button:not([data-whatsapp])").forEach(function(e){e.disabled=true})}
     return box;
+  }
+
+  function openLocationWhatsApp(loc,state,meta){
+    var siteName='PCS';try{var so=$("site").selectedOptions[0];if(so)siteName=so.textContent}catch(e){}
+    var prep=($("f-prep")&&$("f-prep").value)||"Supervisor";
+    var lines=["*PCS LOCATION DAILY UPDATE*","*Date:* "+DATE.split('-').reverse().join('/'),"*Site:* "+siteName,"*Location:* "+loc.name,"*Reported By:* "+prep];
+    var today=(state.today||[]).filter(function(x){return (x.description||'').trim()});lines.push("","*Today's Activities:*");if(today.length)today.forEach(function(x,i){lines.push((i+1)+". "+x.description+(x.percent_complete==null?'':' — '+x.percent_complete+'% complete'))});else lines.push('- None entered');
+    var workers=locationWorkers(loc.id);lines.push("","*Manpower ("+workers.length+"):*");if(workers.length)workers.forEach(function(x){lines.push('- '+x.name+(x.segment?' ('+x.segment.replace('_',' ')+')':''))});else lines.push('- No workers assigned');
+    var mats=(state.materials||[]).filter(function(x){return x.item_name});if(mats.length){lines.push("","*Materials Used:*");mats.forEach(function(x){lines.push('- '+x.item_name+(x.quantity!=null?' '+x.quantity:'')+(x.unit?' '+x.unit:''))})}
+    var plants=(state.plant||[]).filter(function(x){return x.item_name});if(plants.length){lines.push("","*Plant / Equipment / Tools:*");plants.forEach(function(x){lines.push('- '+x.item_name+(x.quantity!=null?' x'+x.quantity:'')+(x.usage_hours!=null?' · '+x.usage_hours+' hrs':''))})}
+    var tomorrow=(state.tomorrow||[]).filter(function(x){return x.description});if(tomorrow.length){lines.push("","*Tomorrow's Activities:*");tomorrow.forEach(function(x){lines.push('- '+x.description)})}
+    var requests=(state.materialRequests||[]).concat(state.plantRequests||[]).filter(function(x){return x.item_name});if(requests.length){lines.push("","*Requirements:*");requests.forEach(function(x){lines.push('- '+x.item_name+(x.quantity!=null?' x'+x.quantity:'')+' ('+(x.priority||'normal')+')')})}
+    lines.push("","*DPR Status:* "+((meta&&meta.submitted)?'Submitted':'Draft'));
+    window.open('https://wa.me/?text='+encodeURIComponent(lines.join(NL)),'_blank');
   }
 
   async function loadPlanInto(loc,state){
