@@ -26,16 +26,17 @@ def test_critical_workflows_use_shared_mobile_actions_and_toast():
         assert 'class="vcms-toast hidden"' in html
 
 
-def test_supervisor_home_remains_reduced_to_daily_work_and_support():
+def test_supervisor_mobile_home_includes_site_progress_module():
     html = page("home.html")
     assert 'if(TIER[role]==="supervisor")' in html
-    for href in ("request.html", "attendance.html", "whatsapp.html", "settings.html", "help.html"):
+    assert '{name:"Site progress"' in html
+    for href in ("request.html", "attendance.html", "whatsapp.html", "camera.html", "dpr.html", "dprlist.html", "dashboard.html", "settings.html", "help.html"):
         assert f'"{href}"' in html
     assert "body.sup-mobile" in html
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v56-pcs-labels" in page("sw.js")
+    assert "vcms-v57-supervisor-site-progress" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",

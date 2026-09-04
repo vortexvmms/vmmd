@@ -281,6 +281,7 @@
     function mobileSections(role){
       if(TIER[role]==="supervisor")return[
         {name:"Daily work",items:[["Request manpower","request.html","cal"],["Attendance / End time","attendance.html","check"],["WhatsApp","whatsapp.html","chat"]]},
+        {name:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]]},
         {name:"Support",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]}
       ];
       const nav=navFor(role);
