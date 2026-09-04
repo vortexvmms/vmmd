@@ -176,6 +176,6 @@
   window.vcmsPcsDpr={isActive:function(){return ACTIVE},updateReadiness:updatePcsReadiness};
   window.addEventListener("online",function(){setTimeout(flushPending,500)});
 
-  function hook(){var s=$("site"),d=$("date");if(s)s.addEventListener("change",refresh);if(d)d.addEventListener("change",refresh);var main=$("dpr-main");if(main){main.addEventListener("input",function(){if(ACTIVE)updatePcsReadiness()});main.addEventListener("change",function(){if(ACTIVE)updatePcsReadiness()})}setTimeout(refresh,600)}
+  function hook(){var s=$("site"),d=$("date");if(s)s.addEventListener("change",refresh);if(d)d.addEventListener("change",refresh);var main=$("dpr-main");if(main){main.addEventListener("input",function(){if(ACTIVE)updatePcsReadiness()});main.addEventListener("change",function(){if(ACTIVE)updatePcsReadiness()})}/* Reference data can arrive slowly on 4G/cold start. Recheck without requiring the supervisor to change the site manually. */[600,1600,3500].forEach(function(ms){setTimeout(refresh,ms)})}
   if(document.readyState!=="loading")hook();else document.addEventListener("DOMContentLoaded",hook);
 })();

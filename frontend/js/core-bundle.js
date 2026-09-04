@@ -218,7 +218,6 @@ window.esc = function (v) {
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(offer,1200)});else setTimeout(offer,1200);
 })();
 
-
 // source: js/core/pwa.js
 // ---- PWA updater: show at most once per release and reload only after the
 // new worker controls the page. This prevents iPhone's repeated update loop. ----

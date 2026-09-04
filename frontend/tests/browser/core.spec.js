@@ -126,7 +126,7 @@ test('DPR readiness uses a dedicated desktop column without covering the form', 
 test('PCS DPR replaces only work description and preserves the established report', async ({ page }) => {
   await signedIn(page, 'admin');
   await page.addInitScript(() => localStorage.setItem('vcms_draft_dpr.html', JSON.stringify({t:Date.now(),v:{'f-desc':'obsolete'}})));
-  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'pcs', site_name:'PCS', project_id:'p1' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', async r => { await new Promise(ok => setTimeout(ok, 900)); await r.fulfill({ json: [{ id:'pcs', site_name:'PCS', project_id:'p1' }] }); });
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/workers*', r => r.fulfill({ json: [] }));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/projects*', r => r.fulfill({ json: [] }));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/dpr/reminders*', r => r.fulfill({ json: [] }));
