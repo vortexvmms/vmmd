@@ -68,7 +68,7 @@ def test_pcs_replaces_only_description_and_has_retry_safety():
 def test_priority2_supervisor_workflow_is_complete():
     for frag in ("Copy latest", "report/latest-location", "previous_percent",
                  "reduction_reason", "activity_status", "Materials required",
-                 "Plant, equipment & tools required", "Photos for this location",
+                 "Plant, equipment & tools required", "Activity photos",
                  "/photo", "Undo copy", "Manpower assigned to this location",
                  "WhatsApp update", "openLocationWhatsApp", "wa.me"):
         assert frag in JS
