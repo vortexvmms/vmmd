@@ -53,7 +53,8 @@ def test_priority3_report_outputs_and_location_resources():
 
 def test_manager_can_assign_pcs_allocated_workers_in_tomorrow_plan():
     for frag in ("Location manpower from PCS allocation", "mw-worker",
-                 "assignPlanWorker", "/api/v1/pcs/distribution"):
+                 "assignPlanWorker", "/api/v1/pcs/distribution", "Full day",
+                 "mw-pick", "Name list", "Planned tools & equipment"):
         assert frag in DASH
 
 
