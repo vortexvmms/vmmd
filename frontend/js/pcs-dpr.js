@@ -100,7 +100,7 @@
         row.appendChild(x);host.appendChild(row);
       });
     }
-    var todayCols=[{k:"description",ph:"Activity description"},{k:"previous_percent",ph:"Previous %",type:"number",min:0,max:100},{k:"percent_complete",ph:"Current %",type:"number",min:0,max:100},{k:"activity_status",options:["planned","manual","in_progress","completed","deferred","cancelled"]},{k:"remark",ph:"Remark / defer reason"}];
+    var todayCols=[{k:"description",ph:"Activity description"},{k:"previous_percent",ph:"Previous cumulative %",type:"number",min:0,max:100},{k:"percent_complete",ph:"Current cumulative %",type:"number",min:0,max:100},{k:"activity_status",options:["planned","manual","in_progress","completed","deferred","cancelled"]},{k:"remark",ph:"Remark / defer reason"}];
     var tomCols=[{k:"description",ph:"Tomorrow activity"},{k:"remark",ph:"Remark"}];
     var matCols=[{k:"item_name",ph:"Material"},{k:"quantity",ph:"Qty",type:"number"},{k:"unit",ph:"Unit"},{k:"delivery_ref",ph:"Delivery ref"},{k:"remarks",ph:"Remarks"}];
     var plantCols=[{k:"item_name",ph:"Plant/equipment"},{k:"quantity",ph:"Qty",type:"number"},{k:"usage_hours",ph:"Hours",type:"number"},{k:"usage_days",ph:"Days",type:"number"},{k:"provider",ph:"Provider"},{k:"remarks",ph:"Remarks"}];
