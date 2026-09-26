@@ -49,3 +49,15 @@ def test_todo_reconciliation_cannot_hide_normal_todos():
     main = read("backend/app/main.py")
     assert "asyncio.wait_for(dpr_missing" in main
     assert "A reminder scan must never make the user's normal to-do list disappear" in main
+
+
+def test_completed_todos_have_a_separate_filterable_view():
+    todo = read("frontend/todo.html")
+    backend = read("backend/app/main.py")
+    assert 'id="tab-active"' in todo
+    assert 'id="tab-completed"' in todo
+    assert 'id="completed-search"' in todo
+    assert 'id="completed-period"' in todo
+    assert 'id="completed-quadrant"' in todo
+    assert 'active.filter(t=>(t.quadrant||"inbox")===q)' in todo
+    assert 'created_at,updated_at' in backend

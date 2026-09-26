@@ -4164,7 +4164,7 @@ async def todos_list(user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.get(f"{REST}/todos",
             params={"user_id": f"eq.{user['user_id']}", "order": "created_at.asc",
-                    "select": "id,text,quadrant,done,due_date,created_at"},
+                    "select": "id,text,quadrant,done,due_date,created_at,updated_at"},
             headers=supabase_headers(user["token"]))
         return r.json() if r.status_code == 200 else []
 
