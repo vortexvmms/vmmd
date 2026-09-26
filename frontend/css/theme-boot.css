@@ -1,0 +1,37 @@
+:root {
+  --vcms-brand: #C00000;
+  --vcms-brand-dark: #960000;
+  --vcms-brand-hover: #A70000;
+  --vcms-brand-soft: #F9E6E6;
+  --vcms-brand-border: #E6A3A3;
+  --vcms-on-brand: #FFFFFF;
+}
+
+/* Legacy red utility names are brand hooks in VCMS, not status colours. */
+.bg-red-600,
+.bg-red-700 {
+  background-color: var(--vcms-brand) !important;
+  color: var(--vcms-on-brand) !important;
+}
+
+header.bg-red-700,
+.bg-red-800,
+.bg-red-900 {
+  background-color: var(--vcms-brand-dark) !important;
+  color: var(--vcms-on-brand) !important;
+}
+
+.text-red-600,
+.text-red-700 {
+  color: var(--vcms-brand) !important;
+}
+
+.border-red-600,
+.border-red-700 {
+  border-color: var(--vcms-brand) !important;
+}
+
+.accent-red-600,
+.accent-red-700 {
+  accent-color: var(--vcms-brand) !important;
+}

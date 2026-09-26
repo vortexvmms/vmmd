@@ -36,7 +36,7 @@ def test_supervisor_mobile_home_includes_site_progress_module():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v64-pr-preview-close" in page("sw.js")
+    assert "vcms-v65-theme-first-paint" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
@@ -55,3 +55,20 @@ def test_pr_pdf_preview_close_controls_stay_accessible():
     assert 'id="preview-close"' in html
     assert 'event.key==="Escape"' in html
     assert "event.target===this" in html
+
+
+def test_saved_theme_is_bootstrapped_before_first_paint():
+    for path in FRONTEND.glob("*.html"):
+        html = path.read_text()
+        if 'href="css/app.css"' not in html:
+            continue
+        assert 'src="js/theme-boot.js?v=20260927-1"' in html, path.name
+        assert 'href="css/theme-boot.css?v=20260927-1"' in html, path.name
+        assert html.index("theme-boot.js") < html.index("css/app.css"), path.name
+        assert html.index("theme-boot.css") < html.index("css/app.css"), path.name
+
+    boot = page("js/theme-boot.js")
+    assert 'vcms_company_appearance_v1' in boot
+    assert 'data-vcms-theme-boot' in boot
+    css = page("css/theme-boot.css")
+    assert "background-color: var(--vcms-brand) !important" in css
