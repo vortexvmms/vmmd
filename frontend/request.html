@@ -11,7 +11,16 @@
   <script src="js/core-bundle.js?v=20260904-history1"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
-  <style>@media(max-width:899px){#request-helper{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}#request-helper>p{width:100%!important;margin:0!important;line-height:1.45!important}#request-helper>.request-copy-tools{width:100%!important;justify-content:flex-start!important;flex-wrap:nowrap!important}#copyfrom{flex:1 1 auto!important;min-width:0!important}#copylast{flex:0 0 auto!important}}</style>
+  <style>
+    #request-helper{align-items:center}
+    #request-helper>.request-copy-tools{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:nowrap}
+    #request-helper>.request-copy-tools>*{margin:0}
+    #request-helper>.request-copy-tools button{white-space:nowrap}
+    #copyfrom{width:13rem;min-width:10rem}
+    #siteoffbar{flex:0 0 auto}
+    #siteoffbar.request-site-off-active{flex:1 0 100%}
+    @media(max-width:899px){#request-helper{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important}#request-helper>p{width:100%!important;margin:0!important;line-height:1.45!important}#request-helper>.request-copy-tools{width:100%!important;justify-content:flex-start!important;flex-wrap:wrap!important}#copyfrom{flex:1 1 12rem!important;min-width:0!important}#copylast{flex:0 0 auto!important}}
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -40,10 +49,9 @@
         <select id="copyfrom" class="border border-gray-300 rounded-lg p-2 text-xs bg-white"></select>
         <button onclick="copyFromDay()" class="bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg">Copy day</button>
         <button id="copylast" onclick="copyLast()" class="bg-gray-700 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap">Copy last</button>
+        <div id="siteoffbar" class="shrink-0"></div>
       </div>
     </div>
-
-    <div id="siteoffbar" class="mb-3"></div>
     <div id="reqstatus" class="hidden rounded-xl p-3 mb-3 text-sm"></div>
 
     <input id="search" type="search" placeholder="Search worker…" class="vcms-control mb-3">
@@ -187,11 +195,11 @@
       const dparts = document.getElementById("date").value.split("-");
       const dstr = dparts.length === 3 ? `${dparts[2]}/${dparts[1]}/${dparts[0]}` : "";
       if (SITE_OFF.has(siteId)) {
-        bar.className = "mb-3 rounded-xl p-3 bg-gray-800 text-white flex items-center justify-between gap-2 flex-wrap";
+        bar.className = "request-site-off-active rounded-xl p-3 bg-gray-800 text-white flex items-center justify-between gap-2 flex-wrap";
         bar.innerHTML = `<span class="text-sm font-bold">🚫 This site is NOT WORKING on ${dstr} — no manpower needed.</span>
           <button onclick="toggleSiteOff(false)" class="bg-white text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">Site is working →</button>`;
       } else {
-        bar.className = "mb-3 text-right";
+        bar.className = "shrink-0";
         bar.innerHTML = `<button onclick="toggleSiteOff(true)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">🚫 Mark site NOT working this day</button>`;
       }
     }
