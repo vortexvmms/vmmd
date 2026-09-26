@@ -97,6 +97,9 @@
       + '<option value="">All / choose site</option></select></label></div>'
       + '<nav class="vcms-flow-steps">' + steps + '</nav>';
     main.parentNode.insertBefore(section, main);
+    if (document.getElementById("date") && document.getElementById("site")) {
+      section.classList.add("native-context");
+    }
     bindControls(section);
   }
   function bindControls(section) {
@@ -120,7 +123,28 @@
       dateInput.value = context.date;
       save();
     }, 800);
+    bindNativeControls(dateInput, siteInput);
     loadSites(siteInput);
+  }
+  function bindNativeControls(dateInput, siteInput) {
+    var nativeDate = document.getElementById("date");
+    var nativeSite = document.getElementById("site");
+    if (!nativeDate || !nativeSite) return;
+    nativeDate.addEventListener("change", function () {
+      context.date = nativeDate.value;
+      dateInput.value = context.date;
+      save();
+    });
+    nativeSite.addEventListener("change", function () {
+      var option = nativeSite.options[nativeSite.selectedIndex];
+      context.site_id = nativeSite.value;
+      context.site_name = option ? option.textContent.trim() : "";
+      var match = Array.from(siteInput.options).find(function (item) {
+        return item.value === context.site_id || item.dataset.name === context.site_name;
+      });
+      if (match) siteInput.value = match.value;
+      save();
+    });
   }
   function loadSites(siteInput) {
     vmmsApi("/api/v1/sites").then(function (response) {
