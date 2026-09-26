@@ -59,5 +59,22 @@ def test_completed_todos_have_a_separate_filterable_view():
     assert 'id="completed-search"' in todo
     assert 'id="completed-period"' in todo
     assert 'id="completed-quadrant"' in todo
+    assert 'id="completed-source"' in todo
+    assert 'id="completed-page-info"' in todo
+    assert "COMPLETED_PAGE_SIZE=25" in todo
     assert 'active.filter(t=>(t.quadrant||"inbox")===q)' in todo
-    assert 'created_at,updated_at' in backend
+    assert 'created_at,updated_at,source,source_key' in backend
+
+
+def test_connected_workflow_navigation_is_available():
+    shell = read("frontend/js/shell.js")
+    workflow = read("frontend/js/workflow.js")
+    home = read("frontend/home.html")
+    assert "Reports & Analytics" in shell
+    assert "Reports & Analytics" in home
+    assert "vcms_work_context" in workflow
+    for page in ("request.html", "allocation.html", "attendance.html", "verify.html", "timesheet.html"):
+        assert page in workflow
+    assert "Workflow context" in workflow
+    assert "Open pending attendance" in home
+    assert "Open missing end times" in home

@@ -238,7 +238,8 @@
         const supervisorNav = [
         { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
         { grp:"Daily", items:[["Request manpower","request.html","cal"],["Attendance","attendance.html","chk"],["WhatsApp","whatsapp.html","chat"]] },
-        { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]] },
+        { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"]] },
+        { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"],["Reports","reports.html","doc"]] },
         { grp:"Procurement", items:[["New PR","pr-new.html","cart"]] },
         { grp:"More", items:[["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
         if(role==="logistics_sup") supervisorNav.splice(2,0,{grp:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"]]});
@@ -246,10 +247,11 @@
       }
       const nav = [
         { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
-        { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]] },
+        { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"]] },
         { grp:"Equipment & Machineries", items:[["Tipper Truck Supply","tipper-trucks.html","truck"]] },
-        { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]] },
-        { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]] },
+        { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"]] },
+        { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["Import PR PDFs","pr-import.html","doc"]] },
+        { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"],["Timesheets","timesheet.html","grid"],["Reports","reports.html","doc"],["Resource Summary","resource-summary.html","grid"],["Site Board","site-dashboard.html","chart"],["PR Board","pr-dashboard.html","chart"]] },
         { grp:"More", items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
       if(role==="admin") {
         nav.splice(2,0,{grp:"Planning",items:[["Programme","planning.html","cal"]]});
@@ -436,6 +438,19 @@
         const dmd=document.getElementById("desk-morning-dot"), ded=document.getElementById("desk-evening-dot");if(dmd) dmd.style.background=pmp.length?"#D97706":"#16A34A";if(ded) ded.style.background=pep.length?"#D97706":"#16A34A";
         const followDate=document.getElementById("desk-follow-date");if(followDate) followDate.textContent=fmtDMY(PRDATE);
         const ex=document.getElementById("exceptions");if(ex){let eh="";if(pmp.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#D97706"></i>Previous attendance pending</span><span class="count">${pmp.length}</span></div>`;if(pep.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#C00000"></i>Previous end time pending</span><span class="count">${pep.length}</span></div>`;if(!eh)eh='<div class="mini-row"><span><i class="status-dot" style="background:#16A34A"></i>No previous-day exceptions</span><span class="count">✓</span></div>';ex.innerHTML=eh;}
+        if(ex){
+          ex.querySelectorAll(".mini-row").forEach(row=>{
+            const attendance=row.textContent.includes("attendance");
+            const endtime=row.textContent.includes("end time");
+            if(!attendance&&!endtime)return;
+            const names=attendance?pmp:pep;
+            const one=names.length===1?"&site_name="+encodeURIComponent(names[0]):"";
+            row.style.cursor="pointer";
+            row.title=attendance?"Open pending attendance":"Open missing end times";
+            row.onclick=()=>location.href=(attendance?"attendance.html?date=":"verify.html?date=")
+              +encodeURIComponent(PRDATE)+one+(endtime?"&missing=1":"");
+          });
+        }
         const canR=isCoordinator(ME.role);
         document.getElementById("m-remind").classList.toggle("hidden", !(canR&&mp.length));
         document.getElementById("e-remind").classList.toggle("hidden", !(canR&&ep.length));
