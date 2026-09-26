@@ -36,7 +36,7 @@ def test_supervisor_mobile_home_includes_site_progress_module():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v63-pr-archive" in page("sw.js")
+    assert "vcms-v64-pr-preview-close" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
@@ -47,3 +47,11 @@ def test_stage_two_cache_and_component_contract():
         ".vcms-supervisor-main",
     ):
         assert class_name in css
+
+
+def test_pr_pdf_preview_close_controls_stay_accessible():
+    html = page("pr-dashboard.html")
+    assert "z-index:10000" in html
+    assert 'id="preview-close"' in html
+    assert 'event.key==="Escape"' in html
+    assert "event.target===this" in html

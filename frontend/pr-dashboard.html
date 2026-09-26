@@ -43,8 +43,8 @@
     .filters { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,.65fr) minmax(220px,1.5fr); gap:8px; }
     .filter { border:1px solid #CBD5E1; border-radius:9px; padding:9px 10px; background:#fff; min-width:0; }
     .c-historical_pdf{background:#DCFCE7;color:#166534}.c-vcms{background:#E0E7FF;color:#3730A3}
-    .modal { position:fixed; inset:0; z-index:80; background:rgba(15,23,42,.76); padding:18px; display:flex; align-items:center; justify-content:center; }
-    .modal.hidden{display:none}.viewer{width:min(1200px,100%);height:calc(100vh - 36px);background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}.viewer iframe{border:0;width:100%;flex:1}
+    .modal { position:fixed; inset:0; z-index:10000; background:rgba(15,23,42,.76); padding:18px; display:flex; align-items:center; justify-content:center; }
+    .modal.hidden{display:none}.viewer{width:min(1200px,100%);height:calc(100vh - 36px);background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}.viewer-toolbar{position:relative;z-index:2;flex:0 0 auto;background:#fff}.viewer iframe{border:0;width:100%;flex:1}
     @media(max-width:767px){.filters{grid-template-columns:1fr}.modal{padding:0}.viewer{height:100vh;border-radius:0}}
   </style>
 </head>
@@ -101,9 +101,9 @@
     </div>
   </main>
 
-  <div id="preview" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDF preview">
+  <div id="preview" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDF preview" onclick="if(event.target===this)closePreview()">
     <div class="viewer">
-      <div class="flex items-center gap-2 p-3 border-b"><strong id="preview-title" class="flex-1">PR PDF</strong><a id="preview-open" class="pbtn" target="_blank" rel="noopener">Open</a><button class="pbtn" onclick="closePreview()">Close</button></div>
+      <div class="viewer-toolbar flex items-center gap-2 p-3 border-b"><strong id="preview-title" class="flex-1">PR PDF</strong><a id="preview-open" class="pbtn" target="_blank" rel="noopener">Open</a><button id="preview-close" class="pbtn" type="button" onclick="closePreview()" aria-label="Close PDF preview">Close</button></div>
       <iframe id="preview-frame" title="PR PDF preview"></iframe>
     </div>
   </div>
@@ -215,8 +215,10 @@
       document.getElementById("preview-frame").src=d.url+"#view=FitH";
       document.getElementById("preview-open").href=d.url;
       document.getElementById("preview").classList.remove("hidden");
+      document.getElementById("preview-close").focus();
     }
     function closePreview(){ document.getElementById("preview-frame").src="about:blank";document.getElementById("preview").classList.add("hidden"); }
+    document.addEventListener("keydown",event=>{ if(event.key==="Escape"&&!document.getElementById("preview").classList.contains("hidden")) closePreview(); });
     load();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
