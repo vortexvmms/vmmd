@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#C00000"><title>VCMS — Import PR PDFs</title>
+  <link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon-192.png"><link rel="stylesheet" href="css/app.css">
+  <script src="js/core-bundle.js?v=20260926-prarchive1"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+  <style>
+    body{background:#F1F3F6}.wrap{max-width:1100px}.card{background:#fff;border:1px solid #E2E8F0;border-radius:16px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.control{width:100%;border:1px solid #CBD5E1;border-radius:10px;padding:11px;background:#fff}.btn{border:0;border-radius:10px;padding:11px 16px;background:#991B1B;color:#fff;font-weight:800}.btn:disabled{opacity:.5}.drop{border:2px dashed #94A3B8;border-radius:14px;padding:28px;text-align:center;background:#F8FAFC}.row{padding:12px;border-top:1px solid #E2E8F0}.bar{height:7px;background:#E2E8F0;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:#15803D;width:0}.muted{color:#64748B;font-size:12px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10"><div class="flex items-center gap-3 wrap mx-auto w-full"><a href="pr-dashboard.html" class="text-2xl font-bold">‹</a><div><h1 class="text-lg font-bold">Import Historical PR PDFs</h1><p class="text-red-100 text-xs">Private archive upload and document indexing</p></div></div></header>
+  <main class="flex-1 p-4 wrap mx-auto w-full">
+    <div class="card p-4">
+      <div class="grid mb-3">
+        <label><span class="text-sm font-bold">Site for this batch</span><select id="site" class="control mt-1"><option value="">Select site…</option></select></label>
+        <label><span class="text-sm font-bold">Default category</span><select id="category" class="control mt-1"><option value="">Not specified</option><option value="asset">Asset</option><option value="consumable">Consumable</option><option value="rentals">Rentals</option></select></label>
+      </div>
+      <label class="flex items-center gap-2 mb-3 text-sm"><input id="ocr" type="checkbox" checked> OCR image-only pages so scanned invoices, material descriptions and prices are searchable (slower)</label>
+      <label class="drop block"><strong>Select PR PDF files</strong><br><span class="muted">You can select many files. Files upload one at a time, including PDFs over 100 pages.</span><input id="files" type="file" accept="application/pdf,.pdf" multiple class="mt-3"></label>
+      <div class="flex items-center gap-3 mt-3"><button id="start" class="btn" onclick="startImport()">Start Import</button><span id="summary" class="muted">No files selected.</span></div>
+    </div>
+    <div id="queue" class="card mt-4" style="overflow:hidden"></div>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>
+    requireLogin(); pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const state=[]; const filesEl=document.getElementById("files"); let OCR_WORKER=null;
+    filesEl.addEventListener("change",()=>{state.splice(0);[...filesEl.files].forEach(file=>state.push({file,prNo:guessPR(file.name),prDate:guessDate(file.name),status:"Ready",progress:0}));render();});
+    function guessPR(name){const base=name.replace(/\.pdf$/i,"");const m=base.match(/(?:PR\s*)?([A-Z]{2,}[A-Z0-9 -]*?[- ]\d{2,})/i);return (m?m[1]:base).replace(/_/g," ").trim();}
+    function guessDate(name){const m=name.match(/(\d{2})[-_.](\d{2})[-_.](20\d{2})/);return m?`${m[3]}-${m[2]}-${m[1]}`:"";}
+    function esc(v){return String(v||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+    function render(){document.getElementById("summary").textContent=state.length?`${state.length} PDF file(s) selected.`:"No files selected.";document.getElementById("queue").innerHTML=state.map((x,i)=>`<div class="row"><div class="grid"><div><strong>${esc(x.file.name)}</strong><div class="muted">${(x.file.size/1048576).toFixed(1)} MB</div></div><div class="grid"><label class="muted">PR number<input class="control" value="${esc(x.prNo)}" ${x.running?'disabled':''} onchange="state[${i}].prNo=this.value"></label><label class="muted">PR date (optional)<input type="date" class="control" value="${esc(x.prDate)}" ${x.running?'disabled':''} onchange="state[${i}].prDate=this.value"></label></div></div><div class="flex items-center gap-2 mt-2"><div class="bar flex-1"><i style="width:${x.progress}%"></i></div><span class="muted">${esc(x.status)}</span></div></div>`).join("");}
+    async function apiJson(path,options={}){const r=await vmmsApi(path,options);let d={};try{d=await r.json()}catch{}if(!r.ok)throw new Error(d.detail||`Request failed (${r.status})`);return d;}
+    async function sha256(file){const hash=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");}
+    function setRow(x,status,progress){x.status=status;x.progress=progress;x.running=progress<100;render();}
+    async function ocrPage(page,x,n,total){if(!OCR_WORKER)OCR_WORKER=await Tesseract.createWorker("eng",1,{logger:m=>{if(m.status==="recognizing text")setRow(x,`OCR page ${n} of ${total} · ${Math.round((m.progress||0)*100)}%`,45+Math.round(n/total*54));}});const viewport=page.getViewport({scale:1.5}),canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{alpha:false});canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);await page.render({canvasContext:ctx,viewport}).promise;const result=await OCR_WORKER.recognize(canvas);canvas.width=canvas.height=1;return{text:(result.data.text||"").replace(/\s+/g," ").trim(),confidence:Number(result.data.confidence)||null};}
+    function pageType(text,n){const s=(text||"").toLowerCase();if(n===1||s.includes("purchase requisition"))return"pr_form";if(s.includes("tax invoice")||s.includes("invoice no"))return"invoice";if(s.includes("quotation")||s.includes("quote no"))return"quotation";if(s.includes("delivery order")||s.includes("delivery note"))return"delivery_order";return"attachment";}
+    async function importOne(x,site,category){
+      setRow(x,"Checking file…",2);const checksum=await sha256(x.file);
+      const init=await apiJson("/api/v1/pr-documents/upload-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:x.file.name,file_size:x.file.size,checksum_sha256:checksum,site_name:site,pr_no:x.prNo,pr_date:x.prDate||null,category,summary:x.file.name})});
+      setRow(x,"Uploading securely…",10);const put=await fetch(init.upload_url,{method:"PUT",headers:{"Content-Type":"application/pdf"},body:x.file});if(!put.ok)throw new Error(`Storage upload failed (${put.status})`);
+      setRow(x,"Reading PDF…",45);const pdf=await pdfjsLib.getDocument({data:await x.file.arrayBuffer()}).promise;
+      await apiJson(`/api/v1/pr-documents/${init.document_id}/complete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page_count:pdf.numPages})});
+      let batch=[];
+      for(let n=1;n<=pdf.numPages;n++){
+        const page=await pdf.getPage(n),content=await page.getTextContent();let text=content.items.map(v=>v.str).join(" ").replace(/\s+/g," ").trim(),ocrUsed=false,confidence=null;
+        if(text.length<20&&document.getElementById("ocr").checked){setRow(x,`OCR page ${n} of ${pdf.numPages}…`,45+Math.round(n/pdf.numPages*54));const o=await ocrPage(page,x,n,pdf.numPages);text=o.text;confidence=o.confidence;ocrUsed=true;}
+        batch.push({page_number:n,page_type:pageType(text,n),extracted_text:text,ocr_used:ocrUsed,ocr_confidence:confidence});
+        if(batch.length===20||n===pdf.numPages){await apiJson(`/api/v1/pr-documents/${init.document_id}/pages`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pages:batch,final:n===pdf.numPages})});batch=[];}
+        setRow(x,`Indexing page ${n} of ${pdf.numPages}…`,45+Math.round(n/pdf.numPages*54));
+      }
+      setRow(x,"Imported",100);
+    }
+    async function startImport(){const site=document.getElementById("site").value,category=document.getElementById("category").value;if(!site){alert("Select a site for this batch.");return}if(!state.length){alert("Select at least one PDF.");return}if(state.some(x=>!x.prNo.trim())){alert("Every file needs a PR number.");return}document.getElementById("start").disabled=true;for(const x of state){if(x.progress===100)continue;try{await importOne(x,site,category)}catch(e){x.status="Failed: "+e.message;x.running=false;render();}}if(OCR_WORKER){await OCR_WORKER.terminate();OCR_WORKER=null}document.getElementById("start").disabled=false;}
+    async function loadSites(){const r=await vmmsApi("/api/v1/pr/directory");if(!r.ok)return;const rows=await r.json(),names=[...new Set(rows.map(x=>x.site_name).filter(Boolean))].sort();document.getElementById("site").innerHTML='<option value="">Select site…</option>'+names.map(x=>`<option>${esc(x)}</option>`).join("");}
+    loadSites();
+  </script>
+</body></html>

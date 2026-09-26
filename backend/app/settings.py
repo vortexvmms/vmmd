@@ -14,3 +14,14 @@ R2_SECRET = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET = os.environ.get("R2_BUCKET", "").strip()
 R2_PUBLIC_BASE = os.environ.get("R2_PUBLIC_BASE", "").strip().rstrip("/")
 R2_ENABLED = all((R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET, R2_BUCKET, R2_PUBLIC_BASE))
+
+# Historical PR documents live in a separate, private R2 bucket.  Keeping these
+# settings independent prevents a future camera-storage change from exposing or
+# deleting procurement records. Account ID may be shared with the camera bucket.
+PR_R2_ACCOUNT_ID = os.environ.get("PR_R2_ACCOUNT_ID", R2_ACCOUNT_ID).strip()
+PR_R2_ACCESS_KEY_ID = os.environ.get("PR_R2_ACCESS_KEY_ID", "").strip()
+PR_R2_SECRET = os.environ.get("PR_R2_SECRET_ACCESS_KEY", "").strip()
+PR_R2_BUCKET = os.environ.get("PR_R2_BUCKET", "").strip()
+PR_R2_ENABLED = all((
+    PR_R2_ACCOUNT_ID, PR_R2_ACCESS_KEY_ID, PR_R2_SECRET, PR_R2_BUCKET,
+))

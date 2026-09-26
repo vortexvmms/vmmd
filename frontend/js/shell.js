@@ -24,7 +24,7 @@
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
         full:null,
-        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","whatsapp.html","dashboard.html","timesheet.html","tipper-trucks.html","settings.html","help.html"]),
+        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","pr-import.html","whatsapp.html","dashboard.html","timesheet.html","tipper-trucks.html","settings.html","help.html"]),
         supervisor:new Set(["home.html","todo.html","request.html","attendance.html","dpr.html","dprlist.html","camera.html","camera-photos.html","pr-new.html","whatsapp.html","dashboard.html","settings.html","help.html"]),
         payroll:new Set(["home.html","todo.html","verify.html","timesheet.html","manhours.html","settings.html","help.html"])
       };
@@ -56,7 +56,7 @@
           {group:"Manpower",items:[["Workers","workers.html","user"],["Sites","sites.html","building"],["Allocation","allocation.html","calendar"],["Attendance","attendance.html","check"],["End-time","verify.html","clock"],["Timesheet","timesheet.html","grid"],["Dashboard","dashboard.html","chart"]]},
           {group:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"]]},
           {group:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","building"],["Daily report","dpr.html","document"],["DPR history","dprlist.html","list"],["Resource summary","resource-summary.html","grid"],["Site board","site-dashboard.html","chart"]]},
-          {group:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"]]},
+          {group:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["PR board","pr-dashboard.html","chart"],["Import PR PDFs","pr-import.html","upload"]]},
           {group:"More",items:[["WhatsApp","whatsapp.html","chat"],["Settings","settings.html","gear"],["How to use","help.html","help"]]}
         ];
         if (viewRole === "admin") {

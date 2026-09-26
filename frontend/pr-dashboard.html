@@ -40,6 +40,12 @@
     @media (min-width:1024px){ .kpis{ grid-template-columns:repeat(4,1fr); } .charts{ grid-template-columns:repeat(3,1fr); } }
     .lcard { border:1px solid #E5E7EB; border-radius:14px; padding:12px 14px; margin:10px; background:#fff; }
     .pbtn { display:inline-block; font-size:12px; font-weight:800; color:#fff; background:#111827; border-radius:9px; padding:8px 14px; text-decoration:none; }
+    .filters { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,.65fr) minmax(220px,1.5fr); gap:8px; }
+    .filter { border:1px solid #CBD5E1; border-radius:9px; padding:9px 10px; background:#fff; min-width:0; }
+    .c-historical_pdf{background:#DCFCE7;color:#166534}.c-vcms{background:#E0E7FF;color:#3730A3}
+    .modal { position:fixed; inset:0; z-index:80; background:rgba(15,23,42,.76); padding:18px; display:flex; align-items:center; justify-content:center; }
+    .modal.hidden{display:none}.viewer{width:min(1200px,100%);height:calc(100vh - 36px);background:#fff;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}.viewer iframe{border:0;width:100%;flex:1}
+    @media(max-width:767px){.filters{grid-template-columns:1fr}.modal{padding:0}.viewer{height:100vh;border-radius:0}}
   </style>
 </head>
 <body class="db min-h-screen flex flex-col">
@@ -47,6 +53,7 @@
     <div class="flex items-center gap-3 wrap mx-auto w-full">
       <a href="home.html" class="text-2xl font-bold leading-none">‹</a>
       <div class="flex-1"><h1 class="text-lg font-bold">PR Dashboard</h1><p class="text-red-100 text-xs">Procurement overview &amp; log</p></div>
+      <a href="pr-import.html" class="bg-white text-red-700 text-sm font-bold px-3 py-2 rounded-lg">Import PDFs</a>
       <input id="f-month" type="month" class="rounded-lg p-2 text-gray-800 text-sm" onchange="load()">
       <button onclick="document.getElementById('f-month').value='';load()" class="bg-red-900 text-white text-sm font-bold px-3 py-2 rounded-lg">All</button>
     </div>
@@ -72,9 +79,13 @@
 
       <!-- PR Log -->
       <div class="card mt-4" style="overflow:hidden">
-        <div class="flex items-center gap-2 p-3 border-b border-gray-100">
-          <p class="sect-h flex-1">PR Log</p>
-          <input id="q" oninput="renderLog()" placeholder="Search…" class="border border-gray-300 rounded-lg p-2 text-sm w-64 max-w-full">
+        <div class="p-3 border-b border-gray-100">
+          <p class="sect-h mb-2">PR Log</p>
+          <div class="filters">
+            <select id="f-site" class="filter" onchange="renderLog()"><option value="">All sites</option></select>
+            <select id="f-source" class="filter" onchange="renderLog()"><option value="">All PRs</option><option value="historical_pdf">Historical PDFs</option><option value="vcms">VCMS PRs</option></select>
+            <input id="q" oninput="queueSearch()" placeholder="Search PR, site, material, supplier or price…" class="filter">
+          </div>
         </div>
         <!-- desktop table -->
         <div class="only-d" style="overflow:auto">
@@ -90,9 +101,16 @@
     </div>
   </main>
 
+  <div id="preview" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDF preview">
+    <div class="viewer">
+      <div class="flex items-center gap-2 p-3 border-b"><strong id="preview-title" class="flex-1">PR PDF</strong><a id="preview-open" class="pbtn" target="_blank" rel="noopener">Open</a><button class="pbtn" onclick="closePreview()">Close</button></div>
+      <iframe id="preview-frame" title="PR PDF preview"></iframe>
+    </div>
+  </div>
+
   <script>
     requireLogin();
-    let DATA=null, CH={};
+    let DATA=null, CH={}, REMOTE_MATCHES=null, SEARCH_TIMER=null;
     function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
     function money(n){ return (Number(n)||0).toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2}); }
     function monLabel(m){ const [y,mm]=m.split("-"); return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][(+mm)-1]+" "+y.slice(2); }
@@ -113,6 +131,9 @@
       const r=await vmmsApi("/api/v1/pr/dashboard"+(month?("?month="+month):""));
       if(!r.ok){ document.getElementById("msg").textContent="Could not load ("+r.status+")."; return; }
       DATA=await r.json();
+      const site=document.getElementById("f-site"), selected=site.value;
+      site.innerHTML='<option value="">All sites</option>'+((DATA.by_site||[]).map(x=>`<option value="${esc(x.site)}">${esc(x.site)} (${x.count})</option>`).join(""));
+      site.value=selected;
       document.getElementById("msg").classList.add("hidden");
       document.getElementById("body").classList.remove("hidden");
       render();
@@ -143,24 +164,30 @@
     }
     function filtered(){
       const q=(document.getElementById("q").value||"").toLowerCase();
+      const site=document.getElementById("f-site").value;
+      const source=document.getElementById("f-source").value;
       let rows=DATA.log||[];
-      if(q) rows=rows.filter(x=>((x.pr_no||"")+" "+(x.site_name||"")+" "+(x.summary||"")+" "+(x.project||"")+" "+(x.requested_by_name||"")).toLowerCase().includes(q));
+      if(site) rows=rows.filter(x=>x.site_name===site);
+      if(source) rows=rows.filter(x=>(x.source||"vcms")===source);
+      if(q) rows=rows.filter(x=>((x.pr_no||"")+" "+(x.site_name||"")+" "+(x.summary||"")+" "+(x.project||"")+" "+(x.requested_by_name||"")).toLowerCase().includes(q)||(REMOTE_MATCHES&&REMOTE_MATCHES.has(x.id)));
       return rows;
     }
+    function queueSearch(){clearTimeout(SEARCH_TIMER);REMOTE_MATCHES=null;renderLog();const q=document.getElementById("q").value.trim();if(q.length<2)return;SEARCH_TIMER=setTimeout(()=>searchArchive(q),280);}
+    async function searchArchive(q){const r=await vmmsApi("/api/v1/pr-archive/search?q="+encodeURIComponent(q));if(!r.ok)return;const d=await r.json();if(document.getElementById("q").value.trim()!==q)return;REMOTE_MATCHES=new Set(d.pr_ids||[]);renderLog();}
     function renderLog(){
       const rows=filtered();
       document.getElementById("logempty").classList.toggle("hidden", rows.length>0);
       // desktop table
       document.getElementById("log").innerHTML=rows.map(x=>`
-        <tr onclick="location.href='pr-new.html?open=${x.id}'">
+        <tr onclick="openPR('${x.id}','${x.document?x.document.id:""}')">
           <td style="white-space:nowrap">${fmtDMY(x.pr_date)}</td>
           <td class="prno" style="white-space:nowrap">${esc(x.pr_no||"—")}</td>
           <td>${esc(x.site_name||"—")}</td>
-          <td style="white-space:nowrap">${catChip(x)}</td>
+          <td style="white-space:nowrap">${catChip(x)} <span class="chip c-${esc(x.source||"vcms")}">${x.source==="historical_pdf"?"PDF":"VCMS"}</span></td>
           <td style="color:#64748B">${esc(x.requested_by_name||"—")}</td>
           <td style="text-align:right;white-space:nowrap;font-weight:600">${x.value?("$"+money(x.value)):"—"}</td>
           <td style="max-width:380px">${descHTML(x)}</td>
-          <td style="text-align:right"><a class="pbtn" style="padding:5px 10px" href="pr-new.html?open=${x.id}&print=1" onclick="event.stopPropagation()">PDF</a></td>
+          <td style="text-align:right">${actionHTML(x)}</td>
         </tr>`).join("");
       // mobile cards — PR + description + Print/PDF button
       document.getElementById("logm").innerHTML=rows.map(x=>`
@@ -171,9 +198,25 @@
           </div>
           <div class="text-xs text-gray-500 mt-0.5">${fmtDMY(x.pr_date)} · ${esc(x.site_name||"—")} ${catChip(x)}</div>
           <div class="text-sm mt-2">${descHTML(x)}</div>
-          <div class="mt-3"><a class="pbtn" href="pr-new.html?open=${x.id}&print=1">Print / PDF</a></div>
+          <div class="mt-3">${actionHTML(x)}</div>
         </div>`).join("");
     }
+    function actionHTML(x){
+      return x.document
+        ? `<button class="pbtn" onclick="event.stopPropagation();previewPDF('${x.document.id}','${esc(x.pr_no||"PR") }')">Preview PDF${x.document.page_count?` · ${x.document.page_count}p`:""}</button>`
+        : `<a class="pbtn" href="pr-new.html?open=${x.id}&print=1" onclick="event.stopPropagation()">Print / PDF</a>`;
+    }
+    function openPR(prId,documentId){ if(documentId) previewPDF(documentId,"PR PDF"); else location.href="pr-new.html?open="+prId; }
+    async function previewPDF(documentId,title){
+      const r=await vmmsApi(`/api/v1/pr-documents/${documentId}/preview-url`);
+      if(!r.ok){ alert("Could not open this PDF."); return; }
+      const d=await r.json();
+      document.getElementById("preview-title").textContent=title+" — "+d.filename;
+      document.getElementById("preview-frame").src=d.url+"#view=FitH";
+      document.getElementById("preview-open").href=d.url;
+      document.getElementById("preview").classList.remove("hidden");
+    }
+    function closePreview(){ document.getElementById("preview-frame").src="about:blank";document.getElementById("preview").classList.add("hidden"); }
     load();
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>

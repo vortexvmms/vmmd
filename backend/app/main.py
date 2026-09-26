@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import uuid
 from datetime import date as date_cls, datetime, timedelta, timezone
 
 import httpx
@@ -36,11 +37,13 @@ from .db import (
 )
 from .errors import install_error_handlers
 from .settings import (
-    R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
+    PR_R2_ENABLED, R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY, SUPABASE_URL,
 )
 from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
+from .storage import pr_r2_presign_get as _pr_r2_presign_get
+from .storage import pr_r2_presign_put as _pr_r2_presign_put
 from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router; from .modules.pcs_plan_router import PcsPlanContext, build_pcs_plan_router; from .modules.pcs_report_router import PcsReportContext, build_pcs_report_router; from .modules.pcs_dist_router import PcsDistContext, build_pcs_dist_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
@@ -3600,6 +3603,202 @@ class PRIn(BaseModel):
     status: str | None = "submitted"
 
 
+class PRDocumentUploadIn(BaseModel):
+    filename: str
+    file_size: int
+    checksum_sha256: str
+    site_name: str
+    pr_no: str
+    pr_date: str | None = None
+    category: str | None = None
+    summary: str | None = None
+
+
+class PRDocumentCompleteIn(BaseModel):
+    page_count: int | None = None
+
+
+class PRDocumentPageIn(BaseModel):
+    page_number: int
+    extracted_text: str | None = None
+    page_type: str = "attachment"
+    ocr_used: bool = False
+    ocr_confidence: float | None = None
+
+
+class PRDocumentPagesIn(BaseModel):
+    pages: list[PRDocumentPageIn]
+    final: bool = False
+
+
+def _pr_safe_part(value: str, fallback: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
+    return value[:80] or fallback
+
+
+@app.post("/api/v1/pr-documents/upload-url", status_code=201)
+async def pr_document_upload_url(body: PRDocumentUploadIn,
+                                 user: dict = Depends(get_current_user)):
+    """Create archive records and return a short-lived direct-to-R2 upload URL."""
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can import historical PRs")
+    if not PR_R2_ENABLED:
+        raise HTTPException(status_code=503, detail="Private PR document storage is not configured")
+    filename = body.filename.strip()
+    checksum = body.checksum_sha256.strip().lower()
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    if body.file_size < 1 or body.file_size > 250 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF must be between 1 byte and 250 MB")
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        raise HTTPException(status_code=400, detail="Invalid SHA-256 checksum")
+    site_name, pr_no = body.site_name.strip(), body.pr_no.strip()
+    if not site_name or not pr_no:
+        raise HTTPException(status_code=400, detail="Site and PR number are required")
+    document_id = str(uuid.uuid4())
+    year = (body.pr_date or datetime.now(timezone.utc).date().isoformat())[:4]
+    object_key = "/".join(("historical-pr", _pr_safe_part(year, "unknown-year"),
+                           _pr_safe_part(site_name, "unknown-site"), document_id,
+                           _pr_safe_part(filename, "document.pdf")))
+    async with shared_client() as client:
+        duplicate = await client.get(
+            f"{REST}/pr_documents", params={"checksum_sha256": f"eq.{checksum}", "select": "id"},
+            headers=supabase_headers(user["token"]),
+        )
+        if duplicate.status_code == 200 and duplicate.json():
+            raise HTTPException(status_code=409, detail="This PDF has already been imported")
+        pr = await client.post(
+            f"{REST}/purchase_requisitions",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"pr_no": pr_no, "pr_date": _nz_date(body.pr_date), "site_name": site_name,
+                  "category": body.category or None, "remarks": body.summary or filename,
+                  "items": [], "photos": [], "status": "submitted", "source": "historical_pdf",
+                  "requested_by_name": user.get("name"), "created_by": user["user_id"],
+                  "updated_at": datetime.now(timezone.utc).isoformat()},
+        )
+        if pr.status_code not in (200, 201) or not pr.json():
+            raise HTTPException(status_code=500, detail="Could not create the historical PR record")
+        pr_id = pr.json()[0]["id"]
+        doc = await client.post(
+            f"{REST}/pr_documents",
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"id": document_id, "pr_id": pr_id, "original_filename": filename,
+                  "object_key": object_key, "checksum_sha256": checksum,
+                  "file_size": body.file_size, "uploaded_by": user["user_id"]},
+        )
+        if doc.status_code not in (200, 201):
+            await client.delete(f"{REST}/purchase_requisitions", params={"id": f"eq.{pr_id}"},
+                                headers=supabase_headers(user["token"]))
+            raise HTTPException(status_code=500, detail="Could not create document metadata")
+    return {"document_id": document_id, "pr_id": pr_id,
+            "upload_url": _pr_r2_presign_put(object_key, 900), "expires_in": 900}
+
+
+@app.post("/api/v1/pr-documents/{document_id}/complete")
+async def pr_document_complete(document_id: str, body: PRDocumentCompleteIn,
+                               user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can import historical PRs")
+    if body.page_count is not None and not 1 <= body.page_count <= 5000:
+        raise HTTPException(status_code=400, detail="Invalid page count")
+    now = datetime.now(timezone.utc).isoformat()
+    async with shared_client() as client:
+        r = await client.patch(
+            f"{REST}/pr_documents", params={"id": f"eq.{document_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"page_count": body.page_count, "uploaded_at": now,
+                  "extraction_status": "processing", "updated_at": now},
+        )
+        rows = r.json() if r.status_code in (200, 204) and r.text else []
+        if not rows:
+            raise HTTPException(status_code=404, detail="Document not found")
+        await client.post(f"{REST}/pr_import_jobs",
+                          headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                          json={"document_id": document_id, "status": "processing", "progress": 5,
+                                "started_at": now})
+    return {"ok": True}
+
+
+@app.post("/api/v1/pr-documents/{document_id}/pages")
+async def pr_document_pages(document_id: str, body: PRDocumentPagesIn,
+                            user: dict = Depends(get_current_user)):
+    """Receive PDF.js text in small chunks; image-only pages remain flagged for OCR."""
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can index historical PRs")
+    if len(body.pages) > 25:
+        raise HTTPException(status_code=400, detail="Send at most 25 pages per batch")
+    valid_types = {"pr_form", "invoice", "quotation", "delivery_order", "attachment"}
+    payload = []
+    for p in body.pages:
+        if p.page_number < 1 or p.page_number > 5000:
+            raise HTTPException(status_code=400, detail="Invalid page number")
+        page_text = (p.extracted_text or "").strip()[:200000]
+        payload.append({"document_id": document_id, "page_number": p.page_number,
+                        "page_type": p.page_type if p.page_type in valid_types else "attachment",
+                        "extracted_text": page_text or None, "ocr_used": p.ocr_used,
+                        "ocr_confidence": (max(0, min(100, p.ocr_confidence))
+                                           if p.ocr_confidence is not None else None)})
+    async with shared_client() as client:
+        if payload:
+            r = await client.post(f"{REST}/pr_document_pages",
+                                  headers={**supabase_headers(user["token"]),
+                                           "Prefer": "resolution=merge-duplicates,return=minimal"},
+                                  json=payload)
+            if r.status_code not in (200, 201, 204):
+                raise HTTPException(status_code=500, detail="Could not index document pages")
+        if body.final:
+            indexed = await client.get(
+                f"{REST}/pr_document_pages",
+                params={"document_id": f"eq.{document_id}", "select": "extracted_text"},
+                headers=supabase_headers(user["token"]),
+            )
+            all_pages = indexed.json() if indexed.status_code == 200 else []
+            nonempty = sum(1 for p in all_pages if p.get("extracted_text"))
+            status = "ready" if all_pages and nonempty == len(all_pages) else "needs_ocr"
+            now = datetime.now(timezone.utc).isoformat()
+            await client.patch(f"{REST}/pr_documents", params={"id": f"eq.{document_id}"},
+                               headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                               json={"extraction_status": status, "updated_at": now})
+            await client.patch(f"{REST}/pr_import_jobs",
+                               params={"document_id": f"eq.{document_id}", "status": "eq.processing"},
+                               headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
+                               json={"status": status, "progress": 100, "completed_at": now})
+    return {"ok": True, "pages": len(payload), "final": body.final}
+
+
+@app.get("/api/v1/pr-documents/{document_id}/preview-url")
+async def pr_document_preview_url(document_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if not PR_R2_ENABLED:
+        raise HTTPException(status_code=503, detail="Private PR document storage is not configured")
+    async with shared_client() as client:
+        r = await client.get(f"{REST}/pr_documents",
+                             params={"id": f"eq.{document_id}", "select": "object_key,original_filename"},
+                             headers=supabase_headers(user["token"]))
+        rows = r.json() if r.status_code == 200 else []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"url": _pr_r2_presign_get(rows[0]["object_key"], 600),
+            "filename": rows[0]["original_filename"], "expires_in": 600}
+
+
+@app.get("/api/v1/pr-archive/search")
+async def pr_archive_search(q: str = "", user: dict = Depends(get_current_user)):
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    q = q.strip()[:200]
+    if len(q) < 2:
+        return {"pr_ids": []}
+    async with shared_client() as client:
+        r = await client.post(f"{REST}/rpc/search_pr_archive",
+                              headers=supabase_headers(user["token"]),
+                              json={"query_text": q, "result_limit": 500})
+    if r.status_code != 200:
+        raise HTTPException(status_code=500, detail="Could not search archived PR text")
+    return {"pr_ids": [x["pr_id"] for x in r.json()]}
+
+
 @app.get("/api/v1/pr/list")
 async def pr_list(user: dict = Depends(get_current_user)):
     if user["role"] not in PR_ROLES:
@@ -3623,7 +3822,7 @@ def _pr_num(v):
 async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
     if user["role"] not in PR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    params = {"select": "id,pr_no,pr_date,category,urgency,site_name,project,requested_by_name,items,remarks,created_at",
+    params = {"select": "id,pr_no,pr_date,category,urgency,site_name,project,requested_by_name,items,remarks,source,created_at",
               "order": "created_at.desc", "limit": "500"}
     if month and len(month) == 7:
         y, m = int(month[:4]), int(month[5:7])
@@ -3634,6 +3833,17 @@ async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
         r = await client.get(f"{REST}/purchase_requisitions", params=params,
                              headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
+        document_by_pr = {}
+        if rows:
+            ids = ",".join(str(x["id"]) for x in rows)
+            dr = await client.get(
+                f"{REST}/pr_documents",
+                params={"pr_id": f"in.({ids})",
+                        "select": "id,pr_id,page_count,file_size,extraction_status,verification_status"},
+                headers=supabase_headers(user["token"]),
+            )
+            if dr.status_code == 200:
+                document_by_pr = {x["pr_id"]: x for x in dr.json()}
     total_value = 0.0
     by_cat = {"asset": 0, "consumable": 0, "rentals": 0}
     by_site, by_month, log, urgent = {}, {}, [], 0
@@ -3653,13 +3863,15 @@ async def pr_dashboard(month: str = "", user: dict = Depends(get_current_user)):
         if mo:
             bm = by_month.setdefault(mo, {"month": mo, "count": 0, "value": 0.0})
             bm["count"] += 1; bm["value"] += v
-        if len(log) < 200:
+        if len(log) < 500:
             descs = [str(it.get("description") or "").strip() for it in items if str(it.get("description") or "").strip()]
             summ = " · ".join(descs[:3]) or (p.get("remarks") or "")
+            document = document_by_pr.get(p["id"])
             log.append({"id": p["id"], "pr_no": p.get("pr_no"), "pr_date": p.get("pr_date"),
                         "site_name": s, "project": p.get("project"), "category": p.get("category"),
                         "urgency": p.get("urgency"), "requested_by_name": p.get("requested_by_name"),
-                        "value": round(v, 2), "summary": summ, "lines": descs[:8]})
+                        "value": round(v, 2), "summary": summ, "lines": descs[:8],
+                        "source": p.get("source") or "vcms", "document": document})
     return {
         "total_count": len(rows), "total_value": round(total_value, 2), "urgent": urgent,
         "by_category": by_cat,
