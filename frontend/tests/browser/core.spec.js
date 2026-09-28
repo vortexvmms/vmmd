@@ -38,6 +38,45 @@ test('attendance header remains aligned without horizontal overflow', async ({ p
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
 
+test('attendance transfer button and popup are not covered by the fixed action footer', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium', 'Desktop footer layout only');
+  await signedIn(page, 'admin');
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [{ id:'s1', site_name:'LOGISTICS' }] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/holidays*', r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/attendance\?.*/, r => r.fulfill({ json: [] }));
+  await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/attendance\/transferable.*/, r => r.fulfill({ json: [] }));
+  await page.goto('/attendance.html');
+
+  const add = page.locator('#addbtn');
+  await add.evaluate(el => el.classList.remove('hidden'));
+  await add.scrollIntoViewIfNeeded();
+  const visibleSpacing = await page.evaluate(() => {
+    const button = document.getElementById('addbtn').getBoundingClientRect();
+    const footer = document.querySelector('.vcms-mobile-actions').getBoundingClientRect();
+    return { buttonBottom: button.bottom, footerTop: footer.top };
+  });
+  expect(visibleSpacing.buttonBottom).toBeLessThanOrEqual(visibleSpacing.footerTop - 8);
+
+  await add.click();
+  await expect(page.locator('#tr-modal')).toBeVisible();
+  const popup = await page.evaluate(() => {
+    const modal = document.getElementById('tr-modal');
+    const panel = document.getElementById('tr-panel').getBoundingClientRect();
+    const footer = document.querySelector('.vcms-mobile-actions');
+    return {
+      modalZ: Number(getComputedStyle(modal).zIndex),
+      footerZ: Number(getComputedStyle(footer).zIndex),
+      panelTop: panel.top,
+      panelBottom: panel.bottom,
+      viewportHeight: innerHeight,
+    };
+  });
+  expect(popup.modalZ).toBeGreaterThan(popup.footerZ);
+  expect(popup.panelTop).toBeGreaterThanOrEqual(0);
+  expect(popup.panelBottom).toBeLessThanOrEqual(popup.viewportHeight);
+  await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
+});
+
 test('retired worker-card pages are not published', async ({ request }) => {
   for (const path of ['/cards.html', '/worker-cards.html', '/training-matrix.html']) {
     expect((await request.get(path)).status()).toBe(404);

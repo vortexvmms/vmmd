@@ -46,8 +46,14 @@
       #list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
       #morningbar,#bulkbar{background:#fff!important;border-color:#dce1e8!important;border-radius:14px!important;padding:16px!important;box-shadow:0 7px 18px rgba(15,23,42,.07)}
       body>div.fixed.bottom-0>div{max-width:none!important;padding:0 24px;display:flex;align-items:center;gap:20px}body>div.fixed.bottom-0 #hours-total{margin:0;min-width:220px;text-align:left}body>div.fixed.bottom-0 .flex{flex:1}
+      body.vcms-shelled.vmms-page-attendance #att-main{padding-bottom:150px!important}
     }
     @media(min-width:1500px){#list{grid-template-columns:repeat(3,minmax(0,1fr))}.att-work{grid-template-columns:minmax(0,1fr) 380px}}
+    #addbtn{scroll-margin-bottom:130px}
+    #tr-modal{z-index:1200;padding:16px}
+    #tr-panel{max-height:min(85vh,calc(100dvh - 32px))}
+    body.att-modal-open{overflow:hidden}
+    @media(max-width:639px){#tr-modal{padding:0}#tr-panel{max-height:calc(100dvh - 12px)}}
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -113,9 +119,9 @@
     </div></div>
   </main>
 
-  <div id="tr-modal" class="hidden fixed inset-0 bg-black/50 z-20 flex items-end sm:items-center justify-center">
-    <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] flex flex-col">
-      <h2 class="text-lg font-bold text-gray-800">Worker reported here</h2>
+  <div id="tr-modal" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="tr-title">
+    <div id="tr-panel" class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 flex flex-col">
+      <h2 id="tr-title" class="text-lg font-bold text-gray-800">Worker reported here</h2>
       <p class="text-xs text-gray-500 mb-3">Pick the worker who turned up at this site. He will be moved here from wherever he was allocated — the change is recorded in the audit log.</p>
       <input id="tr-search" type="search" placeholder="Search name or ID…" class="w-full border border-gray-300 rounded-lg p-2 mb-2">
       <div id="tr-list" class="flex-1 overflow-y-auto space-y-1"></div>
@@ -605,12 +611,17 @@
       const date = document.getElementById("date").value;
       const site = document.getElementById("site").value;
       document.getElementById("tr-modal").classList.remove("hidden");
+      document.body.classList.add("att-modal-open");
       document.getElementById("tr-list").innerHTML = '<p class="text-sm text-gray-400 p-3">Loading…</p>';
       const r = await vmmsApi(`/api/v1/attendance/transferable?date=${date}&site_id=${site}`);
       TRANSFERABLE = r.ok ? await r.json() : [];
       renderTransfer();
     }
-    function closeTransfer() { document.getElementById("tr-modal").classList.add("hidden"); }
+    function closeTransfer() {
+      document.getElementById("tr-modal").classList.add("hidden");
+      document.body.classList.remove("att-modal-open");
+      document.getElementById("addbtn").focus();
+    }
     function renderTransfer() {
       const q = document.getElementById("tr-search").value.trim().toLowerCase();
       const rows = TRANSFERABLE.filter(w => !q || w.name.toLowerCase().includes(q) || w.worker_code.toLowerCase().includes(q));
@@ -643,6 +654,8 @@
     }
 
     document.getElementById("tr-search").addEventListener("input", renderTransfer);
+    document.getElementById("tr-modal").addEventListener("click", event => { if (event.target === event.currentTarget) closeTransfer(); });
+    document.addEventListener("keydown", event => { if (event.key === "Escape" && !document.getElementById("tr-modal").classList.contains("hidden")) closeTransfer(); });
     document.getElementById("date").addEventListener("change", loadDay);
     document.getElementById("site").addEventListener("change", switchSite);
 
