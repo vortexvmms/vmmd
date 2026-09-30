@@ -12,3 +12,7 @@ alter table storage.objects enable row level security;
 grant usage on schema public,auth,storage to authenticated,anon;
 grant select,insert on storage.objects to authenticated;
 grant execute on function auth.uid() to authenticated,anon;
+
+-- Match production Supabase defaults rather than vanilla PostgreSQL defaults.
+alter default privileges in schema public grant all on tables to anon,authenticated;
+alter default privileges in schema public grant all on functions to anon,authenticated;

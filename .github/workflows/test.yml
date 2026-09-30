@@ -63,5 +63,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements-dev.txt
-      - run: psql "$LIFTING_TEST_DB_URL" -v ON_ERROR_STOP=1 -f backend/tests/lifting_db_foundation.sql -f db/migrations/0020_lifting_directory.sql
+      - run: psql "$LIFTING_TEST_DB_URL" -v ON_ERROR_STOP=1 -f backend/tests/lifting_db_foundation.sql -f db/migrations/0020_lifting_directory.sql -f db/migrations/0021_lifting_anonymous_grants.sql
       - run: PYTHONPATH=backend pytest backend/tests/test_lifting_db.py -q

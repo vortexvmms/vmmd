@@ -90,3 +90,8 @@ def test_concurrent_movement_only_one_holder_wins():
     first.wait(timeout=5);assert first.returncode==0;assert 'Holder changed' in error
     assert run(f"select current_machine_id from lifting_gear_items where id='{I}'")==M2
     run('delete from lifting_movements;delete from lifting_packs;update lifting_machines set current_document_id=null;update lifting_gear_certificates set current_document_id=null;delete from lifting_documents;delete from lifting_gear_items;delete from lifting_gear_certificates;delete from lifting_machines;delete from users;')
+
+
+def test_anonymous_cannot_call_or_read_lifting_objects():
+    assert 'permission denied' in run("begin;set local role anon;select lifting_can_read();rollback;",False)
+    assert 'permission denied' in run("begin;set local role anon;select * from lifting_machines;rollback;",False)
