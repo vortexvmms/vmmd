@@ -128,3 +128,15 @@ def test_historical_null_split_day(db):
     result=run(main.mark_attendance(main.AttendanceMark(allocation_id='a2',start_time='13:00'),user()))
     assert result['normal_hours']==4 and result['ot_hours']==2
     assert db[0][0]['attendance']['start_time'] is None
+
+
+def test_submitted_partial_leave_start_edit_preserves_leave_and_end(db):
+    att = db[0][0]['attendance']
+    att.update(partial_leave_type='al', leave_portion='second_half', leave_value=0.5,
+               submitted_at='2026-09-23T20:00:00Z')
+    result = run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',
+                    start_time='11:00', edit_reason='Actual work began at 11 AM'), user()))
+    assert result['normal_hours'] == 7 and result['ot_hours'] == 0
+    assert att['start_time'] == '11:00' and att['end_time'] == '19:00'
+    assert att['partial_leave_type'] == 'al' and att['leave_portion'] == 'second_half'
+    assert att['leave_value'] == 0.5 and att['submitted_at'] == '2026-09-23T20:00:00Z'

@@ -198,7 +198,7 @@
     }
     function restorePending(){
       const byId=new Map(ALL_ROWS.map(x=>[x.allocation_id,x]));
-      UNMATCHED_PENDING=[];readPending().forEach(p=>{const x=byId.get(p.changes?.allocation_id);if(!x){UNMATCHED_PENDING.push(p);return;}const prev={present:x.present,end_time:x.end_time,absence_type:x.absence_type,marked:x.marked,normal_hours:x.normal_hours,ot_hours:x.ot_hours};Object.assign(x,p.changes);x.marked=true;x._saving=true;x._saved=false;SAVE_QUEUE.set(x.allocation_id,{x,changes:p.changes,prev,work_date:p.work_date,site_id:p.site_id,queued_at:p.queued_at});});
+      UNMATCHED_PENDING=[];readPending().forEach(p=>{const x=byId.get(p.changes?.allocation_id);if(!x){UNMATCHED_PENDING.push(p);return;}const prev={present:x.present,start_time:x.start_time,end_time:x.end_time,end_next_day:x.end_next_day,absence_type:x.absence_type,marked:x.marked,normal_hours:x.normal_hours,ot_hours:x.ot_hours,shift_type:x.shift_type,partial_leave_type:x.partial_leave_type,leave_portion:x.leave_portion,leave_value:x.leave_value};Object.assign(x,p.changes);x.marked=true;x._saving=true;x._saved=false;SAVE_QUEUE.set(x.allocation_id,{x,changes:p.changes,prev,work_date:p.work_date,site_id:p.site_id,queued_at:p.queued_at});});
       if(SAVE_QUEUE.size){syncState(`${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} saved on phone · waiting to sync`,"warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,navigator.onLine?300:3000);}
     }
 
@@ -386,7 +386,7 @@
                    <button class="mode-night text-xs font-bold px-2.5 py-1.5 rounded-full ${x.shift_type==="night"?"bg-indigo-700 text-white":"bg-white text-gray-600 border"}">🌙 Night</button>
                    ${["mc","al","ul"].map(v=>`<button class="mode-half text-xs font-bold px-2.5 py-1.5 rounded-full ${x.partial_leave_type===v?"bg-amber-500 text-white":"bg-white text-gray-600 border"}" data-r="${v}">½ ${v.toUpperCase()}</button>`).join("")}
                  </div>
-                 ${x.partial_leave_type?`<div class="text-xs font-bold text-amber-700 mb-2">Worked 08:00–${x.end_time||"12:00"} · Afternoon ${x.partial_leave_type.toUpperCase()} (0.5 day)</div>`:""}
+                 ${x.partial_leave_type?`<div class="text-xs font-bold text-amber-700 mb-2">Worked ${esc(x.start_time||"08:00")}–${x.end_time||"12:00"} · Afternoon ${x.partial_leave_type.toUpperCase()} (0.5 day)</div>`:""}
                  ${x.shift_type==="night"?`<div class="text-xs font-bold text-indigo-700 mb-2">Night shift · starts 20:00 · overnight finish handled automatically</div>`:""}
                  <div class="flex items-center flex-wrap gap-1">
                    ${(x.shift_type==="night"?NIGHT_PRESETS:(x._more?PRESETS:COMMON_PRESETS)).map(([t, lbl, nd]) =>
@@ -433,7 +433,8 @@
     // Keep them out of the end-time retry queue: permission/lock failures are actionable.
     let START_EDIT = null, START_BUSY = false;
     function canEditStart(){return !!ME && (isFull(ME.role)||isManager(ME.role));}
-    function startEligible(x){return x.present && x.absence_type!=="class" && (x.shift_type||"day")==="day" && !x.partial_leave_type && !x._saving;}
+    function startEligible(x){return x.present && x.absence_type!=="class" && (x.shift_type||"day")==="day" && !x._saving;}
+    function startBulkEligible(x){return startEligible(x)&&!x.partial_leave_type;}
     function startTargets(){return START_EDIT ? (document.getElementById("start-bulk").checked?START_EDIT.selected:[START_EDIT.row]) : [];}
     function startReasonState(){
       const needed=startTargets().some(x=>x.submitted);
@@ -448,7 +449,7 @@
       document.getElementById("start-context").textContent=`${x.worker_name} · ${START_EDIT.date} · ${document.getElementById("site").selectedOptions[0]?.textContent||""}`;
       document.getElementById("start-time").value=x.start_time||"08:00";
       document.getElementById("start-bulk").checked=false;
-      document.getElementById("start-bulk-label").classList.toggle("hidden",selected.length<2||!selected.every(startEligible));
+      document.getElementById("start-bulk-label").classList.toggle("hidden",selected.length<2||!selected.every(startBulkEligible));
       document.getElementById("start-bulk-text").textContent=`Apply to ${selected.length} selected workers`;
       document.getElementById("start-reason").value="";
       document.getElementById("start-error").textContent="";
@@ -500,7 +501,7 @@
       const prev = {
         present: x.present, end_time: x.end_time, absence_type: x.absence_type,
         marked: x.marked, normal_hours: x.normal_hours, ot_hours: x.ot_hours,
-        start_time:x.start_time,shift_type:x.shift_type,partial_leave_type:x.partial_leave_type,leave_portion:x.leave_portion,leave_value:x.leave_value,
+        start_time:x.start_time,end_next_day:x.end_next_day,shift_type:x.shift_type,partial_leave_type:x.partial_leave_type,leave_portion:x.leave_portion,leave_value:x.leave_value,
       };
       Object.assign(x, changes);
       x.marked = true;
@@ -526,11 +527,22 @@
         const data=await r.json().catch(()=>({}));
         if(!r.ok)throw new Error(data.detail||"Could not sync");
         const resultMap=new Map((data.results||[]).map(v=>[v.allocation_id,v]));
-        let failed=0;
-        batch.forEach(q=>{const d=resultMap.get(q.x.allocation_id);if(d?.ok){q.x.normal_hours=d.normal_hours;q.x.ot_hours=d.ot_hours;q.x.day_type=d.day_type;q.x._saving=false;q.x._saved=true;if(SAVE_QUEUE.get(q.x.allocation_id)===q)SAVE_QUEUE.delete(q.x.allocation_id);}else{q.x._saving=true;failed++;}});persistPending();
+        let failed=0;const rejected=[];
+        batch.forEach(q=>{
+          const d=resultMap.get(q.x.allocation_id);
+          if(d?.ok){q.x.normal_hours=d.normal_hours;q.x.ot_hours=d.ot_hours;q.x.day_type=d.day_type;q.x._saving=false;q.x._saved=true;if(SAVE_QUEUE.get(q.x.allocation_id)===q)SAVE_QUEUE.delete(q.x.allocation_id);}
+          else if(d&&[400,403,404,422].includes(d.status)){
+            // A rejected change has not saved. Restore the confirmed values,
+            // show the reason, and allow correction instead of retrying forever.
+            if(SAVE_QUEUE.get(q.x.allocation_id)===q){Object.assign(q.x,q.prev);q.x._saving=false;q.x._saved=false;SAVE_QUEUE.delete(q.x.allocation_id);}
+            rejected.push(`${q.x.worker_name}: ${d.detail||"Change rejected"}`);
+          }else{q.x._saving=true;failed++;}
+        });persistPending();
         render();
         if(failed){syncState(`${failed} change${failed===1?"":"s"} need retry`,"err");SAVE_TIMER=setTimeout(flushSaves,5000);}
+        else if(rejected.length){syncState(`${rejected.length} change(s) rejected · saved attendance restored`,"err");}
         else{syncState("All changes saved ✓","ok");setTimeout(()=>{if(!SAVE_QUEUE.size)syncState("");},1800);}
+        if(rejected.length)toast(rejected.join("; "),true);
         setTimeout(()=>{batch.forEach(q=>q.x._saved=false);render();},1600);
       }catch(ex){
         batch.forEach(q=>{q.x._saving=true;if(!SAVE_QUEUE.has(q.x.allocation_id))SAVE_QUEUE.set(q.x.allocation_id,q)});persistPending();
