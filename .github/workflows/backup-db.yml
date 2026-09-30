@@ -51,7 +51,7 @@ jobs:
           # Validate without printing any part of the credential.
           DB_URL=$(python3 - <<'PYURL'
           import os, sys
-          from urllib.parse import urlsplit
+          from urllib.parse import urlsplit, quote, unquote
           value = os.environ["DB_URL"].strip()
           if len(value) > 1 and value[0] == value[-1] and value[0] in ("'", '"', '`'):
               value = value[1:-1].strip()
@@ -66,7 +66,9 @@ jobs:
           if not valid:
               print("SUPABASE_DB_URL must be the full Session pooler URI (postgresql://user:password@host:5432/postgres), with the actual URL-encoded password. Secret value was not displayed.", file=sys.stderr)
               sys.exit(2)
-          print(value)
+          # libpq requires reserved password characters to be percent-encoded.
+          credentials = quote(unquote(uri.username), safe="") + ":" + quote(unquote(uri.password), safe="")
+          print(uri._replace(netloc=credentials + "@" + uri.hostname + ":" + str(uri.port)).geturl())
           PYURL
           )
           ts=$(date -u +%Y%m%d_%H%M)
