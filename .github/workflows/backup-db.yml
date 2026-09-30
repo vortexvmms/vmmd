@@ -28,6 +28,7 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Install PostgreSQL 17 client
         # Supabase runs Postgres 17; pg_dump must match or be newer, so pull the
@@ -43,11 +44,36 @@ jobs:
 
       - name: Dump database
         env:
+          PGCONNECT_TIMEOUT: "20"
+          PGOPTIONS: "-c statement_timeout=600000"
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_KEY: ${{ secrets.VCMS_BACKUP_KEY }}
         run: |
           set -euo pipefail
           test -n "$DB_URL" && test -n "$BACKUP_KEY"
+          # Validate without printing any part of the credential.
+          DB_URL=$(python3 - <<'PYURL'
+          import os, sys
+          from urllib.parse import urlsplit, quote, unquote
+          value = os.environ["DB_URL"].strip()
+          if len(value) > 1 and value[0] == value[-1] and value[0] in ("'", '"', '`'):
+              value = value[1:-1].strip()
+          try:
+              uri = urlsplit(value)
+              valid = (uri.scheme in ("postgres", "postgresql") and uri.hostname
+                       and uri.username and uri.password and uri.path == "/postgres"
+                       and uri.port == 5432 and "YOUR_PASSWORD" not in value
+                       and "[YOUR-PASSWORD]" not in value)
+          except ValueError:
+              valid = False
+          if not valid:
+              print("SUPABASE_DB_URL must be the full Session pooler URI (postgresql://user:password@host:5432/postgres), with the actual URL-encoded password. Secret value was not displayed.", file=sys.stderr)
+              sys.exit(2)
+          # libpq requires reserved password characters to be percent-encoded.
+          credentials = quote(unquote(uri.username), safe="") + ":" + quote(unquote(uri.password), safe="")
+          print(uri._replace(netloc=credentials + "@" + uri.hostname + ":" + str(uri.port)).geturl())
+          PYURL
+          )
           ts=$(date -u +%Y%m%d_%H%M)
           # The runner's default pg_dump on PATH is v16; use the highest version we
           # installed (v17) explicitly so it matches the Supabase server.
