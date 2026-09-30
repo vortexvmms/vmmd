@@ -186,9 +186,9 @@ async function vmmsApi(path, options = {}) {
     return fetch(`${VMMS_CONFIG.BACKEND_URL}${path}`, {
       ...options,
       headers: {
+        "Content-Type": "application/json",
         ...(options.headers || {}),
         "Authorization": `Bearer ${s.access_token}`,
-        "Content-Type": "application/json",
       },
     });
   };
