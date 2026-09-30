@@ -49,6 +49,13 @@
       body.vcms-shelled.vmms-page-attendance #att-main{padding-bottom:150px!important}
     }
     @media(min-width:1500px){#list{grid-template-columns:repeat(3,minmax(0,1fr))}.att-work{grid-template-columns:minmax(0,1fr) 380px}}
+    body.att-group-selected #att-main{padding-bottom:calc(200px + var(--att-group-height,180px))!important}
+    #start-dialog{border:0;padding:0;width:calc(100% - 32px);max-width:420px;max-height:calc(100dvh - 32px);border-radius:16px;color:#1f2937;background:var(--vcms-surface,#fff)}
+    #start-dialog::backdrop{background:rgba(0,0,0,.5)}
+    #start-form{padding:20px;overflow-y:auto;max-height:calc(100dvh - 32px)}
+    #start-form input[type=time]{min-height:44px;width:100%}
+    #start-form button{min-height:44px}
+    @media(max-width:639px){#start-dialog{margin:auto auto 0;width:100%;max-width:none;border-radius:16px 16px 0 0}#start-form{padding-bottom:calc(20px + env(safe-area-inset-bottom))}}
     #addbtn{scroll-margin-bottom:130px}
     #tr-modal{z-index:1200;padding:16px}
     #tr-panel{max-height:min(85vh,calc(100dvh - 32px))}
@@ -157,6 +164,20 @@
     </div>
   </div>
 
+  <dialog id="start-dialog" aria-labelledby="start-title">
+    <form id="start-form">
+      <h2 id="start-title" class="text-lg font-bold">Work Start Time</h2>
+      <p id="start-context" class="text-sm text-gray-500 mt-2 mb-3"></p>
+      <label for="start-time" class="text-sm font-bold">Start time</label>
+      <input id="start-time" type="time" step="60" required class="border border-gray-300 rounded-lg p-2 mt-2 mb-3">
+      <label id="start-bulk-label" class="hidden flex items-center gap-2 text-sm mb-3"><input id="start-bulk" type="checkbox" class="w-5 h-5"><span id="start-bulk-text"></span></label>
+      <div id="start-reason-wrap" class="hidden mb-3"><label for="start-reason" class="text-sm font-bold">Reason for correcting submitted attendance</label><input id="start-reason" type="text" maxlength="500" class="w-full border border-gray-300 rounded-lg p-2 mt-2"></div>
+      <p class="text-xs text-gray-500 mb-3">Applies only to this attendance date. Future day shifts still default to 08:00. Existing end times and overnight settings are kept.</p>
+      <p id="start-error" role="alert" class="text-sm text-red-700 mb-3"></p>
+      <div class="flex gap-3"><button id="start-cancel" type="button" class="vcms-btn vcms-btn-tertiary flex-1">Cancel</button><button id="start-save" type="submit" class="vcms-btn vcms-btn-primary flex-1">Save</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="vcms-toast hidden"></div>
   <div id="sync-state" class="hidden" aria-live="polite"></div>
 
@@ -236,6 +257,7 @@
     }
 
     async function loadDay() {
+      SEL.clear();
       AUTO_FILTER_DONE=false;
       const date = document.getElementById("date").value;
       let all=[];
@@ -333,7 +355,7 @@
             <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-800">${esc(x.worker_name)}
                 ${!x.marked ? '<span class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 rounded px-1.5 py-0.5 align-middle">NOT MARKED</span>' : ''}</p>
-              <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${x.start_time}</p>
+              <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${esc(x.start_time || "08:00")}</p>
             </div>
             <label class="flex items-center gap-1 text-sm shrink-0">
               <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""}>
@@ -375,6 +397,7 @@
                      ${x._saving ? `Saving…` : (x._saved ? `Saved ✓` : (x.end_time ? `${x.end_time} · ${x.normal_hours}+${x.ot_hours} OT` : "no end time"))}
                    </span>
                  </div>
+                 ${x._more && canEditStart() && startEligible(x) ? `<div class="mt-2"><button class="start-edit text-xs font-bold px-3 py-2 rounded-lg bg-gray-100 text-gray-600">Edit Work Start Time</button></div>` : ""}
                  <input type="time" step="900" value="${x.end_time || ""}"
                         class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
                  </div>`}
@@ -397,6 +420,7 @@
         div.querySelectorAll(".qtime").forEach(b => b.addEventListener("click", () => mark(x, { end_time: b.dataset.t, end_next_day: nextDayFor(x, b.dataset.t) }, div)));
         const optBtn=div.querySelector(".card-options");if(optBtn)optBtn.addEventListener("click",()=>{x._expanded=!x._expanded;render();});
         const moreBtn=div.querySelector(".tmore"); if(moreBtn) moreBtn.addEventListener("click",()=>{x._more=!x._more;render();});
+        const startBtn=div.querySelector(".start-edit");if(startBtn)startBtn.addEventListener("click",()=>openStart(x));
         const tc = div.querySelector(".tcustom");
         if (tc) tc.addEventListener("click", () => { ein.classList.toggle("hidden"); if (!ein.classList.contains("hidden")) ein.focus(); });
         if (ein) ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value, end_next_day: nextDayFor(x, ein.value) }, div); });
@@ -404,6 +428,64 @@
       });
       updateGroupBar();
     }
+
+    // Start edits use the same server authorization, dated allocation and hours engine.
+    // Keep them out of the end-time retry queue: permission/lock failures are actionable.
+    let START_EDIT = null, START_BUSY = false;
+    function canEditStart(){return !!ME && (isFull(ME.role)||isManager(ME.role));}
+    function startEligible(x){return x.present && x.absence_type!=="class" && (x.shift_type||"day")==="day" && !x.partial_leave_type && !x._saving;}
+    function startTargets(){return START_EDIT ? (document.getElementById("start-bulk").checked?START_EDIT.selected:[START_EDIT.row]) : [];}
+    function startReasonState(){
+      const needed=startTargets().some(x=>x.submitted);
+      document.getElementById("start-reason-wrap").classList.toggle("hidden",!needed);
+      document.getElementById("start-reason").required=needed;
+    }
+    function openStart(x){
+      if(!canEditStart()||!startEligible(x))return;
+      if(SAVE_QUEUE.size||SAVE_RUNNING){toast("Wait for pending attendance changes to finish saving",true);return;}
+      const selected=ROWS.filter(r=>SEL.has(r.allocation_id));
+      START_EDIT={row:x,selected,date:document.getElementById("date").value,site:document.getElementById("site").value};
+      document.getElementById("start-context").textContent=`${x.worker_name} · ${START_EDIT.date} · ${document.getElementById("site").selectedOptions[0]?.textContent||""}`;
+      document.getElementById("start-time").value=x.start_time||"08:00";
+      document.getElementById("start-bulk").checked=false;
+      document.getElementById("start-bulk-label").classList.toggle("hidden",selected.length<2||!selected.every(startEligible));
+      document.getElementById("start-bulk-text").textContent=`Apply to ${selected.length} selected workers`;
+      document.getElementById("start-reason").value="";
+      document.getElementById("start-error").textContent="";
+      startReasonState();document.getElementById("start-dialog").showModal();
+    }
+    function closeStart(){if(START_BUSY)return;document.getElementById("start-dialog").close();START_EDIT=null;}
+    async function saveStart(event){
+      event.preventDefault();if(START_BUSY||!START_EDIT)return;
+      const context=START_EDIT,targets=startTargets(),time=document.getElementById("start-time").value;
+      const reason=document.getElementById("start-reason").value.trim();
+      const error=document.getElementById("start-error");
+      if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){error.textContent="Choose a valid start time.";return;}
+      if(targets.some(x=>x.submitted)&&!reason){error.textContent="Enter a reason for correcting submitted attendance.";return;}
+      if(!canEditStart()||!targets.every(startEligible)||SAVE_QUEUE.size||SAVE_RUNNING){error.textContent="Attendance changed. Close this dialog and wait for saving to finish.";return;}
+      START_BUSY=true;
+      document.querySelectorAll("#start-form input,#start-form button").forEach(el=>el.disabled=true);
+      error.textContent="";
+      try{
+        const failures=[];
+        for(let i=0;i<targets.length;i+=100){
+          const chunk=targets.slice(i,i+100);
+          const r=await vmmsApi("/api/v1/attendance/batch",{method:"POST",body:JSON.stringify({changes:chunk.map(x=>({allocation_id:x.allocation_id,start_time:time,edit_reason:reason||null}))})});
+          const data=await r.json();if(!r.ok)throw Error(data.detail||"Could not save start time.");
+          const results=new Map((data.results||[]).map(x=>[x.allocation_id,x]));
+          chunk.forEach(x=>{const result=results.get(x.allocation_id);if(!result?.ok)failures.push(`${x.worker_name}: ${result?.detail||"Save not confirmed"}`);});
+        }
+        // Refresh the authoritative saved values, including recalculated hours.
+        if(document.getElementById("date").value===context.date&&document.getElementById("site").value===context.site)await loadDay();
+        if(failures.length){error.textContent=failures.join("; ");return;}
+        START_BUSY=false;closeStart();toast(`Start time ${time} saved for ${targets.length} worker(s)`,false,true);
+      }catch(ex){error.textContent=`${ex.message} Reload attendance to check saved values before retrying.`;}
+      finally{START_BUSY=false;document.querySelectorAll("#start-form input,#start-form button").forEach(el=>el.disabled=false);}
+    }
+    document.getElementById("start-form").addEventListener("submit",saveStart);
+    document.getElementById("start-cancel").addEventListener("click",closeStart);
+    document.getElementById("start-bulk").addEventListener("change",startReasonState);
+    document.getElementById("start-dialog").addEventListener("cancel",event=>{event.preventDefault();closeStart();});
 
     // Optimistic save: update the row on screen immediately, then save in the
     // background. No full re-fetch, so tapping a time / present / reason feels
@@ -538,6 +620,8 @@
       const n = ROWS.filter(x => SEL.has(x.allocation_id) && x.present).length;
       document.getElementById("groupcount").textContent = n;
       document.getElementById("groupbar").classList.toggle("hidden", n === 0);
+      document.body.classList.toggle("att-group-selected",n>0);
+      document.body.style.setProperty("--att-group-height",document.getElementById("groupbar").offsetHeight+"px");
     }
     function initGroupChips() {
       const box = document.getElementById("groupchips");

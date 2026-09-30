@@ -19,7 +19,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .auth import (
     cache_user as _cache_put,
@@ -1091,6 +1091,13 @@ class AttendanceMark(BaseModel):
     leave_portion: str | None = None   # first_half | second_half
     edit_reason: str | None = None
 
+    @field_validator("start_time")
+    @classmethod
+    def validate_start_time(cls, value):
+        if value is None or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+            raise ValueError("Start time must be a valid HH:MM time")
+        return value
+
 
 class AttendanceBatchIn(BaseModel):
     changes: list[AttendanceMark]
@@ -1286,8 +1293,9 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         try:
             await asyncio.wait_for(
                 audit(client, user, "mark_attendance", "attendance", body.allocation_id,
-                      {k: att.get(k) for k in ("present", "end_time")} if att else None,
-                      {"present": present, "end_time": end, "normal": normal, "ot": ot,
+                      {k: att.get(k) for k in ("present", "start_time", "end_time")} if att else None,
+                      {"present": present, "start_time": start, "end_time": end, "normal": normal, "ot": ot,
+                       "edit_reason": body.edit_reason,
                        "shift_type": shift_type, "partial_leave_type": partial_leave,
                        "leave_portion": leave_portion, "leave_value": leave_value}),
                 timeout=1.0)
@@ -1337,7 +1345,7 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
         att = a.get("attendance")
         if not att or not att["present"] or not att["end_time"]:
             continue
-        segs.append({"start": att["start_time"][:5], "end": att["end_time"][:5],
+        segs.append({"start": (att.get("start_time") or "08:00")[:5], "end": att["end_time"][:5],
                      "end_next_day": att["end_next_day"]})
         ids.append((a["id"], att["id"]))
     if len(segs) < 2:
