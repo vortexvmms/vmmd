@@ -20,4 +20,15 @@ test('LM review shows serial and manufacture year with full width source text',a
  await page.getByText('Extracted source text',{exact:true}).click();let widths=await page.locator('#extracted-source').evaluate(el=>({source:el.getBoundingClientRect().width,parent:el.parentElement.getBoundingClientRect().width}));expect(widths.source).toBeGreaterThan(widths.parent-2);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
  await page.screenshot({animations:'disabled',path:require('path').join(process.env.LIFTING_SCREENSHOT_DIR||require('os').tmpdir(),isMobile?'lifting-review-mobile.png':'lifting-review-desktop.png'),fullPage:true});
+ let upload;
+ await page.route('**/api/v1/lifting/documents?*',async route=>{
+   let req=route.request();upload={type:req.headers()['content-type'],bytes:req.postDataBuffer()};
+   if(upload.type!=='application/pdf')return route.fulfill({status:415,json:{detail:'Use a valid PDF, JPG or PNG'}});
+   return route.fulfill({status:201,json:{id:DOC}});
+ });
+ await page.getByLabel('Machine ID (enter manually)',{exact:true}).fill('LC-001');
+ await page.locator('[name=confirmed]').check();await page.getByRole('button',{name:'Confirm and save',exact:true}).click();
+ await expect(page.locator('#review-dialog')).not.toBeVisible();
+ expect(upload.type).toBe('application/pdf');expect(upload.bytes.toString()).toBe('%PDF-1.4 QA');
+ await expect(page.locator('#notice')).toContainText('Certificate reviewed and saved');
 });
