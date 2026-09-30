@@ -48,6 +48,27 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$DB_URL" && test -n "$BACKUP_KEY"
+          # Validate without printing any part of the credential.
+          DB_URL=$(python3 - <<'PYURL'
+          import os, sys
+          from urllib.parse import urlsplit
+          value = os.environ["DB_URL"].strip()
+          if len(value) > 1 and value[0] == value[-1] and value[0] in ("'", '"', '`'):
+              value = value[1:-1].strip()
+          try:
+              uri = urlsplit(value)
+              valid = (uri.scheme in ("postgres", "postgresql") and uri.hostname
+                       and uri.username and uri.password and uri.path == "/postgres"
+                       and uri.port == 5432 and "YOUR_PASSWORD" not in value
+                       and "[YOUR-PASSWORD]" not in value)
+          except ValueError:
+              valid = False
+          if not valid:
+              print("SUPABASE_DB_URL must be the full Session pooler URI (postgresql://user:password@host:5432/postgres), with the actual URL-encoded password. Secret value was not displayed.", file=sys.stderr)
+              sys.exit(2)
+          print(value)
+          PYURL
+          )
           ts=$(date -u +%Y%m%d_%H%M)
           # The runner's default pg_dump on PATH is v16; use the highest version we
           # installed (v17) explicitly so it matches the Supabase server.
