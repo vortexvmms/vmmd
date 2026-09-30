@@ -91,9 +91,11 @@ def build_lifting_router(ctx):
         async for chunk in request.stream():
             content.extend(chunk)
             if len(content)>20971520: raise HTTPException(413,'Documents must be 20 MB or smaller')
-        data=bytes(content);mime=request.headers.get('content-type','')
+        data=bytes(content)
         signatures={'application/pdf':data.startswith(b'%PDF-'),'image/jpeg':data.startswith(b'\xff\xd8\xff'),'image/png':data.startswith(b'\x89PNG\r\n\x1a\n')}
-        if not signatures.get(mime): raise HTTPException(415,'Use a valid PDF, JPG or PNG')
+        # Verify the actual file rather than a browser's possibly stale MIME header.
+        mime=next((kind for kind,valid in signatures.items() if valid),None)
+        if not mime: raise HTTPException(415,'Use a valid PDF, JPG or PNG')
         import fitz
         try:
             d=fitz.open(stream=data,filetype='pdf' if mime=='application/pdf' else 'png' if mime=='image/png' else 'jpeg')

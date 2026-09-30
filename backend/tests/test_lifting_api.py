@@ -1,4 +1,6 @@
 import uuid
+import json
+import pytest
 from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
@@ -44,3 +46,30 @@ def test_upload_validates_content_and_keeps_unverified():
 def test_invalid_record_identifiers_are_rejected():
     c,_=client();assert c.get('/api/v1/lifting/documents/not-an-id/file').status_code==422
     assert c.post('/api/v1/lifting/packs',json={'machine_id':'not-an-id','order':[]}).status_code==422
+
+
+@pytest.mark.parametrize('header',['application/pdf','application/pdf; charset=binary','application/octet-stream','application/json',''])
+def test_pdf_upload_uses_validated_file_bytes_not_client_header(header):
+    c,calls=client();pdf=log_pdf('Certificate',[],LM,'QA User')
+    r=c.post('/api/v1/lifting/documents?kind=lm&filename=certificate.pdf',content=pdf,headers={'Content-Type':header})
+    assert r.status_code==201
+    record=json.loads(calls[-1].content)
+    assert record['mime_type']=='application/pdf'
+    assert calls[0].headers['content-type']=='application/pdf'
+    assert calls[0].content==pdf
+
+
+@pytest.mark.parametrize('filetype,mime',[('png','image/png'),('jpeg','image/jpeg')])
+def test_image_upload_detects_and_validates_original(filetype,mime):
+    import fitz
+    with fitz.open(stream=log_pdf('Certificate',[],LM,'QA User'),filetype='pdf') as doc:
+        data=doc[0].get_pixmap().tobytes(filetype)
+    c,calls=client()
+    r=c.post('/api/v1/lifting/documents?kind=lm&filename=certificate.'+filetype,content=data,headers={'Content-Type':'application/octet-stream'})
+    assert r.status_code==201 and json.loads(calls[-1].content)['mime_type']==mime
+
+
+def test_pdf_signature_alone_does_not_bypass_document_validation():
+    c,calls=client()
+    r=c.post('/api/v1/lifting/documents?kind=lm&filename=certificate.pdf',content=b'%PDF-not a readable document',headers={'Content-Type':'application/json'})
+    assert r.status_code==400 and calls==[]
