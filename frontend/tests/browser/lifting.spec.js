@@ -27,8 +27,16 @@ test('LM review shows serial and manufacture year with full width source text',a
    return route.fulfill({status:201,json:{id:DOC}});
  });
  await page.getByLabel('Machine ID (enter manually)',{exact:true}).fill('LC-001');
+ await page.getByLabel('LM registration number',{exact:true}).fill('LM563989N');
+ await page.getByLabel('Vehicle number',{exact:true}).fill('XE1807Y');
+ await page.getByLabel('Equipment / make / model',{exact:true}).fill('PALFINGER PK53002SHE');
+ await page.getByLabel('Maximum certificate SWL (kg)',{exact:true}).fill('10400');
+ await page.getByLabel('Last thorough examination',{exact:true}).fill('2026-05-28');
+ await page.getByLabel('Printed certificate expiry',{exact:true}).fill('2027-05-27');
  await page.locator('[name=confirmed]').check();await page.getByRole('button',{name:'Confirm and save',exact:true}).click();
  await expect(page.locator('#review-dialog')).not.toBeVisible();
- expect(upload.type).toBe('application/pdf');expect(upload.bytes.toString()).toBe('%PDF-1.4 QA');
+ expect(upload.type).toBe('application/pdf');
+ // WebKit does not expose Blob request bytes through interception.
+ if(!isMobile)expect(upload.bytes.toString()).toBe('%PDF-1.4 QA');
  await expect(page.locator('#notice')).toContainText('Certificate reviewed and saved');
 });
