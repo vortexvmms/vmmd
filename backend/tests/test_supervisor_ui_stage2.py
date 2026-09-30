@@ -36,7 +36,7 @@ def test_supervisor_mobile_home_includes_site_progress_module():
 
 
 def test_stage_two_cache_and_component_contract():
-    assert "vcms-v70-attendance-start-correction" in page("sw.js")
+    assert "vcms-v71-lifting" in page("sw.js")
     css = page("js/core/components.js")
     for class_name in (
         ".vcms-segmented",
