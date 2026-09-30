@@ -28,6 +28,7 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Install PostgreSQL 17 client
         # Supabase runs Postgres 17; pg_dump must match or be newer, so pull the
@@ -43,6 +44,8 @@ jobs:
 
       - name: Dump database
         env:
+          PGCONNECT_TIMEOUT: "20"
+          PGOPTIONS: "-c statement_timeout=600000"
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_KEY: ${{ secrets.VCMS_BACKUP_KEY }}
         run: |
