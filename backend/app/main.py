@@ -47,6 +47,7 @@ from .storage import pr_r2_presign_put as _pr_r2_presign_put
 from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router; from .modules.pcs_plan_router import PcsPlanContext, build_pcs_plan_router; from .modules.pcs_report_router import PcsReportContext, build_pcs_report_router; from .modules.pcs_dist_router import PcsDistContext, build_pcs_dist_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
+from .modules.lifting.router import LiftingContext, build_lifting_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
@@ -112,6 +113,11 @@ app.include_router(build_equipment_router(EquipmentContext(
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
 )))
 
+
+app.include_router(build_lifting_router(LiftingContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit,
+)))
 
 @app.get("/api/v1/audit-log")
 async def get_audit_log(date_from: str | None = None, date_to: str | None = None,

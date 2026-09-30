@@ -242,13 +242,13 @@
         { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"]] },
         { grp:"Procurement", items:[["New PR","pr-new.html","cart"]] },
         { grp:"More", items:[["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
-        if(role==="logistics_sup") supervisorNav.splice(2,0,{grp:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"]]});
+        supervisorNav.splice(2,0,{grp:"Equipment & Machineries",items:role==="logistics_sup"?[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"]]:[["Lifting","lifting.html","document"]]});
         return supervisorNav;
       }
       const nav = [
         { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
         { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"]] },
-        { grp:"Equipment & Machineries", items:[["Tipper Truck Supply","tipper-trucks.html","truck"]] },
+        { grp:"Equipment & Machineries", items:[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"]] },
         { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"]] },
         { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["Import PR PDFs","pr-import.html","doc"]] },
         { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"],["Timesheets","timesheet.html","grid"],["Resource Summary","resource-summary.html","grid"],["Site Board","site-dashboard.html","chart"],["PR Board","pr-dashboard.html","chart"]] },
