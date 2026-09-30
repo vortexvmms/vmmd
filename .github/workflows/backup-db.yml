@@ -10,7 +10,8 @@
 #
 # WHAT IT DOES:
 #   - Runs every day 02:00 Singapore time (18:00 UTC).
-#   - Takes a full compressed dump of the whole database.
+#   - Takes a full compressed dump and schema export; encrypts all artifacts.
+#   - Requires VCMS_BACKUP_KEY in Actions secrets; retain its recovery key locally.
 #   - Saves it as a downloadable Actions "artifact", kept 90 days.
 #   - You (repo admin) can download any day's backup from the Actions tab.
 #
@@ -43,7 +44,10 @@ jobs:
       - name: Dump database
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_KEY: ${{ secrets.VCMS_BACKUP_KEY }}
         run: |
+          set -euo pipefail
+          test -n "$DB_URL" && test -n "$BACKUP_KEY"
           ts=$(date -u +%Y%m%d_%H%M)
           # The runner's default pg_dump on PATH is v16; use the highest version we
           # installed (v17) explicitly so it matches the Supabase server.
@@ -54,13 +58,19 @@ jobs:
           # also a plain .sql for easy reading / partial restores
           "$PGDUMP" "$DB_URL" --no-owner --no-privileges     -f "vcms_backup_${ts}.sql"
           gzip "vcms_backup_${ts}.sql"
-          ls -lh vcms_backup_*
+          "$PGDUMP" "$DB_URL" --schema-only --no-owner --no-privileges -f "vcms_schema_${ts}.sql"
+          for export_file in vcms_backup_*.dump vcms_backup_*.sql.gz vcms_schema_*.sql; do
+            printf %s "$BACKUP_KEY" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 "$export_file"
+            rm "$export_file"
+          done
+          ls -lh *.gpg
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
         with:
           name: vcms-db-backup
           path: |
-            vcms_backup_*.dump
-            vcms_backup_*.sql.gz
+            vcms_backup_*.dump.gpg
+            vcms_backup_*.sql.gz.gpg
+            vcms_schema_*.sql.gpg
           retention-days: 90
