@@ -48,9 +48,11 @@ def extract(text):
     if not m and 'lm_number' not in fields:
         m=re.search(r'(?:safe\s+working\s+load|\bSWL\b)[^\d]{0,180}([\d,]+(?:\.\d+)?)\s*(kg|tonnes?|tons?|t)\b',text,re.I)
     if m: fields['swl_kg']=float(m[1].replace(',',''))*(1 if m[2].lower()=='kg' else 1000)
-    for key,pattern in [('owner',r'OWNER\s+NAME\s*:?\s*(.*?)\s+OWNER\s+UEN'),('serial_number',r'DISTINCTIVE\s+NO\.?\d?\s*:?\s*([A-Z0-9-]+)'),('equipment',r'BRAND\s+AND\s+MODEL\s*:?\s*(.*?)\s+FLY\s+JIB')]:
+    for key,pattern in [('owner',r'OWNER\s+NAME\s*:?\s*(.*?)\s+OWNER\s+UEN'),('serial_number',r'DISTINCTIVE\s+NO\.?\s*(?:[²2](?:\s*[:：]\s*|\s+)(?=[A-Z0-9./-]*\d))?[:：]?\s*([A-Z0-9][A-Z0-9./-]*)'),('equipment',r'BRAND\s+AND\s+MODEL\s*:?\s*(.*?)\s+FLY\s+JIB')]:
         match=re.search(pattern,text,re.I|re.S)
-        if match and (key!='serial_number' or any(c.isdigit() for c in match[1])): fields[key]=re.sub(r'\s+',' ',match[1]).strip()
+        if match and (key!='serial_number' or match[1] != '2' and any(c.isdigit() for c in match[1])): fields[key]=re.sub(r'\s+',' ',match[1]).strip()
+    year=re.search(r'YEAR\s+OF\s+(?:MFG|MANUFACTURE|MANUFACTURING)\s*[:：]?\s*((?:18|19|20)\d{2})\b',text,re.I)
+    if year: fields['year_of_manufacture']=int(year[1])
     for gear,pat in [('Bow screw pin shackle',r'(?:bow|screw).*shackle'),('Webbing sling',r'webbing|polyester'),('Chain sling',r'chain\s+sling'),('Wire rope sling',r'wire\s+rope')]:
         if re.search(pat,text,re.I): fields['gear_type']=gear;break
     m=re.search(r'(\d+(?:\.\d+)?)\s*(?:metres?|meters?|m)\s*(?:long|length)|(?:length)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*m\b',text,re.I)

@@ -31,3 +31,19 @@ def test_multipage_log_and_snapshot_originals():
     pack={'generated_at':'2026-09-30T00:00:00Z','document_order':['lm_log','lg_log','doc1'],'snapshot':{'machine':rows[0],'items':[],'documents':[{'id':'doc1','original_filename':'certificate.pdf'}],'prepared_by':'QA User','warnings_acknowledged':False}}
     result=assemble(pack,{'doc1':(original,'application/pdf')});p=fitz.open(stream=result,filetype='pdf')
     assert len(p)==4 and 'Original LM version 1' in p[-1].get_text()
+
+
+def test_lm_footnote_is_not_serial_and_manufacture_year_is_labeled():
+    for label in ('DISTINCTIVE NO. 2 100330784', 'DISTINCTIVE NO.2\n100330784', 'DISTINCTIVE NO.²: 100330784', 'DISTINCTIVE NO.: 100330784', 'DISTINCTIVE NO. 23456789'):
+        serial='23456789' if '23456789' in label else '100330784'
+        fields=extract(label+' ENERGY SOURCE Diesel Engine YEAR OF MFG 2016 REGISTRATION DATE 29/05/2016')['fields']
+        assert fields['serial_number']==serial
+        assert fields['year_of_manufacture']==2016
+    assert 'serial_number' not in extract('DISTINCTIVE NO. 2 ENERGY SOURCE Diesel Engine')['fields']
+    assert 'year_of_manufacture' not in extract('Registration date 29/05/2016')['fields']
+
+
+def test_lm_pdf_includes_manufacture_year():
+    pdf=log_pdf('Lifting Machine Log',[{'machine_id':'LC-001','year_of_manufacture':2016}],LM,'QA User')
+    with fitz.open(stream=pdf,filetype='pdf') as doc:
+        assert 'Year of Mfg' in doc[0].get_text() and '2016' in doc[0].get_text()

@@ -95,3 +95,14 @@ def test_concurrent_movement_only_one_holder_wins():
 def test_anonymous_cannot_call_or_read_lifting_objects():
     assert 'permission denied' in run("begin;set local role anon;select lifting_can_read();rollback;",False)
     assert 'permission denied' in run("begin;set local role anon;select * from lifting_machines;rollback;",False)
+
+
+def test_manufacture_year_saved_and_old_client_renewal_preserves_it():
+    nd='30000000-0000-0000-0000-000000000009'
+    pre=setup().split('set local role')[0]+f"update lifting_machines set year_of_manufacture=2016 where id='{M1}';insert into lifting_documents(id,kind,original_filename,object_key,mime_type,file_size,checksum,created_by) values('{nd}','lm','renewal.pdf','originals/new','application/pdf',100,'hash','{UID}');set local role authenticated;set local request.jwt.claim.sub='{UID}';"
+    data={'confirmed':True,'machine_id':'LC1','lm_number':'LM563989N','vehicle_number':'XE1807Y','serial_number':'serial','examination_date':'2027-05-28','certificate_expiry':'2031-05-27','swl_kg':10400}
+    for year,expected in ((None,2016),(2017,2017)):
+        if year is not None: data['year_of_manufacture']=year
+        assert run(pre+f"select lifting_review('{nd}','{json.dumps(data)}','{M1}');select year_of_manufacture from lifting_machines where id='{M1}';rollback;").endswith(str(expected))
+    data['year_of_manufacture']=20165
+    assert 'check constraint' in run(pre+f"select lifting_review('{nd}','{json.dumps(data)}','{M1}');rollback;",False)
