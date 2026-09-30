@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from .domain import decorate
 
-LM = [('machine_id','Machine ID'),('lm_number','LM No.'),('vehicle_number','Vehicle'),('equipment','Equipment'),('swl_kg','Max SWL kg'),('examination_date','Exam date'),('validity_6','6 months'),('validity_12','12 months'),('certificate_expiry','Expiry'),('remarks','Remarks')]
+LM = [('machine_id','Machine ID'),('lm_number','LM No.'),('vehicle_number','Vehicle'),('equipment','Equipment'),('year_of_manufacture','Year of Mfg'),('swl_kg','Max SWL kg'),('examination_date','Exam date'),('validity_6','6 months'),('validity_12','12 months'),('certificate_expiry','Expiry'),('remarks','Remarks')]
 LG = [('lg_number','LG No.'),('gear_type','Gear type'),('size','Size'),('length','Length'),('swl_kg','SWL kg'),('examination_date','Exam date'),('validity_6','6 months'),('validity_12','12 months'),('certificate_expiry','Expiry'),('next_renewal','Next renewal'),('currently_with','Currently with'),('remarks','Remarks')]
 LOGO = Path(__file__).resolve().parents[3] / 'assets' / 'vortex-logo.png'
 
