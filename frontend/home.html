@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
+  <script src="js/attendance-completion.js?v=20261002-1"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||["main_sup","wshc_lead"].indexOf(r)!==-1};</script>
   <style>
@@ -162,6 +163,7 @@
               <div style="margin-top:7px"><span class="chip" id="mchip"></span></div>
               <select id="mrswitch" class="mrswitch" onchange="onRoleSwitch(this.value)" style="margin-top:10px;width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;font-size:13px;font-weight:700;background:#fff;color:#111"></select>
             </div>
+            <section id="ready-submissions" class="hidden" style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px" aria-live="polite"></section>
             <div class="mnav" id="mnav"></div>
             <div class="overviewbar"><div class="SECT" id="subgreet"></div><label class="desktop-only date-control">VIEW DATE <input id="home-date" type="date" onchange="changeHomeDate(this.value)"></label></div>
             <div class="desktop-only manager-only command-status">
@@ -418,14 +420,25 @@
         const ep=(d.evening_pending||d.pending_updates||[]).filter(nl), ed=(d.evening_completed||d.completed_updates||[]).filter(nl);
         document.getElementById("m-pend").textContent=mp.length?mp.join(", "):"None — all marked ✓";
         document.getElementById("m-done").textContent=md.length?md.join(", "):"None yet";
+        document.getElementById('e-pend').previousElementSibling.textContent='PENDING';
         document.getElementById("e-pend").textContent=ep.length?ep.join(", "):"None — all submitted ✓";
         document.getElementById("e-done").textContent=ed.length?ed.join(", "):"None yet";
         MPEND=mp; EPEND=ep; RDATE=d.date;
+        const currentStates=await savedSiteStates(RDATE), currentReady=(currentStates||[]).filter(s=>s.ready&&ep.includes(s.name));
+        const readyPanel=document.getElementById('ready-submissions');
+        readyPanel.classList.toggle('hidden',!currentReady.length);
+        readyPanel.innerHTML=`<b>Ready to submit · ${esc(fmtDMY(RDATE))}</b><p style="font-size:13px;margin-top:5px">End times are saved. Submit to complete attendance.</p>${submissionLinks(currentReady,RDATE)}`;
+        if(currentStates){const readyNames=new Set(currentReady.map(s=>s.name));document.getElementById('e-pend').textContent=ep.filter(n=>!readyNames.has(n)).join(', ')||'None';
+          document.getElementById('e-pend').previousElementSibling.textContent='INCOMPLETE';}
         let pd=d, prevOk=window.innerWidth<=900||!managerFollow;
         if(window.innerWidth>900&&managerFollow){const pdr=await vmmsApi("/api/v1/dashboard?date="+localISODate(-1));if(pdr.ok){pd=await pdr.json();prevOk=true;}}
         const pmp=prevOk?(pd.morning_pending||[]).filter(nl):[], pmd=prevOk?(pd.morning_completed||[]).filter(nl):[];
         const pep=prevOk?(pd.evening_pending||pd.pending_updates||[]).filter(nl):[], ped=prevOk?(pd.evening_completed||pd.completed_updates||[]).filter(nl):[];
         PMPEND=pmp; PEPEND=pep; PRDATE=prevOk?(pd.date||localISODate(-1)):localISODate(-1);
+        const previousStates=PRDATE===RDATE?currentStates:await savedSiteStates(PRDATE);
+        const previousReady=(previousStates||[]).filter(s=>s.ready&&pep.includes(s.name));
+        const previousReadyNames=new Set(previousReady.map(s=>s.name));
+        const incomplete=pep.filter(n=>!previousReadyNames.has(n));
         const actionCount=pmp.length+pep.length;
         const ds=document.getElementById("daily-status"), dsp=document.getElementById("daily-status-pill");
         if(ds) ds.textContent=prevOk?`Previous-day follow-up for ${fmtDMY(PRDATE)}: ${actionCount?actionCount+" updates are still pending. Copy a reminder below and post it in the supervisors’ WhatsApp group.":"all attendance and end-time updates are complete."}`:"Previous-day follow-up data is temporarily unavailable. Please refresh before sending reminders.";
@@ -437,13 +450,13 @@
         if(de) de.textContent=pep.length?`${ped.length}/${ped.length+pep.length} sites submitted`:"All sites submitted";
         const dmd=document.getElementById("desk-morning-dot"), ded=document.getElementById("desk-evening-dot");if(dmd) dmd.style.background=pmp.length?"#D97706":"#16A34A";if(ded) ded.style.background=pep.length?"#D97706":"#16A34A";
         const followDate=document.getElementById("desk-follow-date");if(followDate) followDate.textContent=fmtDMY(PRDATE);
-        const ex=document.getElementById("exceptions");if(ex){let eh="";if(pmp.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#D97706"></i>Previous attendance pending</span><span class="count">${pmp.length}</span></div>`;if(pep.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#C00000"></i>Previous end time pending</span><span class="count">${pep.length}</span></div>`;if(!eh)eh='<div class="mini-row"><span><i class="status-dot" style="background:#16A34A"></i>No previous-day exceptions</span><span class="count">✓</span></div>';ex.innerHTML=eh;}
+        const ex=document.getElementById("exceptions");if(ex){let eh="";if(pmp.length)eh+=`<div class="mini-row"><span><i class="status-dot" style="background:#D97706"></i>Previous attendance pending</span><span class="count">${pmp.length}</span></div>`;if(incomplete.length)eh+=`<div class="mini-row" data-incomplete="1"><span><i class="status-dot" style="background:#C00000"></i>${previousStates?'Previous attendance / end times incomplete':'Previous end time pending'}</span><span class="count">${incomplete.length}</span></div>`;if(previousReady.length)eh+=`<div class="mini-row"><span>Ready to submit · ${esc(fmtDMY(PRDATE))}</span><span class="count">${previousReady.length}</span></div>${submissionLinks(previousReady,PRDATE)}`;if(!eh)eh='<div class="mini-row"><span><i class="status-dot" style="background:#16A34A"></i>No previous-day exceptions</span><span class="count">✓</span></div>';ex.innerHTML=eh;}
         if(ex){
           ex.querySelectorAll(".mini-row").forEach(row=>{
-            const attendance=row.textContent.includes("attendance");
+            const attendance=row.textContent.includes("attendance")||row.dataset.incomplete==="1";
             const endtime=row.textContent.includes("end time");
             if(!attendance&&!endtime)return;
-            const names=attendance?pmp:pep;
+            const names=row.dataset.incomplete?incomplete:(attendance?pmp:pep);
             const one=names.length===1?"&site_name="+encodeURIComponent(names[0]):"";
             row.style.cursor="pointer";
             row.title=attendance?"Open pending attendance":"Open missing end times";
@@ -465,6 +478,13 @@
         const leaveCount=document.getElementById("home-leave-count");if(leaveCount)leaveCount.textContent=`Showing ${homeLL.length} of ${ll.length} workers`;
         if(leaveEmpty)leaveEmpty.style.display=ll.length?"none":"block";
       } else { document.getElementById("kpis").innerHTML='<p style="color:#9CA3AF">Manpower dashboard unavailable.</p>'; }
+    }
+    async function savedSiteStates(date){
+      try{const r=await vmmsApi('/api/v1/attendance?date='+encodeURIComponent(date));if(r.ok){const states=VCMSAttendanceCompletion.sites(await r.json());let pending=[];try{pending=JSON.parse(localStorage.getItem('vcms_attendance_pending_v1')||'[]')}catch(e){}return states.map(s=>({...s,ready:s.ready&&!pending.some(p=>p.site_id===s.id&&p.work_date===date)}));}}catch(e){}
+      return null;
+    }
+    function submissionLinks(states,date){
+      return states.map(s=>`<a href="attendance.html?${esc(new URLSearchParams({date,site_id:s.id,site_name:s.name}).toString())}" style="display:block;padding:10px 0;font-weight:700;color:var(--brand)">${esc(s.name)} · Submit End Times ›</a>`).join('');
     }
     async function loadTasks(){
       const box=document.getElementById("tasks-body");
