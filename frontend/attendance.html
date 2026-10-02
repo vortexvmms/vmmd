@@ -9,6 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
+  <script src="js/attendance-completion.js?v=20261002-1"></script>
   <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
@@ -81,6 +82,7 @@
 
   <main id="att-main" class="vcms-supervisor-main flex-1 max-w-md">
     <div id="banner" class="hidden rounded-xl p-3 mb-3 text-sm font-medium text-center"></div>
+    <section id="completion-panel" class="hidden rounded-xl p-4 mb-3 border bg-white" role="status" aria-live="polite"></section>
     <div id="submit-checklist"></div>
     <div id="att-kpis"></div>
     <div class="att-work"><div class="att-tools">
@@ -138,6 +140,7 @@
 
   <div class="vcms-mobile-actions">
     <div class="max-w-md mx-auto w-full">
+      <p id="completion-footer" class="text-sm font-bold mb-2 text-center" aria-live="polite"></p>
       <p class="text-sm text-gray-600 mb-2 text-center" id="hours-total">—</p>
       <div class="flex items-center gap-3">
         <button id="morning-btn" onclick="submitDay('morning')" class="vcms-btn vcms-btn-tertiary flex-1">
@@ -150,6 +153,15 @@
     </div>
   </div>
 
+  <dialog id="leave-dialog" aria-labelledby="leave-title" style="max-width:420px;width:calc(100% - 32px);border:0;border-radius:16px;padding:22px">
+    <h2 id="leave-title" class="text-lg font-bold">This day is not submitted</h2>
+    <p id="leave-copy" class="text-sm mt-3 mb-4"></p>
+    <div class="flex flex-col gap-3">
+      <button id="leave-submit" class="vcms-btn vcms-btn-primary">Submit now</button>
+      <button id="leave-anyway" class="vcms-btn vcms-btn-tertiary">Leave without submitting</button>
+      <button id="leave-stay" class="vcms-btn vcms-btn-tertiary">Keep reviewing</button>
+    </div>
+  </dialog>
   <!-- Group end-time bar: appears when workers are selected below. Set ONE end
        time for the whole selected group in a single save. -->
   <div id="groupbar" class="hidden fixed left-0 right-0 bottom-24 px-3 z-20">
@@ -188,7 +200,8 @@
     const SEL = new Set();   // allocation_ids selected for a group end-time apply
     let ATT_FILTER = "all", EVENING_MODE = false, AUTO_FILTER_DONE = false;
     const SAVE_QUEUE = new Map();
-    let SAVE_TIMER = null, SAVE_RUNNING = false;
+    let SAVE_TIMER = null, SAVE_RUNNING = false, SUBMIT_RUNNING = false;
+    let DISPLAY_CONTEXT = null, LEAVE_ACTION = null, ALLOW_LEAVE = false, DAY_CONFIRMED = false;
     const ATT_QUEUE_KEY = "vcms_attendance_pending_v1";
     let UNMATCHED_PENDING=[];
 
@@ -252,7 +265,7 @@
       ME = await r.json();
       initGroupChips();
       try { const h = await vmmsApi("/api/v1/holidays"); if (h.ok) (await h.json()).forEach(x => HOLIDAYS.add(x.holiday_date)); } catch (e) {}
-      document.getElementById("date").value = fmtDate(new Date());
+      document.getElementById("date").value = new URLSearchParams(location.search).get("date") || fmtDate(new Date());
       await loadDay();
     }
 
@@ -260,8 +273,8 @@
       SEL.clear();
       AUTO_FILTER_DONE=false;
       const date = document.getElementById("date").value;
-      let all=[];
-      try{const r=await vmmsApi(`/api/v1/attendance?date=${date}`);if(!r.ok)throw Error("load failed");all=await r.json();try{localStorage.setItem("vcms_att_day_"+date,JSON.stringify(all))}catch(e){}}
+      let all=[]; DAY_CONFIRMED=false;
+      try{const r=await vmmsApi(`/api/v1/attendance?date=${date}`);if(!r.ok)throw Error("load failed");all=await r.json();DAY_CONFIRMED=true;try{localStorage.setItem("vcms_att_day_"+date,JSON.stringify(all))}catch(e){}}
       catch(e){try{all=JSON.parse(localStorage.getItem("vcms_att_day_"+date)||"[]")}catch(x){}if(all.length)syncState("Offline copy loaded · changes will sync automatically","warn");}
       // HOME LEAVE workers are on leave — no end time to set, so hide that site here
       all = all.filter(x => (x.site_name || "").trim().toUpperCase() !== "HOME LEAVE");
@@ -275,6 +288,11 @@
       const prev = sel.value;
       sel.innerHTML = SITES.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
       if (prev && siteMap[prev]) sel.value = prev;
+      if (!DISPLAY_CONTEXT) {
+        const query=new URLSearchParams(location.search);
+        const target=SITES.find(x=>x.id===query.get('site_id')||x.name===query.get('site_name'));
+        if(target)sel.value=target.id;
+      }
       ROWS = all.filter(x => x.site_id === sel.value);
       render();
     }
@@ -283,7 +301,53 @@
     // Previously it fetched the whole date again on every site change.
     function switchSite(){ SEL.clear(); AUTO_FILTER_DONE=false; ROWS=ALL_ROWS.filter(x=>x.site_id===document.getElementById("site").value); render(); }
 
+    function completionStatus(){return VCMSAttendanceCompletion.status(ROWS, SAVE_QUEUE.size>0||SAVE_RUNNING||SUBMIT_RUNNING||!DAY_CONFIRMED);}
+    function updateCompletion(){
+      const state=completionStatus(), panel=document.getElementById('completion-panel');
+      panel.classList.toggle('hidden',!state.total||state.submitted);
+      document.getElementById('completion-footer').textContent=!state.total?'':state.submitted?'Attendance submitted ✓':state.ready?'End times saved · Submit to finish':state.unmarked?`${state.unmarked} worker(s) not marked`:state.missing?`${state.missing} end time(s) remaining`:'Confirming saved changes…';
+      if(state.submitted||!state.total)return;
+      if(state.ready){
+        panel.innerHTML='<b>All end times saved. Submit to complete today’s attendance.</b><p class="text-sm mt-2 mb-3">Saved end times are still pending until you submit this site and date.</p><button class="vcms-btn vcms-btn-primary" onclick="submitDay(&quot;evening&quot;)">Submit End Times</button>';
+      }else{
+        panel.textContent=state.unmarked?`${state.unmarked} worker(s) still need attendance marking.`:
+          state.missing?`End times saved · ${state.missing} worker(s) remaining.`:
+          'Waiting for saved end times to be confirmed before submission.';
+      }
+    }
+    function requestLeave(action){
+      if(SUBMIT_RUNNING)return;
+      const state=completionStatus();
+      if(ALLOW_LEAVE||state.submitted||!state.total||!state.ready&&!ROWS.some(x=>x.present&&x.end_time)){action();return;}
+      LEAVE_ACTION=action;
+      document.getElementById('leave-copy').textContent=state.ready?
+        'Your end times are saved, but this day is not submitted. Submit now to complete it.':
+        'This day is not submitted. Some attendance or end times are incomplete, or saves are waiting for confirmation. Keep reviewing before submitting.';
+      document.getElementById('leave-submit').disabled=!state.ready;
+      document.getElementById('leave-dialog').showModal();
+    }
+    document.getElementById('leave-stay').onclick=()=>{LEAVE_ACTION=null;document.getElementById('leave-dialog').close();};
+    document.getElementById('leave-anyway').onclick=()=>{const action=LEAVE_ACTION;LEAVE_ACTION=null;document.getElementById('leave-dialog').close();ALLOW_LEAVE=true;ALLOW_LEAVE=false;if(action)action();};
+    document.getElementById('leave-submit').onclick=async()=>{
+      const button=document.getElementById('leave-submit');button.disabled=true;
+      const ok=await submitDay('evening');
+      if(ok){const action=LEAVE_ACTION;LEAVE_ACTION=null;document.getElementById('leave-dialog').close();ALLOW_LEAVE=true;ALLOW_LEAVE=false;if(action)action();}
+      else{document.getElementById('leave-copy').textContent='Submission was not confirmed. Keep reviewing or try again. Your end times remain saved.';button.disabled=!completionStatus().ready;}
+    };
+    document.addEventListener('click',event=>{
+      if(event.target.closest('button.logout,button.vcms-app-logout')){event.preventDefault();event.stopImmediatePropagation();requestLeave(()=>{ALLOW_LEAVE=true;vmmsLogout();});return;}
+      const link=event.target.closest('a[href]');
+      if(!link||event.defaultPrevented||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||link.target==='_blank'||link.hasAttribute('download'))return;
+      const target=new URL(link.href,location.href);
+      if(target.origin!==location.origin||target.href===location.href||target.hash&&target.pathname===location.pathname)return;
+      event.preventDefault();requestLeave(()=>{ALLOW_LEAVE=true;location.href=target.href;});
+    },true);
+    addEventListener('beforeunload',event=>{
+      if(!ALLOW_LEAVE&&(completionStatus().ready||ROWS.some(x=>x.present&&x.end_time))&&!completionStatus().submitted){event.preventDefault();event.returnValue='';}
+    });
     function render() {
+      DISPLAY_CONTEXT={date:document.getElementById('date').value,site:document.getElementById('site').value};
+      updateCompletion();
       const list = document.getElementById("list");
       list.innerHTML = "";
       document.getElementById("empty").classList.toggle("hidden", ROWS.length > 0);
@@ -548,7 +612,7 @@
         batch.forEach(q=>{q.x._saving=true;if(!SAVE_QUEUE.has(q.x.allocation_id))SAVE_QUEUE.set(q.x.allocation_id,q)});persistPending();
         syncState(`Connection weak — ${SAVE_QUEUE.size} change${SAVE_QUEUE.size===1?"":"s"} waiting`,"err");
         SAVE_TIMER=setTimeout(flushSaves,5000);
-      }finally{SAVE_RUNNING=false;if(SAVE_QUEUE.size&&!SAVE_TIMER)SAVE_TIMER=setTimeout(flushSaves,500);}
+      }finally{SAVE_RUNNING=false;updateCompletion();if(SAVE_QUEUE.size&&!SAVE_TIMER)SAVE_TIMER=setTimeout(flushSaves,500);}
     }
 
     async function presentAll() {
@@ -676,6 +740,7 @@
     }
 
     async function submitDay(stage) {
+      if(SUBMIT_RUNNING)return false;
       const morning = stage === "morning";
       if(SAVE_QUEUE.size||SAVE_RUNNING){
         await flushSaves();
@@ -686,6 +751,10 @@
       }
       if(!morning){const pending=ROWS.filter(x=>x.present&&x.absence_type!=="class"&&!x.end_time);if(pending.length){setAttFilter("pending");toast(`${pending.length} present worker(s) still need an end time`,true);return;}}
       if (!morning && !confirm("Submit the end times and lock this day? After this, changes need a reason.")) return;
+      if(!morning&&ROWS.some(x=>!x.marked)){toast("Mark attendance for every worker before submitting",true);return false;}
+      SUBMIT_RUNNING=true;updateCompletion();
+      document.getElementById('submit-btn').disabled=true;
+      document.getElementById('morning-btn').disabled=true;
       try {
         const r = await vmmsApi("/api/v1/attendance/submit", {
           method: "POST",
@@ -695,8 +764,14 @@
         if (!r.ok) throw new Error(data.detail || "Could not submit");
         toast(morning ? `Morning attendance submitted — ${data.present}/${data.total} present`
                       : `Day submitted — ${data.submitted} workers locked`, true);
+        if(!morning){
+          ROWS.forEach(x=>x.submitted=true);
+          try{localStorage.setItem('vcms_att_day_'+document.getElementById('date').value,JSON.stringify(ALL_ROWS));}catch(e){}
+        }
         await loadDay();
-      } catch (ex) { toast(ex.message, true); }
+        return true;
+      } catch (ex) { toast(ex.message, true);return false; }
+      finally{SUBMIT_RUNNING=false;render();}
     }
 
     addEventListener("online",()=>{if(SAVE_QUEUE.size){syncState("Connection restored · syncing saved changes…","warn");clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(flushSaves,100);}});
@@ -752,8 +827,18 @@
     document.getElementById("tr-search").addEventListener("input", renderTransfer);
     document.getElementById("tr-modal").addEventListener("click", event => { if (event.target === event.currentTarget) closeTransfer(); });
     document.addEventListener("keydown", event => { if (event.key === "Escape" && !document.getElementById("tr-modal").classList.contains("hidden")) closeTransfer(); });
-    document.getElementById("date").addEventListener("change", loadDay);
-    document.getElementById("site").addEventListener("change", switchSite);
+    document.getElementById("date").addEventListener("change",()=>{
+      const next=document.getElementById('date').value;
+      if(!DISPLAY_CONTEXT){loadDay();return;}
+      document.getElementById('date').value=DISPLAY_CONTEXT.date;
+      requestLeave(()=>{document.getElementById('date').value=next;loadDay();});
+    });
+    document.getElementById("site").addEventListener("change",()=>{
+      const next=document.getElementById('site').value;
+      if(!DISPLAY_CONTEXT){switchSite();return;}
+      document.getElementById('site').value=DISPLAY_CONTEXT.site;
+      requestLeave(()=>{document.getElementById('site').value=next;switchSite();});
+    });
 
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
