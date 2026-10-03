@@ -1125,10 +1125,10 @@ class SubmitDay(BaseModel):
 
 async def _load_day(client, token, work_date: str, site_id: str | None):
     params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
-              "select": "id,site_id,worker_id,sites(site_name),workers(name,worker_code),"
+              "select": "id,site_id,worker_id,updated_at,sites(site_name),workers(name,worker_code),"
                         "attendance(id,present,start_time,end_time,end_next_day,"
                         "normal_hours,ot_hours,day_type,submitted_at,absence_type,"
-                        "shift_type,partial_leave_type,leave_portion,leave_value)"}
+                        "shift_type,partial_leave_type,leave_portion,leave_value,updated_at)"}
     if site_id:
         params["site_id"] = f"eq.{site_id}"
     r = await client.get(f"{REST}/allocations", params=params,
@@ -1148,6 +1148,8 @@ async def day_sheet(date: str, site_id: str = "",
             att = a.get("attendance") or None
             out.append({
                 "allocation_id": a["id"], "site_id": a["site_id"],
+                "allocation_updated_at": a.get("updated_at"),
+                "attendance_updated_at": att.get("updated_at") if att else None,
                 "site_name": (a.get("sites") or {}).get("site_name", "?"),
                 "worker_name": (a.get("workers") or {}).get("name", "?"),
                 "worker_code": (a.get("workers") or {}).get("worker_code", ""),
@@ -1170,6 +1172,51 @@ async def day_sheet(date: str, site_id: str = "",
         return sorted(out, key=lambda x: (x["site_name"], x["worker_name"]))
 
 
+class AttendanceRemoval(BaseModel):
+    allocation_id: uuid.UUID
+    reason: str
+    allocation_updated_at: datetime
+    attendance_updated_at: datetime | None = None
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value):
+        if value not in ("allocated_by_mistake", "not_scheduled"):
+            raise ValueError("Choose a removal reason")
+        return value
+
+
+@app.post("/api/v1/attendance/remove")
+async def remove_attendance_day(body: AttendanceRemoval, user: dict = Depends(get_current_user)):
+    if user["role"] not in ATTENDANCE_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    require_service()
+    async with shared_client() as client:
+        # Establish ownership with the user's RLS-scoped read before any service write.
+        r = await client.get(f"{REST}/allocations",
+            params={"id": f"eq.{body.allocation_id}", "select": "id"},
+            headers=supabase_headers(user["token"]))
+        if r.status_code != 200:
+            raise HTTPException(status_code=503, detail="Could not verify this allocation. Please retry.")
+        if not r.json():
+            raise HTTPException(status_code=404, detail="Allocation not found (or not your site)")
+        r = await client.post(f"{REST}/rpc/remove_attendance_day", headers=service_headers(), json={
+            "p_allocation_id": str(body.allocation_id), "p_user_id": user["user_id"],
+            "p_reason": body.reason, "p_allocation_updated_at": body.allocation_updated_at.isoformat(),
+            "p_attendance_updated_at": body.attendance_updated_at.isoformat() if body.attendance_updated_at else None,
+        })
+        if r.status_code != 200:
+            data = r.json()
+            code = data.get("code") if isinstance(data, dict) else None
+            status = {"42501": 403, "P0002": 404, "40001": 409, "22023": 400}.get(code, 503)
+            detail = data.get("message") if status != 503 else "Removal was not confirmed. Reload the day before retrying."
+            raise HTTPException(status_code=status, detail=detail)
+        data = r.json()
+        if not isinstance(data, dict) or not data.get("ok"):
+            raise HTTPException(status_code=503, detail="Removal was not confirmed. Reload the day before retrying.")
+        return data
+
+
 @app.patch("/api/v1/attendance/mark")
 async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current_user)):
     if user["role"] not in ATTENDANCE_ROLES:
@@ -1183,7 +1230,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         # the allocation (RLS scopes site_sup to own sites automatically)
         ra = await client.get(
             f"{REST}/allocations",
-            params={"id": f"eq.{body.allocation_id}",
+            params={"id": f"eq.{body.allocation_id}", "status": "eq.allocated",
                     "select": "id,work_date,site_id,worker_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at,absence_type,shift_type,partial_leave_type,leave_portion,leave_value)"},
             headers=supabase_headers(user["token"]),
         )
@@ -1592,7 +1639,7 @@ async def transfer_worker(body: TransferBody, user: dict = Depends(get_current_u
         r = await client.get(
             f"{REST}/allocations",
             params={"work_date": f"eq.{body.work_date}", "worker_id": f"eq.{body.worker_id}",
-                    "select": "id,site_id,sites(site_name),workers(name),attendance(id,submitted_at)"},
+                    "status": "eq.allocated", "select": "id,site_id,sites(site_name),workers(name),attendance(id,submitted_at)"},
             headers=supabase_headers(user["token"]))
         rows = r.json() if r.status_code == 200 else []
 
@@ -2750,10 +2797,26 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         project_rows = rp.json() if rp.status_code == 200 else []
 
         allocation_rows, attendance_by_allocation = [], {}
-        # DPR manpower is already a complete prepared resource record. Only use
-        # attendance as a fallback when the whole month has no DPRs (for example
-        # the completed DLP job on 08/08). This keeps normal report generation fast.
-        if not reports:
+        cancelled, offset = [], 0
+        while True:
+            rc = await client.get(f"{REST}/allocations",
+                params={"status": "eq.cancelled",
+                        "and": f"(work_date.gte.{start},work_date.lte.{end})",
+                        "select": "work_date,site_id,worker_id,workers(name)",
+                        "order": "id.asc", "limit": 1000, "offset": offset}, headers=rollup_headers)
+            if rc.status_code != 200:
+                raise HTTPException(status_code=503, detail="Could not verify removed workers for Resource Summary")
+            batch = rc.json(); cancelled.extend(batch)
+            if len(batch) < 1000:
+                break
+            offset += 1000
+        removed_worker_days = {(int(x["work_date"].split("-")[2]), ((x.get("workers") or {}).get("name") or "").strip().lower()) for x in cancelled if x["site_id"] == site_id}
+        affected_worker_days = {(x["work_date"], x["worker_id"]) for x in cancelled}
+
+        # Preserve prepared DPRs. Only overlay the current attendance for workers
+        # whose day was corrected by cancellation (including remaining split sites),
+        # or use attendance as the existing fallback when the month has no DPRs.
+        if not reports or affected_worker_days:
             ra = await client.get(
                 f"{REST}/allocations",
                 params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
@@ -2764,6 +2827,8 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             if ra.status_code != 200:
                 raise HTTPException(status_code=500, detail="Could not load Resource Summary allocation data")
             allocation_rows = ra.json()
+            if reports:
+                allocation_rows = [x for x in allocation_rows if (x["work_date"], x["worker_id"]) in affected_worker_days]
             ids = [x.get("id") for x in allocation_rows if x.get("id")]
             if ids:
                 ratt = await client.get(
@@ -2836,7 +2901,7 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
             no = int(_rs_number(w.get("no"), 1) or 1)
             # Operational attendance above is authoritative. Keep only DPR-only
             # entries such as PM/CM/visitors who have no worker allocation.
-            if name and (d, name.lower()) in attendance_workers_by_day:
+            if name and ((d, name.lower()) in attendance_workers_by_day or (d, name.lower()) in removed_worker_days):
                 continue
             if name:
                 a = att.setdefault(name, {"position": role, "days": {}, "total": 0.0})

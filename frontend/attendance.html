@@ -193,6 +193,20 @@
   <div id="toast" class="vcms-toast hidden"></div>
   <div id="sync-state" class="hidden" aria-live="polite"></div>
 
+  <dialog id="remove-dialog" class="rounded-2xl p-5 w-[min(92vw,440px)] shadow-xl" aria-labelledby="remove-title">
+    <form id="remove-form">
+      <h2 id="remove-title" class="text-lg font-bold"></h2>
+      <p id="remove-context" class="text-sm text-gray-500 mt-1"></p>
+      <p id="remove-record" class="text-sm mt-3 p-3 bg-amber-50 rounded-lg"></p>
+      <p class="text-sm mt-3">This removes only this day's allocation. The original attendance and reason stay in history. It will not count as absence or unpaid leave. Other dates are unchanged.</p>
+      <label for="remove-reason" class="block text-sm font-semibold mt-4">Why are you removing this worker?</label>
+      <select id="remove-reason" required class="w-full border rounded-lg p-3 mt-1">
+        <option value="">Choose a reason</option><option value="allocated_by_mistake">Allocated by mistake</option><option value="not_scheduled">Not scheduled to work today</option>
+      </select>
+      <p id="remove-error" role="alert" class="text-sm text-red-700 mt-2"></p>
+      <div class="flex gap-2 mt-4"><button id="remove-cancel" type="button" class="flex-1 border rounded-lg p-3">Keep worker</button><button id="remove-confirm" type="submit" class="flex-1 bg-red-700 text-white rounded-lg p-3">Remove from this day</button></div>
+    </form>
+  </dialog>
   <script>
     requireLogin();
 
@@ -465,7 +479,9 @@
                  <input type="time" step="900" value="${x.end_time || ""}"
                         class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
                  </div>`}
-          </div>`;
+          </div>
+          <div class="mt-3 border-t pt-2"><button type="button" class="remove-day text-xs font-semibold text-red-700 underline py-2">Remove from this day</button></div>`;
+        div.querySelector('.remove-day').addEventListener('click',()=>openRemoval(x));
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
         const selcb = div.querySelector(".sel-cb");
@@ -552,11 +568,53 @@
     document.getElementById("start-bulk").addEventListener("change",startReasonState);
     document.getElementById("start-dialog").addEventListener("cancel",event=>{event.preventDefault();closeStart();});
 
+    let REMOVE_ROW=null,REMOVE_RUNNING=false,REMOVE_REVIEWING=false;
+    async function openRemoval(x){
+      if(REMOVE_REVIEWING||REMOVE_ROW)return;
+      if(!navigator.onLine||!DAY_CONFIRMED||!x.allocation_updated_at){toast("Connect and reload the day before removing a worker",true);return;}
+      if(SAVE_RUNNING||SAVE_QUEUE.size||SUBMIT_RUNNING){toast("Wait until attendance changes are saved before removing",true);return;}
+      REMOVE_REVIEWING=true;
+      try{await loadDay();}finally{REMOVE_REVIEWING=false;}
+      if(!DAY_CONFIRMED){toast('Could not verify attendance. Reconnect and reload.',true);return;}
+      x=ALL_ROWS.find(row=>row.allocation_id===x.allocation_id);
+      if(!x){toast('This worker is no longer allocated for this day.',true);return;}
+      REMOVE_ROW=x;
+      document.getElementById('remove-title').textContent=`Remove ${x.worker_code} · ${x.worker_name}?`;
+      document.getElementById('remove-context').textContent=`${document.getElementById('date').value} · ${x.site_name}`;
+      document.getElementById('remove-record').textContent=x.marked?
+        `Recorded: ${x.present?'Present':'Not present'} · ${x.start_time||'08:00'}–${x.end_time||'no end time'} · Normal ${x.normal_hours||0}h · OT ${x.ot_hours||0}h${x.submitted?' · Submitted':''}. These hours or leave will no longer count for this day.`:
+        'No attendance has been marked for this worker.';
+      document.getElementById('remove-reason').value='';document.getElementById('remove-error').textContent='';
+      document.getElementById('remove-dialog').showModal();
+    }
+    function closeRemoval(){if(!REMOVE_RUNNING){document.getElementById('remove-dialog').close();REMOVE_ROW=null;}}
+    document.getElementById('remove-cancel').addEventListener('click',closeRemoval);
+    document.getElementById('remove-dialog').addEventListener('cancel',e=>{e.preventDefault();closeRemoval();});
+    document.getElementById('remove-form').addEventListener('submit',async event=>{
+      event.preventDefault();if(REMOVE_RUNNING||!REMOVE_ROW)return;
+      const error=document.getElementById('remove-error');
+      if(SAVE_RUNNING||SAVE_QUEUE.size||SUBMIT_RUNNING){error.textContent='Wait until attendance changes are saved.';return;}
+      const reason=document.getElementById('remove-reason').value;if(!reason)return;
+      const x=REMOVE_ROW,date=document.getElementById('date').value;
+      REMOVE_RUNNING=true;document.getElementById('remove-confirm').disabled=true;
+      try{
+        const r=await vmmsApi('/api/v1/attendance/remove',{method:'POST',body:JSON.stringify({allocation_id:x.allocation_id,reason,allocation_updated_at:x.allocation_updated_at,attendance_updated_at:x.attendance_updated_at||null})});
+        const data=await r.json();if(!r.ok||!data.ok)throw Error(data.detail||'Removal was not confirmed. Reload the day.');
+        SAVE_QUEUE.delete(x.allocation_id);persistPending();SEL.delete(x.allocation_id);
+        ALL_ROWS=ALL_ROWS.filter(row=>row.allocation_id!==x.allocation_id);ROWS=ROWS.filter(row=>row.allocation_id!==x.allocation_id);
+        // Discard cached hours for the whole day: other sites may have recalculated hours.
+        localStorage.removeItem('vcms_att_day_'+date);
+        REMOVE_RUNNING=false;closeRemoval();render();await loadDay();
+        toast(DAY_CONFIRMED?'Removed from this day. Original record kept in history.':'Removed. Reconnect and reload to refresh remaining hours.',true,DAY_CONFIRMED);
+      }catch(e){error.textContent=e.message;}
+      finally{REMOVE_RUNNING=false;document.getElementById('remove-confirm').disabled=false;}
+    });
+
     // Optimistic save: update the row on screen immediately, then save in the
     // background. No full re-fetch, so tapping a time / present / reason feels
     // instant instead of waiting ~1s for two network round-trips each tap.
     async function mark(x, changes, div) {
-      if(x._saving) return;                    // prevent rapid double-taps
+      if(x._saving||REMOVE_RUNNING||REMOVE_ROW) return;                    // prevent rapid double-taps
       let reason = null;
       if (x.submitted) {
         reason = prompt("This day is already submitted. Reason for the change (required, goes to the audit log):");
