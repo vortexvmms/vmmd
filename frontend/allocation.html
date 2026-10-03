@@ -35,6 +35,39 @@
       body>div.fixed.bottom-0>div{max-width:none!important;padding-left:24px;padding-right:24px}
     }
     @media(min-width:1500px){.alloc-workspace{grid-template-columns:minmax(0,1fr) 330px}#list{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
+
+    .desktop-only{display:none}
+    .desktop-only[hidden]{display:none!important}
+    @media(min-width:900px){
+      .desktop-only{display:block}
+      .vcms-page-header{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 24px!important}
+      .vcms-page-header__row{grid-column:1;min-width:0}.vcms-page-header__row h1{font-size:20px}
+      #allocation-tabs{grid-column:2;grid-row:1;margin:0!important;width:360px!important}
+      .vcms-page-toolbar{grid-column:1 / -1;margin:0!important;padding:0!important;display:flex;gap:10px}
+      .vcms-page-toolbar .vcms-control{height:36px;min-height:36px;max-width:260px}
+      #alloc-main{padding-top:12px}.alloc-kpis{grid-template-columns:repeat(6,minmax(0,1fr))}.alloc-kpi{padding:6px 12px;border-top-color:#dce1e8;box-shadow:none}.alloc-kpi b{font-size:20px}
+      .alloc-side h2{background:#253247!important;color:#fff!important}
+      #list.desktop-list{display:block!important}
+      .desktop-table-wrap{overflow-x:auto;background:#fff;border:1px solid #dce1e8;border-radius:10px;margin-bottom:12px}
+      .desktop-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+      .desktop-table th{text-align:left;background:#f1f5f9;color:#334155;padding:10px 12px}
+      .desktop-table td{padding:9px 12px;border-top:1px solid #e5e7eb;vertical-align:middle;overflow-wrap:anywhere}
+      .desktop-table th:nth-child(1){width:12%}.desktop-table th:nth-child(2){width:27%}.desktop-table th:nth-child(3){width:21%}.desktop-table th:nth-child(4){width:25%}.desktop-table th:nth-child(5){width:15%}
+      .desktop-table select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#172033}
+      .desktop-table tr.edited{background:#fffbeb}.desktop-table tr.edited td:first-child{box-shadow:inset 3px 0 #d97706}
+      .desktop-section-title{font-weight:700;margin:12px 0 8px;color:#172033;display:flex;justify-content:space-between;gap:12px}
+      .desktop-status{display:inline-block;padding:3px 7px;border-radius:5px;background:#f1f5f9;color:#475569;font-size:12px}
+      .desktop-status.pending{background:#fef3c7;color:#92400e}.desktop-status.conflict{background:#fee2e2;color:#991b1b}.desktop-status.assigned{background:#dcfce7;color:#166534}
+      .desktop-site-panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+      .desktop-site-panels .desktop-table{table-layout:auto}.desktop-site-panels .desktop-table th{width:auto}
+      #desktop-review{border:1px solid #94a3b8;padding:8px 12px;border-radius:8px;color:#172033;background:white;font-weight:700;margin-right:12px}
+      #desktop-review-panel{padding:14px;background:#fff;border:1px solid #d97706;border-radius:10px;margin-bottom:12px}
+      .desktop-request-tools{display:flex;justify-content:space-between;align-items:center;margin:12px 0;gap:12px}
+      .desktop-request-tools button{flex-shrink:0;max-width:280px;padding:9px 12px;border-radius:8px;background:#173b75;color:white;font-weight:700}
+      @media(max-width:1199px){.alloc-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.alloc-workspace{grid-template-columns:minmax(0,1fr)}.alloc-side{position:static}.vcms-page-header{grid-template-columns:minmax(0,1fr)!important}#allocation-tabs{grid-column:1;grid-row:auto;width:100%!important}}
+      @media(max-width:1499px){.desktop-site-panels{grid-template-columns:1fr}}
+      @media(min-width:1200px) and (max-width:1499px){.alloc-workspace{grid-template-columns:minmax(0,1fr) 230px}}
+    }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -98,6 +131,7 @@
               class="filt hidden border border-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap">Allocated to this site</button>
     </div>
 
+    <section id="desktop-review-panel" class="desktop-only" hidden aria-label="Unsaved allocation changes"></section>
     <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
     </div><aside class="alloc-side"><h2>Allocation exceptions</h2><div id="alloc-exceptions"></div></aside></div>
@@ -106,6 +140,7 @@
   <div class="vcms-mobile-actions">
     <div class="vcms-mobile-actions__inner max-w-md md:max-w-6xl">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 selected</p>
+      <button id="desktop-review" class="desktop-only" type="button" onclick="toggleDesktopReview()" hidden>Review changes</button>
       <button id="save" onclick="save()" class="vcms-btn vcms-btn-primary">
         Save All
       </button>
@@ -191,7 +226,7 @@
     function setMode(m) {
       MODE = m;
       applyModeChrome();
-      snapshotAssign();          // all edit modes now share the ASSIGN model
+      if (!desktopLayout.matches) snapshotAssign(); // Preserve desktop drafts while changing views.
       render();
     }
 
@@ -242,6 +277,7 @@
       else renderWorker();
       updateStatus();
       updateDesktopSummary();
+      if (desktopLayout.matches) renderDesktop();
     }
 
     function updateDesktopSummary(){
@@ -750,8 +786,83 @@
     let searchTimer=null;
     document.getElementById("search").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180);});
 
+
+    const desktopLayout = window.matchMedia('(min-width:900px)');
+    let desktopReviewOpen = false;
+    desktopLayout.addEventListener('change', () => { if (ME) render(); });
+    function toggleDesktopReview(){ desktopReviewOpen = !desktopReviewOpen; render(); }
+    function desktopWorker(id){
+      return WORKERS.find(w => String(w.id) === String(id)) || (() => { const r=REQROWS.find(x=>String(x.worker_id)===String(id)); return r ? {id:r.worker_id,name:r.worker_name,worker_code:r.worker_code,status:'unavailable'} : null; })();
+    }
+    function desktopTable(workers, compact=false){
+      const wrap=document.createElement('div'); wrap.className='desktop-table-wrap';
+      const table=document.createElement('table'); table.className='desktop-table';
+      table.innerHTML=`<thead><tr><th>Code</th><th>Worker name</th>${compact?'':'<th>Requested site</th>'}<th>Assigned site</th><th>Status</th></tr></thead><tbody></tbody>`;
+      const body=table.querySelector('tbody');
+      workers.forEach(w=>{
+        const cur=ASSIGN[w.id]||'', changed=cur!==(ORIG[w.id]||''), req=REQANY[w.id]||[];
+        const disabled=w.status!=='active';
+        const status=disabled?'Unavailable':req.length>1?'Multi-site request':changed?'Unsaved':cur?'Assigned':'Pending';
+        const cls=disabled?'':req.length>1?'conflict':changed?'pending':cur?'assigned':'pending';
+        const row=document.createElement('tr'); row.className=changed?'edited':'';
+        row.innerHTML=`<td>${esc(w.worker_code)}</td><td>${esc(w.name)}</td>${compact?'':`<td>${esc(req.join(', ')||'—')}</td>`}<td><select aria-label="Assigned site for ${esc(w.worker_code)} ${esc(w.name)}" ${disabled?'disabled':''}>${siteOptions(cur)}</select></td><td><span class="desktop-status ${cls}">${status}</span></td>`;
+        row.querySelector('select').addEventListener('change',e=>{ASSIGN[w.id]=e.target.value;render();});
+        body.appendChild(row);
+      });
+      if(!workers.length) body.innerHTML=`<tr><td colspan="${compact?4:5}">No workers in this group.</td></tr>`;
+      wrap.appendChild(table);return wrap;
+    }
+    function desktopHeading(container,title,detail=''){
+      const h=document.createElement('h2');h.className='desktop-section-title';h.innerHTML=`<span>${esc(title)}</span><span>${esc(detail)}</span>`;container.appendChild(h);
+    }
+    function renderDesktop(){
+      const list=document.getElementById('list');
+      const reminders=MODE==='requests'?[...list.children].slice(0, SITE_OFF.size?2:1):[];
+      list.innerHTML='';list.className='desktop-list';
+      document.getElementById('empty').classList.add('hidden');
+      const active=WORKERS.filter(w=>w.status==='active').sort((a,b)=>a.name.localeCompare(b.name));
+      const q=document.getElementById('search').value.trim().toLowerCase();
+      const visible=active.filter(w=>(!q||w.name.toLowerCase().includes(q)||(w.worker_code||'').toLowerCase().includes(q))&&(!FILTER.unalloc||!ASSIGN[w.id])&&(!FILTER.multi||(REQANY[w.id]||[]).length>1)&&(!FILTER.allochere||ASSIGN[w.id]===document.getElementById('site').value));
+      if(MODE==='requests'){
+        const covered=REQROWS.filter(r=>ASSIGN[r.worker_id]===r.site_id).length;
+        document.getElementById('summary').textContent=REQROWS.length?`${covered}/${REQROWS.length} requested workers allocated · ${REQROWS.length-covered} pending`:'No requests for this date';
+        reminders.forEach(x=>list.appendChild(x));
+        const tools=document.createElement('div');tools.className='desktop-request-tools';
+        tools.innerHTML='<span>Assign workers within each requested site. Multi-site requests need a decision.</span><button type="button">Allocate all to requested site</button>';
+        tools.querySelector('button').addEventListener('click',allocateAllRequested);list.appendChild(tools);
+        Object.keys(REQBYSITE).sort((a,b)=>siteName(a).localeCompare(siteName(b))).forEach(sid=>{
+          const workers=[...REQBYSITE[sid]].map(desktopWorker).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+          const got=workers.filter(w=>ASSIGN[w.id]===sid).length;
+          desktopHeading(list,siteName(sid),`${got}/${workers.length} allocated · ${workers.length-got} pending`);
+          list.appendChild(desktopTable(workers));
+        });
+        if(!REQROWS.length) desktopHeading(list,'No requests for this date');
+      }else if(MODE==='site'){
+        const sid=document.getElementById('site').value, req=REQBYSITE[sid]||new Set();
+        const here=visible.filter(w=>ASSIGN[w.id]===sid||req.has(w.id));
+        const available=visible.filter(w=>!ASSIGN[w.id]&&!req.has(w.id));
+        const panels=document.createElement('div');panels.className='desktop-site-panels';
+        [[`${siteName(sid)} — assigned / requested`,here],['Available workers',available]].forEach(([label,workers])=>{const panel=document.createElement('section');desktopHeading(panel,label,`${workers.length} workers`);panel.appendChild(desktopTable(workers,true));panels.appendChild(panel);});
+        list.appendChild(panels);
+        const elsewhere=visible.filter(w=>ASSIGN[w.id]&&ASSIGN[w.id]!==sid&&!req.has(w.id));
+        if(elsewhere.length){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent=`Workers at other sites (${elsewhere.length}) — expand to reassign`;details.appendChild(summary);details.appendChild(desktopTable(elsewhere));list.appendChild(details);}
+      }else{
+        list.appendChild(desktopTable(visible));
+        const leave=WORKERS.filter(w=>w.status==='on_leave');
+        if(leave.length&&!q&&!FILTER.unalloc&&!FILTER.multi){const d=document.createElement('details');d.innerHTML=`<summary>Home leave — not allocatable (${leave.length})</summary>`;d.appendChild(desktopTable(leave));list.appendChild(d);}
+      }
+      const changed=Object.keys(ASSIGN).filter(id=>ASSIGN[id]!==ORIG[id]);
+      const review=document.getElementById('desktop-review'),panel=document.getElementById('desktop-review-panel');
+      review.hidden=!changed.length;panel.hidden=!changed.length||!desktopReviewOpen;
+      panel.innerHTML='<h2 class="desktop-section-title">Review unsaved changes</h2>';
+      changed.forEach(id=>{const w=desktopWorker(id);if(!w)return;const p=document.createElement('p');p.textContent=`${w.worker_code} · ${w.name}: ${ORIG[id]?siteName(ORIG[id]):'Not working'} → ${ASSIGN[id]?siteName(ASSIGN[id]):'Not working'}`;panel.appendChild(p);});
+      if(changed.length) document.getElementById('selcount').textContent=`${changed.length} unsaved change${changed.length===1?'':'s'}`;
+      else if(MODE==='site') document.getElementById('selcount').textContent='No changes yet';
+    }
+
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
 </html>
+
