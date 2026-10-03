@@ -18,7 +18,7 @@ declare
   dtype text;
   recalculated jsonb := '[]'::jsonb;
 begin
-  if p_reason not in ('allocated_by_mistake','not_scheduled') then
+  if p_reason is null or p_reason not in ('allocated_by_mistake','not_scheduled') then
     raise exception 'Choose a removal reason' using errcode='22023';
   end if;
   select role into actor_role from public.users where id=p_user_id and status='active';

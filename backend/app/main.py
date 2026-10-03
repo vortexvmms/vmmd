@@ -2817,28 +2817,30 @@ async def resource_summary(site_id: str, month: str, user: dict = Depends(get_cu
         # whose day was corrected by cancellation (including remaining split sites),
         # or use attendance as the existing fallback when the month has no DPRs.
         if not reports or affected_worker_days:
-            ra = await client.get(
-                f"{REST}/allocations",
-                params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
-                        "and": f"(work_date.gte.{start},work_date.lte.{end})",
-                        "select": "id,work_date,worker_id,workers(name,trade)",
-                        "order": "work_date.asc"},
-                headers=rollup_headers)
-            if ra.status_code != 200:
-                raise HTTPException(status_code=500, detail="Could not load Resource Summary allocation data")
-            allocation_rows = ra.json()
+            allocation_rows, offset = [], 0
+            while True:
+                ra = await client.get(f"{REST}/allocations",
+                    params={"site_id": f"eq.{site_id}", "status": "eq.allocated",
+                            "and": f"(work_date.gte.{start},work_date.lte.{end})",
+                            "select": "id,work_date,worker_id,workers(name,trade)",
+                            "order": "work_date.asc,id.asc", "limit": 1000, "offset": offset},
+                    headers=rollup_headers)
+                if ra.status_code != 200:
+                    raise HTTPException(status_code=500, detail="Could not load Resource Summary allocation data")
+                batch = ra.json(); allocation_rows.extend(batch)
+                if len(batch) < 1000:
+                    break
+                offset += 1000
             if reports:
                 allocation_rows = [x for x in allocation_rows if (x["work_date"], x["worker_id"]) in affected_worker_days]
             ids = [x.get("id") for x in allocation_rows if x.get("id")]
-            if ids:
-                ratt = await client.get(
-                    f"{REST}/attendance",
-                    params={"allocation_id": f"in.({','.join(ids)})",
-                            "select": "allocation_id,present,normal_hours,ot_hours"},
-                    headers=rollup_headers)
+            for offset in range(0, len(ids), 150):
+                ratt = await client.get(f"{REST}/attendance",
+                    params={"allocation_id": f"in.({','.join(ids[offset:offset+150])})",
+                            "select": "allocation_id,present,normal_hours,ot_hours"}, headers=rollup_headers)
                 if ratt.status_code != 200:
                     raise HTTPException(status_code=500, detail="Could not load Resource Summary attendance")
-                attendance_by_allocation = {x["allocation_id"]: x for x in ratt.json()}
+                attendance_by_allocation.update({x["allocation_id"]: x for x in ratt.json()})
       print(f"[resource-summary] source complete reports={len(reports)} allocations={len(allocation_rows)}", flush=True)
     except HTTPException:
       raise
