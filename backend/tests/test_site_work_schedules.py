@@ -76,3 +76,31 @@ def test_new_attendance_uses_site_policy_and_snapshots_it(monkeypatch):
     result=asyncio.run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',present=True,shift_type='day',start_time='07:00',end_time='16:30'),{'role':'site_sup','token':'test','user_id':'u1'}))
     assert (result['normal_hours'],result['ot_hours'])==(8,1)
     assert writes[0]['start_time']=='07:00' and writes[0]['work_schedule']==PCS
+
+
+def test_bulk_end_keeps_site_policy_and_recalculates_workers_concurrently(monkeypatch):
+    import asyncio, json, httpx
+    rows=[{'id':str(i),'worker_id':'w'+str(i),'attendance':{'id':'t'+str(i),'present':True,'submitted_at':None,'start_time':'07:00','work_schedule':PCS}} for i in range(3)]
+    writes=[];active=0;max_active=0
+    def transport(req):
+        payload=json.loads(req.content);writes.append(payload);return httpx.Response(200,json=[payload])
+    client=httpx.AsyncClient(transport=httpx.MockTransport(transport))
+    class Context:
+        async def __aenter__(self):return client
+        async def __aexit__(self,*args):pass
+    async def load(*args):return rows
+    async def unlocked(*args):return False
+    async def daytype(*args):return 'WD'
+    async def audit(*args):pass
+    async def recompute(*args):
+        nonlocal active,max_active
+        assert len(writes)==3  # shared daily quotas must see every saved segment
+        active+=1;max_active=max(max_active,active)
+        await asyncio.sleep(.01)
+        active-=1
+        return {}
+    for name,value in [('REST','https://test.supabase.co/rest/v1'),('shared_client',Context),('_load_day',load),('month_locked',unlocked),('get_day_type',daytype),('audit',audit),('recompute_worker_day',recompute)]:monkeypatch.setattr(main,name,value)
+    result=asyncio.run(main.bulk_end(main.BulkEnd(work_date='2026-10-05',site_id='s1',end_time='16:30'),{'role':'site_sup','token':'test','user_id':'u1'}))
+    assert result['updated']==3 and result['ok']
+    assert all((p['normal_hours'],p['ot_hours'])==(8,1) for p in writes)
+    assert max_active==3

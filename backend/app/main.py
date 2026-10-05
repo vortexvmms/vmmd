@@ -1539,6 +1539,7 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
             saves.append((a["id"], save_end_time(a, att, payload)))
 
         results = await asyncio.gather(*(job for _, job in saves), return_exceptions=True)
+        saved_workers = set()
         for (allocation_id, _), result in zip(saves, results):
             if isinstance(result, Exception):
                 failed.append(allocation_id)
@@ -1550,12 +1551,14 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
             if saved:
                 updated += 1
                 a = next(x for x in rows if x["id"] == allocation_id)
-                try:
-                    await asyncio.wait_for(recompute_worker_day(client, user["token"], body.work_date, a["worker_id"], day_type), timeout=1.5)
-                except Exception:
-                    pass  # The verified end-time write must not become a false failed save.
+                saved_workers.add(a["worker_id"])
             else:
                 failed.append(allocation_id)
+        # Recalculate after all writes, concurrently and once per worker. A big
+        # site's response must not wait for a sequential per-worker network loop.
+        await asyncio.gather(*(asyncio.wait_for(
+            recompute_worker_day(client, user["token"], body.work_date, worker_id, day_type), timeout=1.5)
+            for worker_id in saved_workers), return_exceptions=True)
         try:
             await audit(client, user, "bulk_end", "attendance",
                         f"{body.work_date}:{body.site_id}", None,
