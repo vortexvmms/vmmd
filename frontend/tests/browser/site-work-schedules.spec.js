@@ -28,3 +28,12 @@ test('site rules can be edited without horizontal overflow',async({page},info)=>
 test('attendance day mode uses site start and offers scheduled finish',async({page},info)=>{
  const writes=await fixture(page);await page.goto('/attendance.html?date=2026-10-05&site_id=s1');await expect(page.locator('.worker-card')).toHaveCount(1);if(info.project.name==='mobile-safari'){await expect(page.locator('.quick-time[data-t="16:30"]')).toBeVisible();await page.locator('.card-options').click();}else{await expect(page.locator('.tchip[data-t="16:30"]')).toBeVisible();}await page.locator('.mode-day').click();await expect.poll(()=>writes.length).toBeGreaterThan(0);expect(writes[0].changes[0].start_time).toBe('07:00');
 });
+
+test('Sites editor fetches current rules even when a previous page cached old defaults',async({page})=>{
+ await fixture(page);
+ await page.addInitScript(()=>localStorage.setItem('vmms_ref_cache',JSON.stringify({'/api/v1/sites':{t:Date.now(),b:JSON.stringify([{id:'s1',site_code:'PCS-GBM',site_name:'PCS-GBM',status:'active',supervisors:[]}])}})));
+ await page.goto('/sites.html');await page.getByText('PCS-GBM',{exact:true}).click();
+ await expect(page.locator('#schedule-start_time')).toHaveValue('07:00');
+ await expect(page.locator('#schedule-lunch_start')).toHaveValue('11:30');
+ await expect(page.locator('#schedule-end_time')).toHaveValue('16:30');
+});
