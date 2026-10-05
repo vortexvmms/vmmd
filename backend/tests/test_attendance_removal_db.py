@@ -77,3 +77,11 @@ def test_audit_failure_rolls_back_cancellation():
 def test_rpc_is_not_callable_by_browser_roles():
  out=run("select has_function_privilege('anon','public.remove_attendance_day(uuid,uuid,text,timestamptz,timestamptz)','EXECUTE'),has_function_privilege('authenticated','public.remove_attendance_day(uuid,uuid,text,timestamptz,timestamptz)','EXECUTE');")
  assert out=='f|f'
+
+
+@pytest.mark.parametrize('day,expected',[('2026-10-05',[8,1]),('2026-10-10',[4,5]),('2026-10-11',[0,9])])
+def test_site_snapshot_survives_removal_recalculation(day,expected):
+ from test_site_work_schedules import PCS
+ policy=json.dumps(PCS)
+ sql=setup(day=day,split=True)+f"update attendance set start_time='07:00',end_time='16:30',work_schedule='{policy}'::jsonb where id='{T2}';"+remove()+f"select jsonb_build_array(normal_hours,ot_hours) from attendance where id='{T2}'; rollback;"
+ assert json.loads(run(sql).splitlines()[-1])==expected

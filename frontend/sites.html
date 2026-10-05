@@ -96,6 +96,14 @@
           <div id="m-sups" class="border border-gray-200 rounded-lg p-3 mb-3 text-sm"></div>
         </div>
 
+<fieldset id="m-schedule" class="border border-gray-200 rounded-lg p-3 mb-3">
+<legend class="text-sm font-bold">Work schedule &amp; OT rules</legend>
+<p class="text-xs text-gray-500 mb-3">Current OT engine defaults apply to every site until changed here. Changes apply to newly recorded attendance from the effective date; saved attendance keeps its original rules.</p>
+<div class="grid3"><label class="text-sm">Start time<input id="schedule-start_time" type="time" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label><label class="text-sm">Lunch starts<input id="schedule-lunch_start" type="time" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label><label class="text-sm">Lunch ends<input id="schedule-lunch_end" type="time" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label><label class="text-sm">Scheduled finish<input id="schedule-end_time" type="time" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label><label class="text-sm">Weekday basic hours<input id="schedule-weekday_basic_hours" type="number" min="0" max="24" step="0.5" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label><label class="text-sm">Saturday basic hours<input id="schedule-saturday_basic_hours" type="number" min="0" max="24" step="0.5" class="w-full border border-gray-300 rounded-lg p-2 mt-1 mb-2"></label></div><label class="block text-sm mb-2">Saturday basic rule<select id="schedule-saturday_rule" class="w-full border rounded-lg p-2 mt-1"><option value="before_noon">Before noon, up to the basic limit (current default)</option><option value="first_hours">First worked hours, up to the basic limit</option></select></label>
+<label class="block text-sm mb-2">Lunch deduction<select id="schedule-lunch_rule" class="w-full border rounded-lg p-2 mt-1"><option value="full_break">Full break when work overlaps lunch (current default)</option><option value="overlap">Only the worked time within the lunch window</option></select></label>
+<label class="block text-sm">Effective from<input id="schedule-effective_from" type="date" class="w-full border rounded-lg p-2 mt-1"></label>
+<p class="text-xs text-gray-500 mt-2">Sunday and public holidays: all worked hours are OT. OT rounds down to half-hour steps. Site transfers share one daily basic-hours allowance, set by the first working site. Scheduled finish is a shortcut; actual end time must still be recorded.</p>
+</fieldset>
         <p id="m-error" class="text-sm font-medium text-red-600 hidden mb-2"></p>
       </div>
 
@@ -111,7 +119,18 @@
   <script>
     requireLogin();
 
-    let ME = null, SITES = [], SUPS = [], EDIT = null;
+    let ME = null, SITES = [], SUPS = [], EDIT = null, SCHEDULE_INITIAL = "";
+    const SCHEDULE_DEFAULTS = {start_time:"08:00",lunch_start:"12:00",lunch_end:"13:00",end_time:"17:00",weekday_basic_hours:8,saturday_basic_hours:4,saturday_rule:"before_noon",lunch_rule:"full_break"};
+    function todaySG(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapore',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+    function readSchedule(){const out={};for(const key of [...Object.keys(SCHEDULE_DEFAULTS),"effective_from"]){const value=document.getElementById("schedule-"+key).value;out[key]=key.endsWith("_hours")?Number(value):value;}return out;}
+    function scheduleChanges(){
+      const schedule=readSchedule();
+      if(JSON.stringify(schedule)===SCHEDULE_INITIAL)return {};
+      if(!schedule.effective_from||schedule.effective_from<todaySG())throw new Error("Choose today or a future effective date.");
+      if(!schedule.start_time||!schedule.lunch_start||!schedule.lunch_end||!schedule.end_time||!(schedule.start_time<=schedule.lunch_start&&schedule.lunch_start<=schedule.lunch_end&&schedule.lunch_end<=schedule.end_time)||schedule.start_time===schedule.end_time)throw new Error("Start, lunch and finish must be in chronological order within the day.");
+      if([schedule.weekday_basic_hours,schedule.saturday_basic_hours].some(h=>!Number.isFinite(h)||h<0||h>24))throw new Error("Basic hours must be between 0 and 24.");
+      return {work_schedule:schedule};
+    }
 
     function toast(msg) {
       const t = document.getElementById("toast");
@@ -169,6 +188,12 @@
 
     function openForm(s = null) {
       EDIT = s;
+      const versions=(s?.work_schedules||[]).slice().sort((a,b)=>a.effective_from.localeCompare(b.effective_from));
+      const selected=versions[versions.length-1]||{};
+      const schedule={...SCHEDULE_DEFAULTS,...selected,effective_from:selected.effective_from>todaySG()?selected.effective_from:todaySG()};
+      for(const [key,value] of Object.entries(schedule)){const el=document.getElementById("schedule-"+key);if(el)el.value=value;}
+      document.getElementById("schedule-effective_from").min=todaySG();
+      SCHEDULE_INITIAL=JSON.stringify(readSchedule());
       document.getElementById("m-title").textContent = s ? "Edit Site" : "Add Site";
       document.getElementById("m-code").value = s ? s.site_code : "";
       document.getElementById("m-code").disabled = !!s;
@@ -209,6 +234,7 @@
             body: JSON.stringify({
               site_name: document.getElementById("m-name").value,
               status: document.getElementById("m-status").value,
+              ...scheduleChanges(),
             }),
           });
           const data = await r.json();
@@ -227,6 +253,7 @@
             method: "POST",
             body: JSON.stringify({
               site_code: document.getElementById("m-code").value,
+              ...scheduleChanges(),
               site_name: document.getElementById("m-name").value,
             }),
           });

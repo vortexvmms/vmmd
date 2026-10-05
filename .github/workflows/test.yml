@@ -84,5 +84,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements-dev.txt
-      - run: psql "$ATTENDANCE_REMOVAL_TEST_DB_URL" -v ON_ERROR_STOP=1 -f backend/tests/attendance_removal_db_foundation.sql -f db/schema.sql -f db/migrate_attendance_shifts_partial_leave.sql -f backend/tests/attendance_removal_db_live_contract.sql -f supabase/migrations/20261003005943_attendance_day_removal.sql
+      - run: psql "$ATTENDANCE_REMOVAL_TEST_DB_URL" -v ON_ERROR_STOP=1 -f backend/tests/attendance_removal_db_foundation.sql -f db/schema.sql -f db/migrate_attendance_shifts_partial_leave.sql -f backend/tests/attendance_removal_db_live_contract.sql -f supabase/migrations/20261003005943_attendance_day_removal.sql -f supabase/migrations/20261005094040_site_work_schedules.sql
       - run: PYTHONPATH=backend pytest backend/tests/test_attendance_removal_db.py -q
