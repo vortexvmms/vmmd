@@ -15,7 +15,7 @@ DPR = (ROOT / "frontend/dpr.html").read_text()
 
 def _hours_engine():
     tree = ast.parse(MAIN)
-    wanted = {"_to_min", "compute_hours"}
+    wanted = {"_to_min", "worked_hours", "compute_hours"}
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted]
     ns = {}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "hours-engine", "exec"), ns)

@@ -19,7 +19,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .auth import (
     cache_user as _cache_put,
@@ -376,14 +376,55 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
 
 
 # ---------------- Site Master (Phase 5) ----------------
+class WorkSchedule(BaseModel):
+    effective_from: date_cls
+    start_time: str
+    lunch_start: str
+    lunch_end: str
+    end_time: str
+    weekday_basic_hours: float = Field(default=8, ge=0, le=24)
+    saturday_basic_hours: float = Field(default=4, ge=0, le=24)
+    saturday_rule: str = "before_noon"
+    lunch_rule: str = "full_break"
+
+    @field_validator("start_time", "lunch_start", "lunch_end", "end_time")
+    @classmethod
+    def valid_time(cls, value):
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+            raise ValueError("Use a valid HH:MM time")
+        return value
+
+    @model_validator(mode="after")
+    def valid_window(self):
+        if not (self.start_time <= self.lunch_start <= self.lunch_end <= self.end_time) or self.start_time == self.end_time:
+            raise ValueError("Start, lunch and finish must be in chronological order within the day")
+        if self.lunch_rule not in ("full_break", "overlap"):
+            raise ValueError("Invalid lunch rule")
+        if self.saturday_rule not in ("first_hours", "before_noon"):
+            raise ValueError("Invalid Saturday OT rule")
+        return self
+
+
 class SiteCreate(BaseModel):
     site_code: str
     site_name: str
+    work_schedule: WorkSchedule | None = None
 
 
 class SiteUpdate(BaseModel):
     site_name: str | None = None
     status: str | None = None  # active | archived
+    work_schedule: WorkSchedule | None = None
+
+
+def merge_site_schedule(existing: list, schedule: WorkSchedule) -> list:
+    # Existing attendance snapshots are never rewritten. Keeping all effective
+    # versions also makes a future-dated change safe for today's new attendance.
+    today = datetime.now(timezone(timedelta(hours=8))).date()
+    if schedule.effective_from < today:
+        raise HTTPException(status_code=400, detail="Schedule changes must start today or later; existing attendance keeps its saved rules")
+    value = schedule.model_dump(mode="json")
+    return sorted([x for x in existing if x.get("effective_from") != value["effective_from"]] + [value], key=lambda x: x["effective_from"])
 
 
 class SupervisorAssign(BaseModel):
@@ -395,7 +436,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
     async with shared_client() as client:
         r = await client.get(
             f"{REST}/sites",
-            params={"select": "id,site_code,site_name,status,site_supervisors(user_id,users(name))",
+            params={"select": "id,site_code,site_name,status,work_schedules,site_supervisors(user_id,users(name))",
                     "order": "site_name.asc"},
             headers=supabase_headers(user["token"]),
         )
@@ -409,7 +450,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
                 sups.append({"user_id": link["user_id"], "name": u.get("name", "?")})
             out.append({"id": s["id"], "site_code": s["site_code"],
                         "site_name": s["site_name"], "status": s["status"],
-                        "supervisors": sups})
+                        "supervisors": sups, "work_schedules": s.get("work_schedules") or []})
         return out
 
 
@@ -426,7 +467,8 @@ async def create_site(body: SiteCreate, user: dict = Depends(get_current_user)):
         r = await client.post(
             f"{REST}/sites",
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
-            json={"site_code": code, "site_name": name, "status": "active"},
+            json={"site_code": code, "site_name": name, "status": "active",
+                  "work_schedules": merge_site_schedule([], body.work_schedule) if body.work_schedule else []},
         )
         if r.status_code == 409:
             raise HTTPException(status_code=409, detail=f"Site code {code} already exists")
@@ -449,18 +491,20 @@ async def update_site(site_id: str, body: SiteUpdate, user: dict = Depends(get_c
         if body.status not in ("active", "archived"):
             raise HTTPException(status_code=400, detail="Invalid status")
         changes["status"] = body.status
-    if not changes:
+    if not changes and body.work_schedule is None:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
     async with shared_client() as client:
         old = await client.get(
             f"{REST}/sites",
-            params={"id": f"eq.{site_id}", "select": "site_code,site_name,status"},
+            params={"id": f"eq.{site_id}", "select": "site_code,site_name,status,work_schedules"},
             headers=supabase_headers(user["token"]),
         )
         old_rows = old.json() if old.status_code == 200 else []
         if not old_rows:
             raise HTTPException(status_code=404, detail="Site not found")
+        if body.work_schedule is not None:
+            changes["work_schedules"] = merge_site_schedule(old_rows[0].get("work_schedules") or [], body.work_schedule)
 
         r = await client.patch(
             f"{REST}/sites",
@@ -986,13 +1030,25 @@ async def save_request(body: RequestBulk, user: dict = Depends(get_current_user)
                 "total": len(requested)}
 
 
+def site_schedule(site: dict, work_date: str) -> dict:
+    versions = [x for x in (site.get("work_schedules") or []) if x.get("effective_from", "9999-12-31") <= work_date]
+    return max(versions, key=lambda x: x["effective_from"]) if versions else {}
+
+
+def attendance_schedule(allocation: dict) -> dict:
+    att = allocation.get("attendance")
+    # An empty legacy snapshot is meaningful: never infer newer site rules for
+    # attendance that was already recorded before the schedule was configured.
+    return (att.get("work_schedule") or {}) if att else site_schedule(allocation.get("sites") or {}, allocation["work_date"])
+
+
 # ---------------- OT Hours Engine (Phase 7 · spec §6, confirmed Rev 3) ----------------
 def _to_min(t: str) -> int:
     h, m = t.split(":")[:2]
     return int(h) * 60 + int(m)
 
 
-def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tuple[float, float]:
+def compute_hours(day_type: str, start: str, end: str, end_next_day: bool, schedule: dict = None) -> tuple[float, float]:
     """Returns (normal_hours, ot_hours) per the confirmed rules:
     R1 weekday 8h normal then OT · R2 1h lunch deducted ·
     R3 no lunch if finished by 12:00 noon · R4 Saturday OT after lunch ·
@@ -1003,20 +1059,17 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
     if e <= s:
         raise ValueError("End time must be after start time")
 
-    # R2/R3: deduct 1h lunch only when work spans the 12:00–13:00 window
-    finished_by_noon = (not end_next_day) and e_raw <= 720
-    lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
-    worked = (e - s - lunch) / 60.0
+    worked = worked_hours(start, end, end_next_day, schedule)
 
     if day_type in ("SUN", "PH"):
         normal, ot = 0.0, worked                       # R5
     elif day_type == "SAT":
         morning = max(0, min(e, 720) - s) / 60.0       # R4: normal only before noon
-        normal = min(4.0, morning, worked)
+        normal = min(float((schedule or {}).get("saturday_basic_hours", 4)), worked if (schedule or {}).get("saturday_rule") == "first_hours" else morning, worked)
         ot = worked - normal
     else:  # WD
-        normal = min(8.0, worked)                      # R1
-        ot = max(0.0, worked - 8.0)
+        normal = min(float((schedule or {}).get("weekday_basic_hours", 8)), worked)
+        ot = max(0.0, worked - normal)
 
     # Company practice (CR 19/07/2026): OT counted in half-hour steps,
     # rounded DOWN (0.75 -> 0.5, 2.2 -> 2.0). Normal hours unchanged.
@@ -1024,15 +1077,22 @@ def compute_hours(day_type: str, start: str, end: str, end_next_day: bool) -> tu
     return round(normal, 2), round(ot, 2)
 
 
-def worked_hours(start: str, end: str, end_next_day: bool) -> float:
+def worked_hours(start: str, end: str, end_next_day: bool, schedule: dict = None) -> float:
     """Hours actually worked in one segment, lunch rules R2/R3 applied."""
     s = _to_min(start)
     e_raw = _to_min(end)
     e = e_raw + (1440 if end_next_day else 0)
     if e <= s:
         raise ValueError("End time must be after start time")
-    finished_by_noon = (not end_next_day) and e_raw <= 720
-    lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
+    if schedule:
+        ls, le = _to_min(schedule["lunch_start"]), _to_min(schedule["lunch_end"])
+        if schedule.get("lunch_rule", "full_break") == "overlap":
+            lunch = max(0, min(e, le) - max(s, ls))
+        else:
+            lunch = le - ls if s < le and e > ls else 0
+    else:
+        finished_by_noon = (not end_next_day) and e_raw <= 720
+        lunch = 60 if (not finished_by_noon and s < 780 and e > 720) else 0
     return (e - s - lunch) / 60.0
 
 
@@ -1045,23 +1105,27 @@ def compute_day(day_type: str, segments: list[dict]) -> list[tuple[float, float]
     order = sorted(range(len(segments)),
                    key=lambda i: _to_min(segments[i]["start"]))
     out = [(0.0, 0.0)] * len(segments)
+    # The first working site sets the daily basic allowance. A transfer never
+    # starts a second allowance; each segment still uses its own lunch window.
+    first = (segments[order[0]].get("schedule") or {}) if order else {}
 
     if day_type in ("SUN", "PH"):
         for i in order:
             out[i] = (0.0, worked_hours(**segments[i]))
     elif day_type == "SAT":
         # R4: hours before 12:00 are normal (max 4 for the day), rest is OT
-        remaining_normal = 4.0
+        remaining_normal = float(first.get("saturday_basic_hours", 4))
         for i in order:
             g = segments[i]
             w = worked_hours(**g)
             s, e = _to_min(g["start"]), _to_min(g["end"]) + (1440 if g["end_next_day"] else 0)
             morning = max(0, min(e, 720) - s) / 60.0
-            n = min(remaining_normal, morning, w)
+            eligible = w if (g.get("schedule") or {}).get("saturday_rule") == "first_hours" else morning
+            n = min(remaining_normal, eligible, w)
             remaining_normal -= n
             out[i] = (n, w - n)
     else:  # weekday: 8 normal hours for the day, then OT (R1)
-        remaining_normal = 8.0
+        remaining_normal = float(first.get("weekday_basic_hours", 8))
         for i in order:
             w = worked_hours(**segments[i])
             n = min(remaining_normal, w)
@@ -1125,10 +1189,10 @@ class SubmitDay(BaseModel):
 
 async def _load_day(client, token, work_date: str, site_id: str | None):
     params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
-              "select": "id,site_id,worker_id,updated_at,sites(site_name),workers(name,worker_code),"
+              "select": "id,work_date,site_id,worker_id,updated_at,sites(site_name,work_schedules),workers(name,worker_code),"
                         "attendance(id,present,start_time,end_time,end_next_day,"
                         "normal_hours,ot_hours,day_type,submitted_at,absence_type,"
-                        "shift_type,partial_leave_type,leave_portion,leave_value,updated_at)"}
+                        "shift_type,partial_leave_type,leave_portion,leave_value,work_schedule,updated_at)"}
     if site_id:
         params["site_id"] = f"eq.{site_id}"
     r = await client.get(f"{REST}/allocations", params=params,
@@ -1146,6 +1210,8 @@ async def day_sheet(date: str, site_id: str = "",
         out = []
         for a in rows:
             att = a.get("attendance") or None
+            a.setdefault("work_date", date)
+            schedule = attendance_schedule(a)
             out.append({
                 "allocation_id": a["id"], "site_id": a["site_id"],
                 "allocation_updated_at": a.get("updated_at"),
@@ -1157,7 +1223,10 @@ async def day_sheet(date: str, site_id: str = "",
                 # supervisor has verified him. Unmarked workers show unticked.
                 "marked": bool(att),
                 "present": att["present"] if att else False,
-                "start_time": (att["start_time"][:5] if att and att["start_time"] else "08:00"),
+                "start_time": (att["start_time"][:5] if att and att["start_time"] else schedule.get("start_time", "08:00")),
+                "default_start_time": schedule.get("start_time", "08:00"),
+                "scheduled_end_time": schedule.get("end_time", "17:00"),
+                "work_schedule": schedule,
                 "end_time": (att["end_time"][:5] if att and att["end_time"] else None),
                 "end_next_day": att["end_next_day"] if att else False,
                 "normal_hours": float(att["normal_hours"]) if att else 0,
@@ -1221,17 +1290,12 @@ async def remove_attendance_day(body: AttendanceRemoval, user: dict = Depends(ge
 async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current_user)):
     if user["role"] not in ATTENDANCE_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed")
-    safe_shift_start = ((body.shift_type == "night" and body.start_time == "20:00") or
-                        (body.shift_type == "day" and body.start_time == "08:00"))
-    if body.start_time and user["role"] in SUPERVISOR_ROLES and not safe_shift_start:
-        raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
-
     async with shared_client() as client:
         # the allocation (RLS scopes site_sup to own sites automatically)
         ra = await client.get(
             f"{REST}/allocations",
             params={"id": f"eq.{body.allocation_id}", "status": "eq.allocated",
-                    "select": "id,work_date,site_id,worker_id,attendance(id,present,start_time,end_time,end_next_day,submitted_at,absence_type,shift_type,partial_leave_type,leave_portion,leave_value)"},
+                    "select": "id,work_date,site_id,worker_id,sites(work_schedules),attendance(id,present,start_time,end_time,end_next_day,submitted_at,absence_type,shift_type,partial_leave_type,leave_portion,leave_value,work_schedule)"},
             headers=supabase_headers(user["token"]),
         )
         arows = ra.json() if ra.status_code == 200 else []
@@ -1239,6 +1303,11 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
             raise HTTPException(status_code=404, detail="Allocation not found (or not your site)")
         alloc = arows[0]
         att = alloc.get("attendance")
+        schedule = attendance_schedule(alloc)
+        safe_shift_start = ((body.shift_type == "night" and body.start_time == "20:00") or
+                            (body.shift_type == "day" and body.start_time == schedule.get("start_time", "08:00")))
+        if body.start_time and user["role"] in SUPERVISOR_ROLES and not safe_shift_start:
+            raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
 
         # Submitted days remain correctable by the site's own supervisor until
         # payroll closes the month (decision 22/07/2026). Reason is mandatory
@@ -1246,7 +1315,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         if att and att["submitted_at"] and not body.edit_reason:
             raise HTTPException(status_code=400, detail="A reason is required when changing a submitted day")
 
-        start = body.start_time or (att["start_time"][:5] if att and att["start_time"] else "08:00")
+        start = body.start_time or (att["start_time"][:5] if att and att["start_time"] else schedule.get("start_time", "08:00"))
         end = body.end_time if body.end_time is not None else (att["end_time"][:5] if att and att["end_time"] else None)
         end_nd = body.end_next_day if body.end_next_day is not None else (att["end_next_day"] if att else False)
         present = body.present if body.present is not None else (att["present"] if att else True)
@@ -1265,6 +1334,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         # tagged 'class' so reports can show it distinctly.
         if body.absence_type == "class":
             present, start, end, end_nd = True, "08:00", "17:00", False
+            schedule = {}
             shift_type, partial_leave, leave_portion = "day", None, None
 
         if shift_type not in ("day", "night", "custom"):
@@ -1287,7 +1357,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         normal, ot = (0.0, 0.0)
         if present and end:
             try:
-                normal, ot = compute_hours(day_type, start, end, end_nd)
+                normal, ot = compute_hours(day_type, start, end, end_nd, schedule)
             except ValueError as ve:
                 raise HTTPException(status_code=400, detail=str(ve))
         # (recomputed at day level below if the worker has more than one site today)
@@ -1303,7 +1373,7 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
                    "day_type": day_type, "absence_type": absence,
                    "shift_type": shift_type, "partial_leave_type": partial_leave,
                    "leave_portion": leave_portion, "leave_value": leave_value,
-                   "edit_reason": body.edit_reason}
+                   "edit_reason": body.edit_reason, "work_schedule": schedule}
         # The allocation was already authorised through the user's RLS-scoped
         # read above. Use the server-only key for the actual write so an outdated
         # attendance UPDATE policy cannot silently discard a supervisor's save.
@@ -1355,7 +1425,8 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         except Exception:
             pass
 
-        return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type}
+        return {"ok": True, "normal_hours": normal, "ot_hours": ot, "day_type": day_type, "work_schedule": schedule,
+                "default_start_time": schedule.get("start_time", "08:00"), "scheduled_end_time": schedule.get("end_time", "17:00")}
 
 
 @app.post("/api/v1/attendance/batch")
@@ -1386,12 +1457,13 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
     """When a worker has 2+ sites on the same date, recompute all his segments
     together so normal hours are counted once for the day (site request 22/07/2026).
     Returns {allocation_id: (normal, ot)} or {} if he only has one site."""
+    headers = service_headers() if SUPABASE_SERVICE_KEY else supabase_headers(token)
     r = await client.get(
         f"{REST}/allocations",
         params={"work_date": f"eq.{work_date}", "worker_id": f"eq.{worker_id}",
                 "status": "eq.allocated",
-                "select": "id,attendance(id,present,start_time,end_time,end_next_day)"},
-        headers=supabase_headers(token))
+                "select": "id,attendance(id,present,start_time,end_time,end_next_day,work_schedule)"},
+        headers=headers)
     rows = r.json() if r.status_code == 200 else []
     segs, ids = [], []
     for a in rows:
@@ -1399,7 +1471,7 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
         if not att or not att["present"] or not att["end_time"]:
             continue
         segs.append({"start": (att.get("start_time") or "08:00")[:5], "end": att["end_time"][:5],
-                     "end_next_day": att["end_next_day"]})
+                     "end_next_day": att["end_next_day"], "schedule": att.get("work_schedule") or {}})
         ids.append((a["id"], att["id"]))
     if len(segs) < 2:
         return {}
@@ -1410,7 +1482,7 @@ async def recompute_worker_day(client, token, work_date: str, worker_id: str,
     out = {}
     for (alloc_id, att_id), (n, o) in zip(ids, pairs):
         await client.patch(f"{REST}/attendance", params={"id": f"eq.{att_id}"},
-                           headers={**supabase_headers(token), "Prefer": "return=minimal"},
+                           headers={**headers, "Prefer": "return=minimal"},
                            json={"normal_hours": n, "ot_hours": o})
         out[alloc_id] = (n, o)
     return out
@@ -1457,7 +1529,7 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
                 continue
             attempted += 1
             start = att["start_time"][:5] if att and att["start_time"] else "08:00"
-            normal, ot = compute_hours(day_type, start, body.end_time, end_nd)
+            normal, ot = compute_hours(day_type, start, body.end_time, end_nd, att.get("work_schedule") or {})
             payload = {"present": True, "start_time": start, "end_time": body.end_time,
                        "end_next_day": end_nd, "normal_hours": normal, "ot_hours": ot,
                        "day_type": day_type}
@@ -1477,6 +1549,11 @@ async def bulk_end(body: BulkEnd, user: dict = Depends(get_current_user)):
             saved = ru.status_code in (200, 201) and bool(ru.json())
             if saved:
                 updated += 1
+                a = next(x for x in rows if x["id"] == allocation_id)
+                try:
+                    await asyncio.wait_for(recompute_worker_day(client, user["token"], body.work_date, a["worker_id"], day_type), timeout=1.5)
+                except Exception:
+                    pass  # The verified end-time write must not become a false failed save.
             else:
                 failed.append(allocation_id)
         try:
@@ -1513,7 +1590,8 @@ async def present_all(body: SubmitDay, user: dict = Depends(get_current_user)):
             await client.post(
                 f"{REST}/attendance",
                 headers={**supabase_headers(user["token"]), "Prefer": "return=minimal"},
-                json={"allocation_id": a["id"], "present": True, "start_time": "08:00",
+                json={"allocation_id": a["id"], "present": True, "start_time": attendance_schedule({**a, "work_date": body.work_date}).get("start_time", "08:00"),
+                      "work_schedule": attendance_schedule({**a, "work_date": body.work_date}),
                       "end_time": None, "end_next_day": False, "normal_hours": 0, "ot_hours": 0,
                       "day_type": day_type, "absence_type": None})
             added += 1
