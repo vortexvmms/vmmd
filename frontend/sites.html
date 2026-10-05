@@ -154,6 +154,9 @@
     }
 
     async function load() {
+      // The editable master must not reuse a 30-minute reference list from
+      // another page: another device or a release may have changed its rules.
+      vmmsClearRefCache("/api/v1/sites");
       const r = await vmmsApi("/api/v1/sites");
       if (!r.ok) { toast("Could not load sites"); return; }
       SITES = await r.json();
