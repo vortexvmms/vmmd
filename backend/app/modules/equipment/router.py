@@ -5,7 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from typing import Callable
 from urllib.parse import unquote, urlparse
 
@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...core.roles import COORDINATOR_ROLES
 from .schemas import ExtractTripSheet, ImportBatchCreate, MasterCreate, TripBulkCreate, TripCreate
+from .billing import calculate_billing
 
 
 EQUIPMENT_ROLES = set(COORDINATOR_ROLES + ("logistics_sup",))
@@ -59,14 +60,30 @@ def _month_bounds(month: str) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _period_bounds(month=None, date_from=None, date_to=None):
+    if date_from or date_to:
+        try:
+            start, end = date.fromisoformat(date_from or ""), date.fromisoformat(date_to or "")
+        except ValueError:
+            raise HTTPException(422,"Choose both From and To work dates")
+        if end < start or (end-start).days>366:
+            raise HTTPException(422,"Choose a valid date range of up to one year")
+        return start.isoformat(), (end+timedelta(days=1)).isoformat()
+    return _month_bounds(month or "")
+
+
 def _trip_payload(item: TripCreate, user: dict) -> dict:
-    data = item.model_dump(exclude={"import_item_id"})
+    data = calculate_billing(item.model_dump(exclude={"import_item_id"}))
     data["trip_date"] = item.trip_date.isoformat()
     data["truck_no"] = item.truck_no.upper()
     data["created_by"] = user["user_id"]
     data["updated_by"] = user["user_id"]
     data["review_status"] = "approved"
     return data
+
+
+def _present_trip(row):
+    return {**row,"transport_amount":row.get("billed_amount",row.get("transport_amount"))}
 
 
 def _parse_date(value) -> str | None:
@@ -121,10 +138,23 @@ def _normalise_extraction(raw: dict) -> dict:
         "quantity": _number(raw.get("quantity")),
         "unit_type": unit,
         "transport_rate": _number(raw.get("transport_rate")),
+        "start_time": _parse_time(raw.get("start_time")),
+        "end_time": _parse_time(raw.get("end_time")),
+        "quality_warnings": [str(x)[:200] for x in (raw.get("quality_warnings") or [])][:8],
         "confidence": max(0, min(100, confidence if confidence is not None else 0)),
         "warnings": [str(x)[:200] for x in (raw.get("warnings") or [])][:8],
     }
     return result
+
+
+def _parse_time(value) -> str | None:
+    text = str(value or "").strip().upper().replace(".", ":")
+    for fmt in ("%H:%M", "%H:%M:%S", "%I:%M %p", "%I %p", "%I:%M%p"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%H:%M")
+        except ValueError:
+            pass
+    return None
 
 
 def _parse_model_json(text: str) -> dict | None:
@@ -178,7 +208,12 @@ async def _gemini_extract(image: bytes, mime: str, masters: dict) -> dict:
         + json.dumps(masters, ensure_ascii=False)
         + ". Return keys: client, transport_provider, work_type, driver_name, trip_sheet_no, "
           "trip_date, do_no, truck_no, pickup_location, delivery_location, material_type, "
-          "quantity, unit_type, transport_rate, confidence, warnings. "
+          "quantity, unit_type, transport_rate, start_time, end_time, quality_warnings, confidence, warnings. "
+          "Times must be 24-hour HH:MM, empty if unreadable. Use the WORK DATE printed on the sheet, never upload date. "
+          "work_type must be Day Work, Night Work, or Trip Basis. Explicit load/trip billing means Trip Basis; "
+          "otherwise morning starts (7/8 AM) indicate Day Work and evening starts (7/8 PM) Night Work. "
+          "Add quality_warnings for blurry text, dark photos, glare, angled perspective, clipped page edges or unreadable numbers. "
+          "If the file contains multiple different trip sheets, warn that they must be uploaded separately. "
           "unit_type must be load, tonnage, hour, meter, trip, or day."
     )
     payload = {
@@ -207,6 +242,9 @@ async def _gemini_extract(image: bytes, mime: str, masters: dict) -> dict:
                     "quantity": {"type": "NUMBER"},
                     "unit_type": {"type": "STRING"},
                     "transport_rate": {"type": "NUMBER"},
+                    "start_time": {"type": "STRING"},
+                    "end_time": {"type": "STRING"},
+                    "quality_warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
                     "confidence": {"type": "NUMBER"},
                     "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
                 },
@@ -267,7 +305,7 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
             raise HTTPException(status_code=404, detail="Unknown master-data type")
         payload = {"name": body.name, "created_by": user["user_id"]}
         if kind == "drivers":
-            payload.update({"provider_id": body.provider_id, "truck_no": (body.truck_no or "").strip().upper() or None})
+            payload.update({"provider_id": body.provider_id, "truck_no": (body.truck_no or "").strip().upper() or None, "phone": body.phone})
         async with context.shared_client() as client:
             r = await client.post(f"{context.rest_url}/{table}",
                 headers={**context.supabase_headers(user["token"]), "Prefer": "return=representation"}, json=payload)
@@ -280,11 +318,12 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
             return row
 
     @router.get("/trips")
-    async def list_trips(month: str, client_id: str | None = None,
+    async def list_trips(month: str | None = None, client_id: str | None = None,
                          provider_id: str | None = None,
+                         date_from: str | None = None, date_to: str | None = None,
                          user: dict = Depends(context.get_current_user)):
         _require_equipment(user)
-        start, end = _month_bounds(month)
+        start, end = _period_bounds(month,date_from,date_to)
         params = {"select": "*,client:tipper_clients(name),provider:tipper_providers(name),work_type:tipper_work_types(name),driver:tipper_drivers(name)",
                   "and": f"(trip_date.gte.{start},trip_date.lt.{end})", "order": "trip_date.asc,trip_sheet_no.asc", "limit": "2000"}
         if client_id:
@@ -296,7 +335,7 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
                                  headers=context.supabase_headers(user["token"]))
             if r.status_code != 200:
                 raise HTTPException(status_code=503, detail="Could not load tipper-truck records")
-            return r.json()
+            return [_present_trip(row) for row in r.json()]
 
     @router.post("/trips", status_code=201)
     async def create_trip(body: TripCreate, user: dict = Depends(context.get_current_user)):
@@ -311,7 +350,7 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
                 raise HTTPException(status_code=500, detail="Could not save trip record")
             row = (r.json() or [{}])[0]
             await context.audit(client, user, "create", "tipper_trip", row.get("id", ""), None, row)
-            return row
+            return _present_trip(row)
 
     @router.post("/trips/bulk", status_code=201)
     async def create_trips_bulk(body: TripBulkCreate,
@@ -337,7 +376,7 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
                     json={"status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()})
             await context.audit(client, user, "bulk_create", "tipper_trip", body.batch_id or "manual",
                                 None, {"count": len(rows)})
-            return {"count": len(rows), "items": rows}
+            return {"count": len(rows), "items": [_present_trip(row) for row in rows]}
 
     @router.delete("/trips/{trip_id}")
     async def delete_trip(trip_id: str, user: dict = Depends(context.get_current_user)):
@@ -383,8 +422,10 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
                 if len(image_response.content) > 10 * 1024 * 1024:
                     raise HTTPException(status_code=413, detail="Each image must be below 10 MB")
                 mime = (image_response.headers.get("content-type") or "image/jpeg").split(";", 1)[0]
-                if mime not in ("image/jpeg", "image/png", "image/webp"):
-                    raise HTTPException(status_code=415, detail="Use JPG, PNG or WebP trip-sheet images")
+                if mime not in ("image/jpeg", "image/png", "image/webp", "application/pdf"):
+                    raise HTTPException(status_code=415, detail="Use JPG, PNG, WebP or PDF trip sheets")
+                from .operations import document_mime
+                mime = document_mime(image_response.content)
                 master_responses = []
                 for table in ("tipper_clients", "tipper_providers", "tipper_work_types", "tipper_drivers"):
                     master_responses.append(await client.get(f"{context.rest_url}/{table}",
@@ -412,4 +453,6 @@ def build_equipment_router(context: EquipmentContext) -> APIRouter:
                     headers=headers, json={"failed_files": int(batch.get("failed_files") or 0) + 1})
                 raise
 
+    from .operations import add_operations
+    add_operations(router, context)
     return router

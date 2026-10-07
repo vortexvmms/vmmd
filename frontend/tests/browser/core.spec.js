@@ -342,12 +342,14 @@ test('Tipper Truck Supply is responsive and keeps image imports in review', asyn
   await page.route(/https:\/\/vmms-backend-sg\.onrender\.com\/api\/v1\/equipment\/tipper\/trips\?.*/, r => r.fulfill({ json: [{
     id:'t1',client_id:'c1',provider_id:'p2',work_type_id:'w1',trip_sheet_no:'287',trip_date:'2026-09-01',do_no:'260364',truck_no:'XF421C',pickup_location:'T5 Haul Rd',delivery_location:'T5 Haul Rd',material_type:'Sand',quantity:9,unit_type:'load',transport_rate:45,transport_amount:405,source:'manual',client:{name:'PKJV-T5-MSP'},provider:{name:'SVP'},work_type:{name:'Day Work'},driver:null
   }] }));
+  await page.route('**/api/v1/equipment/tipper/rate-rules', r => r.fulfill({json: []}));
+  await page.route('**/api/v1/equipment/tipper/submissions?*', r => r.fulfill({json: []}));
   await page.goto('/tipper-trucks.html');
   await expect(page.getByRole('heading', { name:'Tipper Truck Supply' })).toBeVisible();
   await expect(page.locator('#k-entries')).toHaveText('1');
   await expect(page.getByRole('button', { name:'Bulk Trip Sheets' })).toBeVisible();
   await page.getByRole('button', { name:'Bulk Trip Sheets' }).click();
   await expect(page.locator('#bulk-files')).toHaveAttribute('multiple', '');
-  await expect(page.getByText('nothing enters the Trip Register until you review')).toBeVisible();
+  await expect(page.getByText('Approved records only enter final totals.', {exact:false})).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
 });
