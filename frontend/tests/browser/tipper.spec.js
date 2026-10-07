@@ -51,3 +51,9 @@ test('OCR photo quality warning requires retake rather than driver submit',async
  await page.route('**/api/v1/equipment/tipper/driver/**',async r=>{const p=new URL(r.request().url()).pathname;if(p.endsWith('/setup'))return r.fulfill({json:{driver:{id:driver,name:'Driver One'},sites:rules}});if(p.endsWith('/preview'))return r.fulfill({json:{id,status:'draft',fields:{trip_date:'2026-09-30'},quality_warnings:['DO number is cropped'],warnings:[]}});return r.fulfill({json:[]});});
  await page.goto('/driver-upload.html#'+'a'.repeat(43));await page.locator('#site').selectOption(client+'|SITE A');await page.locator('#file').setInputFiles({name:'sheet.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF fixture')});await page.locator('#photo-checked').check();await page.locator('#read').click();await expect(page.locator('#submit')).toBeDisabled();await expect(page.locator('#ocr-warnings')).toContainText('cropped');
 });
+
+ test('historical work type and amount remain visible without invented zero hours',async({page})=>{
+ await fixture(page);await page.route('**/api/v1/equipment/tipper/trips?*',route=>route.fulfill({json:[{id,client_id:client,provider_id:provider,provider:{name:'VORTEX'},work_type:{name:'Day Work'},billing_mode:'legacy',trip_date:'2024-08-06',do_no:'OLD1',truck_no:'XF1',quantity:9,unit_type:'load',transport_rate:45,transport_amount:405}]}));
+ await page.goto('/tipper-trucks.html');await page.getByRole('button',{name:'Trip Register',exact:true}).click();await expect(page.locator('#register-rows')).toContainText('Day Work');await expect(page.locator('#register-rows')).toContainText('405.00');
+ await page.getByRole('button',{name:'Monthly TRP',exact:true}).click();await expect(page.locator('#summary-rows')).toContainText('1 legacy entry');await expect(page.locator('#summary-rows')).not.toContainText('0.00 hours');
+ });
