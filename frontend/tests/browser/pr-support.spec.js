@@ -53,6 +53,25 @@ test('failed default update restores the saved selection', async ({page})=>{
   await expect(pm).toBeEnabled();
 });
 
+test('historical spellings produce only two names and custom additions are unique', async ({page})=>{
+  await setup(page);
+  await page.route('**/api/v1/pr/directory',r=>r.fulfill({json:[
+    {...entry,pm_hod:'Teo Zheng Lian',manager_director:'Ramasamy Rameshkumar'},
+    {...entry,id:'another',pm_hod:'Teo Zheng Liang',manager_director:'Ramasamy RameshKumar'},
+    {...entry,id:'third',pm_hod:'Ramesh Kumar',manager_director:'Ramasamy Ramesh kumar'}
+  ]}));
+  await page.goto('/pr-directory.html');
+  const select=page.locator('select[data-field="pm_hod"]').first();
+  await expect(select).toHaveValue('Teo Zheng Liang');
+  expect(await select.locator('option').allTextContents()).toEqual(['Select name…','Ramasamy Ramesh Kumar','Teo Zheng Liang','Add name…']);
+  await expect(page.locator('select[data-field="manager_director"]').first()).toHaveValue('Ramasamy Ramesh Kumar');
+  await page.evaluate(()=>{VCMS_PR.remember(' New  Approver ');VCMS_PR.remember('new approver');VCMS_PR.refreshChoices();});
+  expect(await select.locator('option').allTextContents()).toEqual(['Select name…','Ramasamy Ramesh Kumar','Teo Zheng Liang','New Approver','Add name…']);
+  page.once('dialog',d=>d.dismiss());
+  await select.selectOption('__add_pr_name__');
+  await expect(select).toHaveValue('Teo Zheng Liang');
+});
+
 test('PR embeds a delayed signature before printing and includes both default approvers', async ({page}, info)=>{
   await setup(page);
   await page.addInitScript(()=>localStorage.setItem('vcms_my_signature','https://media.example.com/signatures/test.png'));
