@@ -3699,6 +3699,73 @@ async def pr_directory_add(body: PRDirIn, user: dict = Depends(get_current_user)
         return rows[0] if rows else {"ok": True}
 
 
+class PRDirApprovers(BaseModel):
+    pm_hod: str = Field(default="", max_length=160)
+    manager_director: str = Field(default="", max_length=160)
+
+
+@app.patch("/api/v1/pr/directory/{entry_id}")
+async def pr_directory_approvers(entry_id: uuid.UUID, body: PRDirApprovers,
+                                 user: dict = Depends(get_current_user)):
+    if user["role"] not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only managers can edit the PR directory")
+    async with shared_client() as client:
+        r = await client.patch(f"{REST}/pr_directory",
+            params={"id": f"eq.{entry_id}"},
+            headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
+            json={"pm_hod": body.pm_hod.strip(), "manager_director": body.manager_director.strip()})
+        if r.status_code != 200:
+            raise HTTPException(status_code=503, detail="Could not save approver defaults")
+        rows = r.json()
+        if not rows:
+            raise HTTPException(status_code=404, detail="Directory entry not found (or not editable)")
+        return rows[0]
+
+
+@app.get("/api/v1/pr/signature-image")
+async def pr_signature_image(url: str, user: dict = Depends(get_current_user)):
+    from urllib.parse import urlsplit, unquote
+    from fastapi.responses import Response
+    if user["role"] not in PR_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    # Public signature objects only. Never proxy arbitrary URLs or follow redirects.
+    bases = [f"{SUPABASE_URL}/storage/v1/object/public/dpr-photos", R2_PUBLIC_BASE]
+    target = urlsplit(url)
+    valid = False
+    for base in bases:
+        if not base:
+            continue
+        allowed = urlsplit(base)
+        prefix = allowed.path.rstrip("/") + "/signatures/"
+        if (target.scheme == allowed.scheme == "https" and target.netloc == allowed.netloc
+                and not target.username and not target.password and not target.query and not target.fragment
+                and target.path.startswith(prefix)):
+            path = unquote(unquote(target.path[len(prefix):]))
+            valid = bool(re.fullmatch(r"[A-Za-z0-9_/-]+\.(?:png|jpe?g|webp)", path, re.I))
+            if valid:
+                break
+    if not valid:
+        raise HTTPException(status_code=400, detail="Use a saved VCMS signature image")
+    async with shared_client() as client:
+        try:
+            async with client.stream("GET", url, follow_redirects=False, timeout=15) as remote:
+                kind = remote.headers.get("content-type", "").split(";")[0].strip().lower()
+                if remote.status_code != 200 or kind not in ("image/png", "image/jpeg", "image/webp"):
+                    raise HTTPException(status_code=422, detail="Saved signature unavailable; upload it again")
+                chunks = []; size = 0
+                async for chunk in remote.aiter_bytes():
+                    size += len(chunk)
+                    if size > 2 * 1024 * 1024:
+                        raise HTTPException(status_code=413, detail="Signature image exceeds 2 MB")
+                    chunks.append(chunk)
+                content = b"".join(chunks)
+                if not content:
+                    raise HTTPException(status_code=422, detail="Signature image is empty")
+        except httpx.HTTPError:
+            raise HTTPException(status_code=503, detail="Could not load the saved signature")
+    return Response(content, media_type=kind, headers={"Cache-Control": "no-store"})
+
+
 @app.delete("/api/v1/pr/directory/{entry_id}")
 async def pr_directory_delete(entry_id: str, user: dict = Depends(get_current_user)):
     if user["role"] not in COORDINATOR_ROLES:

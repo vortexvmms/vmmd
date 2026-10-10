@@ -66,6 +66,7 @@
       .pr-top { grid-template-columns:minmax(0,1.45fr) minmax(420px,.55fr); }
     }
   </style>
+  <script src="js/pr-support.js?v=20261010-1"></script>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
@@ -164,6 +165,11 @@
         <div><label class="fl">Requested By</label><input id="f-reqby" class="inp"></div>
       </div></section><section class="pr-lower-card">
 
+      <label class="fl">Requester signature</label>
+      <p id="pr-signature-status" class="text-xs text-gray-500">Uses your saved DPR signature.</p>
+      <label class="text-red-700 font-bold cursor-pointer text-sm">Upload / replace my signature
+        <input id="pr-signature-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="setPRSignature(event)">
+      </label>
       <!-- Reference photos / invoice attachments -->
       <label class="fl mt-4">Reference photos / Invoice (optional)</label>
       <div id="drop" class="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center text-xs text-gray-500">
@@ -200,6 +206,12 @@
     const SIG_KEY="vcms_my_signature";   // same saved signature as the DPR page
     const LOGO_URL="https://www.vortex.sg/images/Vortex-Logo_Type.png";
 
+    async function setPRSignature(event){
+      const file=event.target.files[0];event.target.value="";
+      if(!file)return;
+      try{await VCMS_PR.uploadSignature(file);document.getElementById("pr-signature-status").textContent="Signature saved on this browser and ready for PDF.";toast("Signature saved");}
+      catch(e){toast(e.message||"Could not save your signature");}
+    }
     // ---- image helpers (same R2 pipeline as DPR) ----
     async function compressImage(file, maxDim=1600, quality=0.72){
       try{
@@ -429,7 +441,7 @@
       const sel=document.getElementById("f-code");
       sel.innerHTML='<option value="">—</option>'+entries.map(e=>`<option value="${esc(e.project_code)}">${esc(e.project_code)}</option>`).join("");
       if(entries.length===1){ sel.value=entries[0].project_code; onCode(); }
-      else { document.getElementById("f-project").value=""; }
+      else { document.getElementById("f-project").value=""; SEL._pm=""; SEL._md=""; }
     }
     function onCode(){
       const site=document.getElementById("f-site").value, code=document.getElementById("f-code").value;
@@ -438,7 +450,7 @@
         document.getElementById("f-project").value=e.project||"";
         if(e.deliver_to && !document.getElementById("f-deliverto").value) document.getElementById("f-deliverto").value=e.deliver_to;
         SEL._pm=e.pm_hod||""; SEL._md=e.manager_director||"";
-      }
+      }else{ document.getElementById("f-project").value=""; SEL._pm=""; SEL._md=""; }
     }
 
     function addItem(data){
@@ -578,10 +590,15 @@
 
     // ---------- PRINT (A4 landscape, matches the PR template) ----------
     function bx(on){ return `<span class="box">${on?"✓":""}</span>`; }
-    function imgAspect(url){ return new Promise(res=>{ const im=new Image(); im.onload=()=>res(im.naturalHeight>=im.naturalWidth?"port":"land"); im.onerror=()=>res("port"); im.src=url; }); }
+    function imgAspect(url){ return new Promise(res=>{ const im=new Image(); const timer=setTimeout(()=>res("port"),15000); im.onload=()=>{clearTimeout(timer);res(im.naturalHeight>=im.naturalWidth?"port":"land");}; im.onerror=()=>{clearTimeout(timer);res("port");}; im.src=url; }); }
     async function printPR(){
+      const w=window.open("","_blank");
+      if(!w){toast("Allow pop-ups to open the PR print preview.");return;}
+      w.document.body.textContent="Preparing PR and signature…";
+      try{
       const d=collect();
-      let mySig=""; try{ mySig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
+      let savedSig=""; try{ savedSig=localStorage.getItem(SIG_KEY)||""; }catch(e){}
+      const mySig=await VCMS_PR.signature(savedSig);
       const items=d.items.length?d.items:[{}];
       const anyPrice=items.some(it=>String(it.unit_price||"").trim()||String(it.amount||"").trim());
       let sn=0;
@@ -605,7 +622,7 @@
           <div class="attcap">Attachment ${i+1}${p.caption?(" — "+esc(p.caption)):""} &nbsp;·&nbsp; P.R No ${esc(d.pr_no||"")}</div>
           <img src="${p.url}">
         </div>`).join("");
-      const w=window.open("","_blank");
+      w.document.open();
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>PR ${esc(d.pr_no||"")}</title>
       <style>
         @page{ size:A4 landscape; margin:10mm; }
@@ -645,7 +662,7 @@
         .pbar .cl{ background:#C00000; color:#fff; }
         @media print{ .pbar{ display:none; } }
       </style></head><body>
-      <div class="pbar"><button onclick="window.print()">Print / Save PDF</button><button class="cl" onclick="window.close()">✕ Close</button></div>
+      <div class="pbar"><button id="print-ready" disabled onclick="window.print()">Preparing images…</button><span id="print-error" role="status"></span><button class="cl" onclick="window.close()">✕ Close</button></div>
       <div class="hdr">
         <img class="logo" src="${LOGO_URL}" onerror="this.style.display='none'">
         <div class="cats">${bx(d.category==='asset')} Asset<br>${bx(d.category==='consumable')} Consumable<br>${bx(d.category==='rentals')} Rentals</div>
@@ -672,10 +689,12 @@
       <div class="foot">
         <div style="flex:1.5;margin-right:44px">
           <div style="display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid #000;padding-bottom:3px;min-height:42px">
+            <div style="width:52%;display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px">
             <span style="font-weight:700;white-space:nowrap">Requested By :</span>
             <span style="font-weight:600">${esc(d.requested_by_name||"")}</span>
-            ${mySig?`<img src="${mySig}" style="height:32px">`:""}
-            <span>&nbsp;/</span>
+            ${mySig?`<img alt="Requester signature" src="${esc(mySig)}" style="height:32px;max-width:120px;object-fit:contain">`:""}
+            </div>
+            <div style="width:48%;text-align:center;font-weight:600">${esc(d.pm_hod||"")}</div>
           </div>
           <div style="display:flex;font-size:10px;margin-top:3px">
             <span style="width:52%;text-align:center">Requester Name</span>
@@ -684,15 +703,35 @@
         </div>
         <div style="flex:1">
           <div style="display:flex;align-items:flex-end;border-bottom:1px solid #000;padding-bottom:3px;min-height:42px">
-            <span style="font-weight:700;white-space:nowrap">Approved By :</span>
+            <span style="font-weight:700;white-space:nowrap">Approved By :</span><span style="font-weight:600;margin-left:8px">${esc(d.manager_director||"")}</span>
           </div>
           <div style="text-align:center;font-size:10px;margin-top:3px">Manager / Director</div>
         </div>
       </div>
       ${atts}
-      <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});<\/script>
+      <script>
+      (async function(){
+        var button=document.getElementById('print-ready');
+        try{
+          await Promise.all(Array.from(document.images).map(function(image){
+            return new Promise(function(resolve,reject){
+              function check(){if(image.naturalWidth>0||image.classList.contains('logo'))resolve();else reject(new Error('A signature or attachment image could not be loaded.'));}
+              if(image.complete){check();return;}
+              var logo=image.classList.contains('logo');
+              var timer=setTimeout(function(){if(logo){image.style.display='none';resolve();}else reject(new Error('Images are taking too long to load. Close this preview and try again.'));},logo?5000:25000);
+              image.addEventListener('load',function(){clearTimeout(timer);check();},{once:true});
+              image.addEventListener('error',function(){clearTimeout(timer);check();},{once:true});
+            });
+          }));
+          button.disabled=false;button.textContent='Print / Save PDF';window.print();
+        }catch(error){button.textContent='Images unavailable';document.getElementById('print-error').textContent=error.message;}
+      })();<\/script>
       </body></html>`);
       w.document.close(); w.focus();
+      }catch(error){
+        w.document.body.textContent=error.message||"Could not prepare the PR. Close this preview and try again.";
+        toast(error.message||"Could not prepare the PR");
+      }
     }
 
     boot();
