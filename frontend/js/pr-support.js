@@ -1,18 +1,27 @@
 // PR approver choices and self-contained print signatures.
 (function () {
-  const names = new Set(['Teo Zheng Liang', 'Ramasamy Ramesh Kumar']);
+  const names = new Map();
   const ADD = '__add_pr_name__';
-  function remember(value) { if (String(value || '').trim()) names.add(String(value).trim()); }
+  function clean(value) { return String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' '); }
+  function key(value) { return clean(value).toLocaleLowerCase('en'); }
+  function canonical(value) {
+    const name=clean(value), compact=key(name).replace(/ /g, '');
+    if (compact==='ramasamyrameshkumar'||compact==='rameshkumar') return 'Ramasamy Ramesh Kumar';
+    if (compact==='teozhengliang'||compact==='teozhenglian') return 'Teo Zheng Liang';
+    return names.get(key(name)) || name;
+  }
+  function remember(value) { const name=canonical(value); if (name && name!==ADD) names.set(key(name),name); return name; }
+  ['Ramasamy Ramesh Kumar','Teo Zheng Liang'].forEach(remember);
   function options(value) {
-    remember(value);
+    value=remember(value);
     const escape = window.esc;
-    return '<option value="">Select name…</option>' + [...names].map(name =>
+    return '<option value="">Select name…</option>' + [...names.values()].map(name =>
       `<option value="${escape(name)}" ${name === value ? 'selected' : ''}>${escape(name)}</option>`
     ).join('') + `<option value="${ADD}">Add name…</option>`;
   }
   function refreshChoices() {
     document.querySelectorAll('[data-pr-name]').forEach(select => {
-      const value = select.value === ADD ? select.dataset.previous || '' : select.value;
+      const value = canonical(select.value === ADD ? select.dataset.previous || '' : select.value);
       select.innerHTML = options(value);
       select.value = value;
     });
@@ -20,9 +29,9 @@
   function choose(select) {
     if (select.value !== ADD) { select.dataset.previous = select.value; return true; }
     const raw = window.prompt('Enter the new approver name:');
-    const name = String(raw || '').trim();
+    const name = canonical(raw);
     if (!name || name === ADD || name.length > 160) {
-      select.value = select.dataset.previous || '';
+      select.value = canonical(select.dataset.previous);
       if (name.length > 160) window.alert('Use a name of 160 characters or fewer.');
       return false;
     }
@@ -62,5 +71,5 @@
     localStorage.setItem('vcms_my_signature', result);
     return result;
   }
-  window.VCMS_PR = { options, remember, refreshChoices, choose, signature, uploadSignature };
+  window.VCMS_PR = { canonical, options, remember, refreshChoices, choose, signature, uploadSignature };
 })();

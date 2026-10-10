@@ -19,7 +19,7 @@
     .inp { border:1px solid #D1D5DB; border-radius:8px; padding:8px; width:100%; font-size:14px; }
     @media(max-width:899px){main>div:last-of-type{overflow-x:auto!important;-webkit-overflow-scrolling:touch}table.dt{min-width:640px}table.dt th:first-child,table.dt td:first-child{position:sticky;left:0;background:#fff;z-index:2}table.dt thead th:first-child{background:#F9FAFB;z-index:3}table.dt button{min-height:40px;padding:8px 10px}}
   </style>
-  <script src="js/pr-support.js?v=20261010-1"></script>
+  <script src="js/pr-support.js?v=20261010-2"></script>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
@@ -103,8 +103,8 @@
     async function saveApprovers(select){
       const entry=DIRECTORY.find(x=>x.id===select.dataset.id);
       if(!entry || !VCMS_PR.choose(select)) return;
-      const old=entry[select.dataset.field]||"";
-      const body={pm_hod:entry.pm_hod||"",manager_director:entry.manager_director||""};
+      const old=VCMS_PR.canonical(entry[select.dataset.field]);
+      const body={pm_hod:VCMS_PR.canonical(entry.pm_hod),manager_director:VCMS_PR.canonical(entry.manager_director)};
       body[select.dataset.field]=select.value;
       const peers=[...document.querySelectorAll('[data-id]')].filter(el=>el.dataset.id===entry.id);
       peers.forEach(el=>el.disabled=true);
