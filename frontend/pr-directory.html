@@ -19,6 +19,7 @@
     .inp { border:1px solid #D1D5DB; border-radius:8px; padding:8px; width:100%; font-size:14px; }
     @media(max-width:899px){main>div:last-of-type{overflow-x:auto!important;-webkit-overflow-scrolling:touch}table.dt{min-width:640px}table.dt th:first-child,table.dt td:first-child{position:sticky;left:0;background:#fff;z-index:2}table.dt thead th:first-child{background:#F9FAFB;z-index:3}table.dt button{min-height:40px;padding:8px 10px}}
   </style>
+  <script src="js/pr-support.js?v=20261010-1"></script>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
@@ -35,8 +36,8 @@
         <input id="a-site" class="inp" placeholder="Site Name *">
         <input id="a-code" class="inp" placeholder="Project Code *">
         <input id="a-proj" class="inp sm:col-span-2" placeholder="Project (title)">
-        <input id="a-pm" class="inp" placeholder="PM / HOD">
-        <input id="a-md" class="inp" placeholder="Manager / Director">
+        <div><label for="a-pm">PM / HOD default</label><select id="a-pm" class="inp" data-pr-name onchange="VCMS_PR.choose(this)"></select></div>
+        <div><label for="a-md">Manager / Director default</label><select id="a-md" class="inp" data-pr-name onchange="VCMS_PR.choose(this)"></select></div>
         <input id="a-deliver" class="inp sm:col-span-2" placeholder="Default Delivery To (optional)">
       </div>
       <button onclick="addEntry()" class="mt-3 bg-red-700 text-white font-bold px-5 py-2 rounded-lg">Add to directory</button>
@@ -55,7 +56,9 @@
 
   <script>
     requireLogin();
-    let ME = null, CAN_EDIT = false;
+    let ME = null, CAN_EDIT = false, DIRECTORY = [];
+    document.getElementById("a-pm").innerHTML=VCMS_PR.options("");
+    document.getElementById("a-md").innerHTML=VCMS_PR.options("");
     function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),2400); }
 
     async function boot(){
@@ -66,7 +69,10 @@
     }
     async function load(){
       const r=await vmmsApi("/api/v1/pr/directory");
-      const rows=r.ok?await r.json():[];
+      if(!r.ok){toast("Could not load PR directory");return;}
+      const rows=await r.json(); DIRECTORY=rows;
+      rows.forEach(x=>{VCMS_PR.remember(x.pm_hod);VCMS_PR.remember(x.manager_director);});
+      VCMS_PR.refreshChoices();
       document.getElementById("count").textContent=`${rows.length} project(s)`;
       document.getElementById("empty").classList.toggle("hidden", rows.length>0);
       document.getElementById("rows").innerHTML=rows.map(x=>`
@@ -74,8 +80,8 @@
           <td style="font-weight:600;color:#111827">${esc(x.site_name)}</td>
           <td>${esc(x.project_code)}</td>
           <td style="color:#374151">${esc(x.project||"—")}</td>
-          <td style="color:#6B7280">${esc(x.pm_hod||"—")}</td>
-          <td style="color:#6B7280">${esc(x.manager_director||"—")}</td>
+          <td style="color:#6B7280">${CAN_EDIT?`<select class="inp" data-pr-name data-id="${esc(x.id)}" data-field="pm_hod" data-previous="${esc(x.pm_hod||'')}" aria-label="PM / HOD for ${esc(x.site_name)}" onchange="saveApprovers(this)">${VCMS_PR.options(x.pm_hod||'')}</select>`:esc(x.pm_hod||"—")}</td>
+          <td style="color:#6B7280">${CAN_EDIT?`<select class="inp" data-pr-name data-id="${esc(x.id)}" data-field="manager_director" data-previous="${esc(x.manager_director||'')}" aria-label="Manager / Director for ${esc(x.site_name)}" onchange="saveApprovers(this)">${VCMS_PR.options(x.manager_director||'')}</select>`:esc(x.manager_director||"—")}</td>
           <td style="text-align:right">${CAN_EDIT?`<button onclick="delEntry('${x.id}')" class="text-red-600 text-sm font-bold">Delete</button>`:""}</td>
         </tr>`).join("");
     }
@@ -91,7 +97,24 @@
       const r=await vmmsApi("/api/v1/pr/directory",{method:"POST",body:JSON.stringify(body)});
       if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||"Failed"); return; }
       ["a-site","a-code","a-proj","a-pm","a-md","a-deliver"].forEach(id=>document.getElementById(id).value="");
+      ["a-pm","a-md"].forEach(id=>document.getElementById(id).dataset.previous="");
       toast("Added"); await load();
+    }
+    async function saveApprovers(select){
+      const entry=DIRECTORY.find(x=>x.id===select.dataset.id);
+      if(!entry || !VCMS_PR.choose(select)) return;
+      const old=entry[select.dataset.field]||"";
+      const body={pm_hod:entry.pm_hod||"",manager_director:entry.manager_director||""};
+      body[select.dataset.field]=select.value;
+      const peers=[...document.querySelectorAll('[data-id]')].filter(el=>el.dataset.id===entry.id);
+      peers.forEach(el=>el.disabled=true);
+      try{
+        const r=await vmmsApi("/api/v1/pr/directory/"+entry.id,{method:"PATCH",body:JSON.stringify(body)});
+        if(!r.ok)throw new Error("Could not save approver defaults");
+        const saved=await r.json(); Object.assign(entry,saved);
+        select.dataset.previous=select.value;toast("Approver defaults saved");
+      }catch(e){select.value=old;select.dataset.previous=old;toast(e.message||"Save failed");}
+      finally{peers.forEach(el=>el.disabled=false);}
     }
     async function delEntry(id){
       if(!confirm("Delete this project from the directory?")) return;

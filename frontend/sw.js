@@ -5,8 +5,9 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v80-tipper-driver-portal';
+const CACHE = 'vcms-v82-pr-signatures-approvers';
 const APP_SHELL = [
+  'js/pr-support.js?v=20261010-1',
   'js/attendance-completion.js?v=20261002-1','./','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html','pcs-dashboard.html','pcs-report.html','camera.html','camera-settings.html','camera-photos.html','tipper-trucks.html','js/tipper.js?v=20261007-1','js/tipper-shared.js?v=20261007-1','lifting.html','css/lifting.css','js/lifting.js?v=20260930-1','audit-log.html','camera-manifest.json',
   'css/app.css','css/assistant.css?v=20260828-1','js/core-bundle.js?v=20260904-history1','js/auth.js?v=20260930-upload2','js/ui.js?v=20260825-ui5','js/pcs-dpr.js?v=20260905-navyheaders','js/shell.js?v=20260901-equipment1','js/workflow.js?v=20260927-1','js/chatbot.js?v=20260828-1','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'
 ];
