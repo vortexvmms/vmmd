@@ -432,12 +432,12 @@ class SupervisorAssign(BaseModel):
 
 
 @app.get("/api/v1/sites")
-async def list_sites(user: dict = Depends(get_current_user)):
+async def list_sites(user: dict = Depends(get_current_user), include_removed: bool = False):
     async with shared_client() as client:
         r = await client.get(
             f"{REST}/sites",
-            params={"select": "id,site_code,site_name,status,work_schedules,site_supervisors(user_id,users(name))",
-                    "order": "site_name.asc"},
+            params={"select": "id,site_code,site_name,status,removed_at,work_schedules,site_supervisors(user_id,users(name))",
+                    "order": "site_name.asc", **({} if include_removed and user["role"] in FULL_ROLES else {"removed_at": "is.null"})},
             headers=supabase_headers(user["token"]),
         )
         if r.status_code != 200:
@@ -449,7 +449,7 @@ async def list_sites(user: dict = Depends(get_current_user)):
                 u = link.get("users") or {}
                 sups.append({"user_id": link["user_id"], "name": u.get("name", "?")})
             out.append({"id": s["id"], "site_code": s["site_code"],
-                        "site_name": s["site_name"], "status": s["status"],
+                        "site_name": s["site_name"], "status": s["status"], "removed_at": s.get("removed_at"),
                         "supervisors": sups, "work_schedules": s.get("work_schedules") or []})
         return out
 
@@ -4492,3 +4492,4 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
     if r.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail="Photo storage upload failed")
     return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
+

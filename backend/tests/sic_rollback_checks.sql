@@ -9,10 +9,15 @@ select set_config('sic.test_scoped_site',coalesce((select ss.site_id::text from 
 select set_config('sic.test_other_site',coalesce((select s.id::text from public.sites s where not exists(select 1 from public.site_supervisors ss join public.users u on u.id=ss.user_id where u.auth_uid::text=current_setting('sic.test_scoped_user') and ss.site_id=s.id) limit 1),''),true);
 set local role authenticated;
 do $$
-declare r public.sic_records; n public.sic_records; data jsonb; passed int:=0;
+declare r public.sic_records; n public.sic_records; data jsonb; passed int:=0; key text;
 begin
  data:=jsonb_build_object('worker_id',current_setting('sic.test_worker'),'site_id',current_setting('sic.test_site'),'fin','SIC-TEST-ONLY','sic_date','2025-01-01','validity_months',12,'expiry_date','2025-12-31');
  r:=public.sic_save(data);passed:=passed+1;
+ key:=r.id::text||'/'||gen_random_uuid()::text;
+ insert into storage.objects(bucket_id,name,owner_id) values('sic-cards',key,auth.uid()::text);
+ if not exists(select 1 from storage.objects where bucket_id='sic-cards' and name=key) then raise exception 'Uploaded object cannot be read';end if;
+ insert into public.sic_attachments(record_id,object_key,filename,mime_type,file_size) values(r.id,key,'QA card.png','image/png',100);
+ passed:=passed+2;
  if not exists(select 1 from public.sic_audit where record_id=r.id and action='created' and actor=auth.uid()) then raise exception 'Audit missing'; end if;passed:=passed+1;
  begin perform public.sic_save(data);raise exception 'Duplicate accepted';exception when unique_violation then passed:=passed+1;end;
  begin perform public.sic_save(data||'{"sic_date":"2026-01-01","expiry_date":"2026-12-30"}'::jsonb,null,r.id,r.updated_at);raise exception 'Override accepted without reason';exception when raise_exception then if SQLERRM='Override accepted without reason' then raise;end if;passed:=passed+1;end;

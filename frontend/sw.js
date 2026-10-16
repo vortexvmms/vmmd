@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v85-sic-dashboard-filters';
+const CACHE = 'vcms-v86-site-removal-upload-fix';
 const APP_SHELL = [
   'sic-register.html','css/sic-register.css?v=20261016-1','js/sic-domain.js?v=20261016-2','js/sic-register.js?v=20261016-2',
   'js/pr-support.js?v=20261010-2',

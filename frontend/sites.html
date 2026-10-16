@@ -60,6 +60,7 @@
     <label id="sites-archive-filter" class="text-xs flex items-center gap-1">
       <input id="show-archived" type="checkbox" class="accent-white"> Archived
     </label>
+    <label id="sites-removed-filter" class="hidden text-xs flex items-center gap-1"><input id="show-removed" type="checkbox" class="accent-white"> Removed sites</label>
   </header>
 
   <main class="flex-1 p-4 max-w-md mx-auto w-full pb-24">
@@ -143,7 +144,7 @@
       if (!r.ok) { vmmsLogout(); return; }
       ME = await r.json();
       if (isFull(ME.role)) {
-        document.getElementById("fab").classList.remove("hidden");
+        document.getElementById("fab").classList.remove("hidden");document.getElementById("sites-removed-filter").classList.remove("hidden");
         // Any active user can be assigned to a site (supervisors AND main supervisors),
         // except the payroll/HR account (Jenny Tan).
         const ru = await vmmsApi("/api/v1/users");
@@ -153,21 +154,32 @@
       await load();
     }
 
+    async function siteRequest(path,options={}) {
+      await _vmmsEnsureFresh();
+      const send=()=>fetch(VMMS_CONFIG.SUPABASE_URL+path,{...options,headers:{apikey:VMMS_CONFIG.SUPABASE_PUBLISHABLE,Authorization:'Bearer '+getSession()?.access_token,'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(45000)});
+      let r=await send();if(r.status===401&&await vmmsRefresh())r=await send();
+      if(!r.ok){let d;try{d=await r.json()}catch{}throw Error(d?.message||'Could not update site list');}return r;
+    }
+    async function setRemoved(site,removed){
+      if(!confirm(removed?'Remove '+site.site_name+' from site selection? Past attendance, reports and SIC records are kept. You can restore it from Removed sites.':'Restore '+site.site_name+' as an archived site?'))return;
+      try{await siteRequest('/rest/v1/rpc/site_set_removed',{method:'POST',body:JSON.stringify({p_site_id:site.id,p_removed:removed})});vmmsClearRefCache('/api/v1/sites');await load();toast(removed?'Site removed. Restore is available under Removed sites.':'Site restored as archived.');}catch(e){toast(e.message)}
+    }
     async function load() {
       // The editable master must not reuse a 30-minute reference list from
       // another page: another device or a release may have changed its rules.
       vmmsClearRefCache("/api/v1/sites");
-      const r = await vmmsApi("/api/v1/sites");
-      if (!r.ok) { toast("Could not load sites"); return; }
-      SITES = await r.json();
+      try {
+        const r = await vmmsApi('/api/v1/sites?include_removed=true');if(!r.ok)throw Error('Could not load sites');
+        SITES = await r.json();
+      } catch(e) {toast(e.message);return;}
       render();
     }
 
     function render() {
-      const showArch = document.getElementById("show-archived").checked;
-      const rows = SITES.filter(s => showArch || s.status === "active");
+      const showArch = document.getElementById("show-archived").checked,removed=document.getElementById("show-removed").checked;
+      const rows = SITES.filter(s => removed ? !!s.removed_at : !s.removed_at && (showArch || s.status === "active"));
       document.getElementById("count").textContent =
-        `${SITES.filter(s => s.status === "active").length} active sites`;
+        `${SITES.filter(s => !s.removed_at && s.status === "active").length} active sites`;
       const list = document.getElementById("list");
       list.innerHTML = "";
       document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
@@ -178,12 +190,15 @@
         div.innerHTML =
           `<div class="flex items-center justify-between">
              <p class="font-medium text-gray-800">${esc(s.site_name)}</p>
-             <span class="text-xs font-bold px-3 py-1 rounded-full ${s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}">${s.status === "active" ? "Active" : "Archived"}</span>
+             <span class="text-xs font-bold px-3 py-1 rounded-full ${s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-500"}">${s.removed_at?"Removed":s.status === "active" ? "Active" : "Archived"}</span>
            </div>
            <p class="text-xs text-gray-400 mt-1">${s.site_code} · ${sups}</p>`;
         if (isFull(ME.role)) {
           div.classList.add("cursor-pointer", "active:bg-gray-50");
-          div.onclick = () => openForm(s);
+          div.onclick = () => {if(!s.removed_at)openForm(s)};
+          if(s.removed_at||s.status==='archived'){
+            const action=document.createElement('button');action.type='button';action.textContent=s.removed_at?'Restore site':'Remove site';action.className='mt-3 text-sm font-bold text-red-700 border border-gray-300 rounded-lg px-3 py-2';action.onclick=event=>{event.stopPropagation();setRemoved(s,!s.removed_at)};div.appendChild(action);
+          }
         }
         list.appendChild(div);
       });
@@ -273,9 +288,10 @@
       }
     }
 
-    document.getElementById("show-archived").addEventListener("change", render);
+    document.getElementById("show-archived").addEventListener("change", render);document.getElementById("show-removed").addEventListener("change",render);
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
 </html>
+

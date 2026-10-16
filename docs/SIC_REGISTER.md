@@ -26,3 +26,7 @@ If the SIC module fails, revert the frontend commit or hide its navigation entry
 Dashboard filters support site, SIC status, worker status, card availability, record archive status, search and expiry ranges. KPI tiles and the filtered-log action carry the selected scope into the log. Archived sites remain selectable in SIC (clearly labelled) without changing their master status. Missing-card metrics/options are omitted.
 
 SIC site choices hide an archived duplicate when an active site with the same normalized name exists and the archived site has no SIC history. Independent archived sites such as Advario remain selectable. Historical links and site-master rows are preserved.
+
+Card storage policies qualify `storage.objects.name` to avoid accidentally matching the worker-name column in a correlated subquery. The database suite tests actual object-row insertion, read and SIC attachment linkage.
+
+The main Sites directory supports recoverable removal of archived sites and restoring them as archived. Only management can remove or restore; active sites must be archived first. Removed sites are omitted from ordinary site directories. Attendance/report references and SIC history remain intact.

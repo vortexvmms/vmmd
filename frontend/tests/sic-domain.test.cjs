@@ -7,3 +7,5 @@ test('worker/archive/card and date filters compose',()=>{const result=S.filter(r
 test('Excel values cannot become formulas',()=>{assert.equal(S.excelText('=1+1'),"'=1+1");assert.equal(S.excelText('@SUM(A1)'),"'@SUM(A1)");assert.equal(S.excelText('Anbu'),'Anbu')});
 
 test('site choices hide an unused archived duplicate and retain independent archived sites or linked history',()=>{const sites=[{id:'active',site_name:'TUAS LOT',status:'active'},{id:'old',site_name:' tuas  lot ',status:'archived'},{id:'advario',site_name:'ADVARIO',status:'archived'}];assert.deepEqual(S.siteChoices(sites).map(s=>s.id),['active','advario']);assert.deepEqual(S.siteChoices(sites,[{site_id:'old'}]).map(s=>s.id),['active','old','advario']);assert.deepEqual(S.siteChoices([sites[1]]).map(s=>s.id),['old'])});
+
+test('removed sites stay out of new choices but retain linked history',()=>{const s={id:'gone',site_name:'OLD',status:'archived',removed_at:'2026-10-16'};assert.deepEqual(S.siteChoices([s]),[]);assert.deepEqual(S.siteChoices([s],[{site_id:'gone'}]),[s])});

@@ -18,3 +18,7 @@ insert into public.users values('00000000-0000-0000-0000-000000000001','00000000
 insert into public.workers values('10000000-0000-0000-0000-000000000001','QA Worker');
 insert into public.sites values('20000000-0000-0000-0000-000000000001','QA Site'),('20000000-0000-0000-0000-000000000002','Other Site');
 insert into public.site_supervisors values('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002');
+
+alter table public.sites add column status text not null default 'archived';
+create function public.is_full() returns boolean language sql stable as $$select public.my_role() in ('admin','general_manager','operation_manager','hr_assistant')$$;
+grant update on public.sites to authenticated;
