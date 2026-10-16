@@ -6,6 +6,7 @@ function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapor
 function days(date,now=today()){return Math.round((Date.parse(date+'T00:00:00Z')-Date.parse(now+'T00:00:00Z'))/86400000)}
 function status(date,now=today()){const n=days(date,now);return n<0?'Expired':n<=30?'Expiring Soon':'Valid'}
 function filter(rows,f,now=today()){return rows.filter(r=>(!f.q||[r.name,r.fin,r.site_name].join(' ').toLowerCase().includes(f.q.toLowerCase()))&&(!f.site||r.site_id===f.site)&&(!f.status||status(r.expiry_date,now)===f.status)&&(!f.card||(f.card==='missing'?!r.card_count:r.card_count>0))&&(!f.worker||f.worker==='all'||(f.worker==='active'?['active','on_leave'].includes(r.worker_status):!['active','on_leave'].includes(r.worker_status)))&&(!f.archive||f.archive==='all'||(f.archive==='archived'?r.archived:!r.archived))&&(!f.sicFrom||r.sic_date>=f.sicFrom)&&(!f.sicTo||r.sic_date<=f.sicTo)&&(!f.expiryFrom||r.expiry_date>=f.expiryFrom)&&(!f.expiryTo||r.expiry_date<=f.expiryTo)).sort((a,b)=>String(a[f.sort||'name']).localeCompare(String(b[f.sort||'name']))||a.id.localeCompare(b.id))}
+function siteChoices(sites,records=[]){const name=s=>String(s.site_name||'').trim().replace(/\s+/g,' ').toLowerCase();return sites.filter(s=>s.status!=='archived'||!sites.some(a=>a.status==='active'&&name(a)===name(s))||records.some(r=>r.site_id===s.id))}
 function excelText(v){return String(v??'').replace(/^[=+\-@\t\r]/,"'$&")}
-const api={expiry,today,days,status,filter,excelText};if(typeof module!=='undefined')module.exports=api;else root.SIC=api;
+const api={expiry,today,days,status,filter,siteChoices,excelText};if(typeof module!=='undefined')module.exports=api;else root.SIC=api;
 })(typeof window==='undefined'?{}:window);
