@@ -75,4 +75,3 @@
   assistant.defer=true;
   (document.head||document.documentElement).appendChild(assistant);
 })();
-
