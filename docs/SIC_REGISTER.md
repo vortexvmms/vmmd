@@ -22,3 +22,5 @@ The log has seven standard columns, with screen-only status/card/actions. Search
 Apply `db/migrations/0023_sic_register.sql` once before publishing the frontend. All schema changes are additive. GitHub Pages publishes after the full Test workflow succeeds on main. Service-worker cache v84 updates navigation/assets.
 
 If the SIC module fails, revert the frontend commit or hide its navigation entry. Retain the SIC tables, private bucket and audit history; never drop populated tables as a routine rollback. The previous production commit is d7d1801edd94645fabaac71047fcf8cfb2926183.
+
+Dashboard filters support site, SIC status, worker status, card availability, record archive status, search and expiry ranges. KPI tiles and the filtered-log action carry the selected scope into the log. Archived sites remain selectable in SIC (clearly labelled) without changing their master status. Missing-card metrics/options are omitted.
