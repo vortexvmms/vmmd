@@ -4,6 +4,9 @@ select set_config('sic.test_admin',(select auth_uid::text from public.users wher
 select set_config('sic.test_worker',(select id::text from public.workers order by id limit 1),true);
 select set_config('sic.test_site',(select id::text from public.sites order by id limit 1),true);
 select set_config('request.jwt.claim.sub',current_setting('sic.test_admin'),true);
+select set_config('sic.test_scoped_user',coalesce((select u.auth_uid::text from public.users u join public.site_supervisors ss on ss.user_id=u.id where u.role in ('wshc','safety_sup') and u.status='active' and u.auth_uid is not null limit 1),''),true);
+select set_config('sic.test_scoped_site',coalesce((select ss.site_id::text from public.site_supervisors ss join public.users u on u.id=ss.user_id where u.auth_uid::text=current_setting('sic.test_scoped_user') limit 1),''),true);
+select set_config('sic.test_other_site',coalesce((select s.id::text from public.sites s where not exists(select 1 from public.site_supervisors ss join public.users u on u.id=ss.user_id where u.auth_uid::text=current_setting('sic.test_scoped_user') and ss.site_id=s.id) limit 1),''),true);
 set local role authenticated;
 do $$
 declare r public.sic_records; n public.sic_records; data jsonb; passed int:=0;
@@ -22,8 +25,13 @@ begin
  perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000099',true);
  if exists(select 1 from public.sic_records) then raise exception 'Unregistered account can read';end if;passed:=passed+1;
  begin perform public.sic_save(data);raise exception 'Unregistered account can write';exception when insufficient_privilege then passed:=passed+1;end;
+ if current_setting('sic.test_scoped_user')<>'' and current_setting('sic.test_other_site')<>'' then
+  perform set_config('request.jwt.claim.sub',current_setting('sic.test_scoped_user'),true);
+  if not public.sic_can_manage(current_setting('sic.test_scoped_site')::uuid) or public.sic_can_read(current_setting('sic.test_other_site')::uuid) then raise exception 'Assigned-site authorization failed'; end if;passed:=passed+1;
+  begin perform public.sic_save(data||jsonb_build_object('site_id',current_setting('sic.test_other_site')));raise exception 'Cross-site write accepted';exception when insufficient_privilege then passed:=passed+1;end;
+ end if;
  perform set_config('request.jwt.claim.sub',current_setting('sic.test_admin'),true);
  raise notice 'SIC checks passed: %',passed;
 end $$;
 reset role;
-select '11 SIC database checks passed; transaction will roll back' as result;
+select 'SIC database checks passed, including assigned-site isolation where configured; transaction will roll back' as result;
