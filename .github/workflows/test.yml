@@ -30,7 +30,8 @@ jobs:
       - run: node --check frontend/js/shell.js
       - run: node --check frontend/js/lifting.js
       - run: node --check frontend/js/sic-register.js
-      - run: node --test frontend/tests/sic-domain.test.cjs
+      - run: node --test frontend/tests/sic-domain.test.cjs frontend/tests/verification-export.test.cjs
+      - run: node --check frontend/js/verification-export.js
       - run: node --check frontend/js/theme-ext.js
       - run: node --check frontend/js/theme-designer.js
       - run: node --check frontend/js/tipper.js

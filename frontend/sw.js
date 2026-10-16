@@ -5,8 +5,9 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v86-site-removal-upload-fix';
+const CACHE = 'vcms-v87-verification-exports';
 const APP_SHELL = [
+  'js/verification-export.js?v=20261016-1',
   'sic-register.html','css/sic-register.css?v=20261016-1','js/sic-domain.js?v=20261016-2','js/sic-register.js?v=20261016-2',
   'js/pr-support.js?v=20261010-2',
   'js/attendance-completion.js?v=20261002-1','./','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html','pcs-dashboard.html','pcs-report.html','camera.html','camera-settings.html','camera-photos.html','tipper-trucks.html','js/tipper.js?v=20261007-1','js/tipper-shared.js?v=20261007-1','lifting.html','css/lifting.css','js/lifting.js?v=20260930-1','audit-log.html','camera-manifest.json',

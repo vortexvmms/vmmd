@@ -13,6 +13,7 @@
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isManager=window.isManager||function(r){return VMMS_TIER.manager.indexOf(r)!==-1};window.isSupervisor=window.isSupervisor||function(r){return VMMS_TIER.supervisor.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||isManager(r)};</script>
   <style>
     .print-only { display: none; }
+    @media(max-width:1100px){.verify-export-actions{width:100%}header>div:first-child{flex-wrap:wrap}.verify-export-actions button{flex:1;white-space:nowrap}}
     @media(max-width:899px){.sheet{overflow-x:auto!important;-webkit-overflow-scrolling:touch}.sheet table{min-width:760px}.sheet th:first-child,.sheet td:first-child{position:sticky;left:0;z-index:2;background:#fff}.sheet thead th:first-child{background:#E5E7EB;z-index:3}.sheet input[type=checkbox]{width:22px;height:22px}}
     @media print {
       @page { size: A4 landscape; margin: 9mm; }
@@ -43,8 +44,9 @@
         <h1 class="text-lg font-bold">End-Time Verification</h1>
         <p class="text-red-100 text-xs" id="summary">Loading…</p>
       </div>
+      <div class="verify-export-actions flex flex-wrap gap-2"><button id="export-excel" onclick="exportVerification('xlsx')" disabled class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Export to Excel</button><button id="export-csv" onclick="exportVerification('csv')" disabled class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Export to CSV</button>
       <button onclick="downloadPdf()" class="bg-white text-red-700 text-sm font-bold px-4 py-2 rounded-lg">Download PDF</button>
-      <button onclick="window.print()" class="bg-red-900 text-white text-sm font-bold px-4 py-2 rounded-lg">Print</button>
+      <button onclick="window.print()" class="bg-red-900 text-white text-sm font-bold px-4 py-2 rounded-lg">Print</button></div>
     </div>
     <div class="flex flex-wrap gap-2 mt-3 max-w-6xl mx-auto w-full">
       <input id="date" type="date" class="rounded-lg p-2 text-gray-800 text-base">
@@ -98,13 +100,14 @@
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers for this date.</p>
   </main>
 
+  <script src="js/verification-export.js?v=20261016-1"></script>
   <script>
     requireLogin();
     function downloadPdf() {
       const d = document.getElementById("date").value || "";
       vmmsDownloadPdf("body", `VMMS_EndTime_Verification_${d}`, { landscape: true });
     }
-    let ME = null, ALL = [];
+    let ME = null, ALL = [], LOADED = false, EXPORTING = false, LOAD_ID = 0;
     const HLABELS = { code:"Worker ID", name:"Name", site:"Site", status:"Status",
       start:"Start", end:"End time", normal:"Normal h", ot:"OT h", submitted:"Submitted" };
     let SORT = { key: "site", dir: 1 };
@@ -137,9 +140,12 @@
     }
 
     async function load() {
+      const requestId=++LOAD_ID;LOADED=false;exportButtons();
       const date = document.getElementById("date").value || todayIso();
       const r = await vmmsApi(`/api/v1/attendance?date=${date}`);
-      ALL = r.ok ? await r.json() : [];
+      if(requestId!==LOAD_ID)return;
+      if(!r.ok){ALL=[];render();document.getElementById('summary').textContent='Could not load attendance. Please select the date again to retry.';return;}
+      const data=await r.json();if(requestId!==LOAD_ID)return;ALL=data;LOADED=true;
       // site dropdown
       const names = [...new Set(ALL.map(x => x.site_name))].sort();
       const sel = document.getElementById("site");
@@ -149,14 +155,14 @@
       render();
     }
 
-    function render() {
+    function verificationRows() {
       const site = document.getElementById("site").value;
       const q = document.getElementById("search").value.trim().toLowerCase();
       const missing = document.getElementById("f-missing").checked;
       const present = document.getElementById("f-present").checked;
       const otOnly = document.getElementById("f-ot").checked;
 
-      let rows = ALL.filter(x =>
+      return ALL.filter(x =>
         (!site || x.site_name === site) &&
         (!q || x.worker_name.toLowerCase().includes(q) || x.worker_code.toLowerCase().includes(q)) &&
         (!missing || (x.present && !x.end_time)) &&
@@ -169,6 +175,10 @@
         return c * SORT.dir;
       });
 
+    }
+    function render() {
+      const site=document.getElementById('site').value,rows=verificationRows();
+      exportButtons();
       // header sort arrows
       document.querySelectorAll("#hrow th").forEach(th => {
         const k = th.dataset.k;
@@ -215,6 +225,23 @@
              <td class="p-3 text-right">${Math.round(ot*10)/10}</td><td></td></tr>`;
     }
 
+    function exportButtons(){for(const id of ['export-excel','export-csv'])document.getElementById(id).disabled=!LOADED||EXPORTING||!verificationRows().length;}
+    function verificationContext(){const active=[];const q=document.getElementById('search').value.trim();if(q)active.push('Search: '+q);if(document.getElementById('f-missing').checked)active.push('Missing end time only');if(document.getElementById('f-present').checked)active.push('Present only');if(document.getElementById('f-ot').checked)active.push('Has OT only');return {date:document.getElementById('date').value,site:document.getElementById('site').value||'All sites',filters:active.join(' / ')||'All workers',sort:HLABELS[SORT.key]+(SORT.dir>0?' ascending':' descending'),user:ME?.name||'VCMS',generated:new Date().toLocaleString('en-SG',{timeZone:'Asia/Singapore',hour12:false})};}
+    async function exportVerification(kind){
+      if(!LOADED||EXPORTING)return;
+      const rows=verificationRows().map(r=>({...r})),context=verificationContext();if(!rows.length){alert('No matching workers to export.');return;}
+      EXPORTING=true;exportButtons();const button=document.getElementById(kind==='xlsx'?'export-excel':'export-csv'),label=button.textContent;button.textContent='Preparing…';
+      try{
+        let blob;
+        if(kind==='csv')blob=new Blob([VerificationExport.csv(rows,context.date)],{type:'text/csv;charset=utf-8'});
+        else{
+          if(!window.ExcelJS)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';script.onload=()=>window.ExcelJS?resolve():reject(Error('Excel export tool unavailable'));script.onerror=()=>reject(Error('Could not load Excel export. Check your connection and retry.'));document.head.appendChild(script)});
+          const workbook=VerificationExport.workbook(window.ExcelJS,rows,context);blob=new Blob([await workbook.xlsx.writeBuffer()],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+        }
+        const site=context.site.replace(/[^a-z0-9_-]+/gi,'_'),name=`VCMS_EndTime_Verification_${context.date}_${site}.${kind}`,url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      }catch(e){alert(e.message||'Could not export. Please try again.')}finally{EXPORTING=false;button.textContent=label;exportButtons();}
+    }
+
     document.getElementById("date").addEventListener("change", load);
     ["site","search","f-missing","f-present","f-ot"].forEach(id =>
       document.getElementById(id).addEventListener("input", render));
@@ -227,3 +254,4 @@
   </script>
 </body>
 </html>
+
