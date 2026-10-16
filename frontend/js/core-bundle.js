@@ -11,6 +11,7 @@ window.esc = function (v) {
 };
 
 
+
 // source: js/core/theme.js
 // VCMS appearance foundation: company brand + personal display mode.
 (function () {
@@ -121,6 +122,7 @@ window.esc = function (v) {
   (document.head||document.documentElement).appendChild(e);
 })();
 
+
 // source: js/core/components.js
 // Shared visual components. Safety colours are semantic and never follow the brand.
 (function(){
@@ -186,6 +188,7 @@ window.esc = function (v) {
   (document.head||document.documentElement).appendChild(style);
 })();
 
+
 // source: js/core/drafts.js
 // ---- Small text-form draft recovery (no photos, files, signatures or secrets) ----
 // Media remains in the server/upload flow; only ordinary fields are retained.
@@ -218,6 +221,7 @@ window.esc = function (v) {
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(offer,1200)});else setTimeout(offer,1200);
 })();
 
+
 // source: js/core/pwa.js
 // ---- PWA updater: show at most once per release and reload only after the
 // new worker controls the page. This prevents iPhone's repeated update loop. ----
@@ -246,6 +250,7 @@ window.esc = function (v) {
     }).catch(function(){});
   });
 })();
+
 
 
 // source: js/core/layout.js
@@ -318,7 +323,7 @@ window.esc = function (v) {
 // ---- Load the shared desktop application shell ----
 (function () {
   var shell=document.createElement("script");
-  shell.src="js/shell.js?v=20260901-equipment1";
+  shell.src="js/shell.js?v=20261016-sic1";
   shell.defer=true;
   (document.head||document.documentElement).appendChild(shell);
   var assistant=document.createElement("script");
@@ -326,6 +331,7 @@ window.esc = function (v) {
   assistant.defer=true;
   (document.head||document.documentElement).appendChild(assistant);
 })();
+
 
 // source: js/core/app-config.js
 // ---- Role tiers (Rev 6) — shared by all pages ----
@@ -368,6 +374,7 @@ if (window.tailwind) {
     } } } }
   };
 }
+
 
 // source: js/core/ui-theme.js
 // ---- Modern Soft UI theme + subtle motion (applies app-wide) ----
@@ -641,6 +648,7 @@ if (window.tailwind) {
 })();
 
 
+
 // source: js/core/export.js
 // ---- Download-as-PDF helper (works on iPhone, where window.print() is blocked) ----
 // Lazy-loads html2pdf.js on first use, then renders one DOM element to an A4 PDF.
@@ -745,6 +753,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
 };
 
 
+
 // source: js/core/site-history.js
 (function () {
   "use strict";
@@ -778,6 +787,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
     label: label
   });
 })();
+
 
 // source: js/core/navigation.js
 // ---- Global floating "Home" button (every page except home / login) ----
@@ -826,3 +836,4 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
   s.textContent='@media(min-width:900px){.kpi,.stat{transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s ease,border-color .18s ease!important;will-change:transform}.kpi:hover,.stat:hover{transform:translateY(-5px) scale(1.012)!important;box-shadow:0 14px 30px rgba(16,24,40,.15)!important;border-color:rgba(185,28,28,.38)!important}.kpi:active,.stat:active{transform:translateY(-2px) scale(1.005)!important}}@media(prefers-reduced-motion:reduce){.kpi,.stat{transition:none!important}.kpi:hover,.stat:hover{transform:none!important}}';
   document.head.appendChild(s);
 })();
+
