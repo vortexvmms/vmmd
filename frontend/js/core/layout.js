@@ -67,7 +67,7 @@
 // ---- Load the shared desktop application shell ----
 (function () {
   var shell=document.createElement("script");
-  shell.src="js/shell.js?v=20260901-equipment1";
+  shell.src="js/shell.js?v=20261016-sic1";
   shell.defer=true;
   (document.head||document.documentElement).appendChild(shell);
   var assistant=document.createElement("script");

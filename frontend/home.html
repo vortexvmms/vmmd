@@ -244,13 +244,13 @@
         { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"]] },
         { grp:"Procurement", items:[["New PR","pr-new.html","cart"]] },
         { grp:"More", items:[["Settings","settings.html","gear"],["How to use","help.html","help"]] } ];
-        supervisorNav.splice(2,0,{grp:"Equipment & Machineries",items:role==="logistics_sup"?[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"]]:[["Lifting","lifting.html","document"]]});
+        supervisorNav.splice(2,0,{grp:"Equipment & Machineries",items:role==="logistics_sup"?[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]]:[["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]]});
         return supervisorNav;
       }
       const nav = [
         { items:[["Home","home.html","home"],["To-do","todo.html","check"]] },
         { grp:"Manpower", items:[["Workers","workers.html","user"],["Sites","sites.html","bld"],["Allocation","allocation.html","cal"],["Attendance","attendance.html","chk"],["End-time","verify.html","clk"]] },
-        { grp:"Equipment & Machineries", items:[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"]] },
+        { grp:"Equipment & Machineries", items:[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]] },
         { grp:"Site progress", items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","bld"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"]] },
         { grp:"Procurement", items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["Import PR PDFs","pr-import.html","doc"]] },
         { grp:"Reports & Analytics", items:[["Operational Dashboard","dashboard.html","chart"],["Timesheets","timesheet.html","grid"],["Resource Summary","resource-summary.html","grid"],["Site Board","site-dashboard.html","chart"],["PR Board","pr-dashboard.html","chart"]] },
@@ -286,7 +286,7 @@
       if(TIER[role]==="supervisor")return[
         {name:"Daily work",items:[["Request manpower","request.html","cal"],["Attendance / End time","attendance.html","check"],["WhatsApp","whatsapp.html","chat"]]},
         {name:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Daily report","dpr.html","doc"],["DPR history","dprlist.html","list"],["Dashboard","dashboard.html","chart"]]},
-        {name:"Support",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]}
+        {name:"Support",items:[["SIC Register","sic-register.html","shield"],["Settings","settings.html","gear"],["How to use","help.html","help"]]}
       ];
       const nav=navFor(role);
       const labeled=nav.slice(1);                          // skip Home/To-do row
@@ -509,3 +509,4 @@
   </script>
 </body>
 </html>
+
