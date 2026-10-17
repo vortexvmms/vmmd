@@ -17,3 +17,18 @@ test('archived Advario remains selectable for SIC entries',async({page})=>{await
 test('dashboard filters update counts and carry into the SIC log',async({page})=>{await boot(page);await expect(page.locator('#summary button')).toHaveCount(5);await expect(page.locator('#dashboard')).not.toContainText('Missing SIC cards');await expect(page.locator('#dash-card option[value="missing"]')).toHaveCount(0);await page.locator('#dash-site').selectOption(ADVARIO);await expect(page.locator('[data-stat="records"] b')).toHaveText('61');await expect(page.locator('#dash-context')).toContainText('ADVARIO');await expect(page.locator('#site-summary tbody tr')).toHaveCount(1);await page.locator('#dash-status').selectOption('Expired');await expect(page.locator('[data-stat="records"] b')).toHaveText('61');await page.getByRole('button',{name:'View filtered SIC log',exact:true}).click();await expect(page.locator('#filter-site')).toHaveValue(ADVARIO);await expect(page.locator('#filter-status')).toHaveValue('Expired');await expect(page.locator('#row-count')).toContainText('61 matching records');await page.getByRole('button',{name:'Dashboard',exact:true}).click();await page.locator('#dash-expiry-from').fill('2026-02-01');await page.locator('#dash-expiry-from').press('Tab');await expect(page.locator('[data-stat="records"] b')).toHaveText('0');await page.locator('#dash-clear').click();await expect(page.locator('[data-stat="records"] b')).toHaveText('123');await page.locator('#dash-search').fill('Worker 123');await expect(page.locator('[data-stat="records"] b')).toHaveText('1')});
 
 test('SIC site lists omit the unused archived TUAS LOT duplicate',async({page})=>{await boot(page);await expect(page.locator('#dash-site option').filter({hasText:'TUAS LOT'})).toHaveCount(1);await expect(page.locator('#filter-site option').filter({hasText:'TUAS LOT'})).toHaveCount(1);await page.getByRole('button',{name:'New Entry',exact:true}).click();await expect(page.locator('#entry-site option').filter({hasText:'TUAS LOT'})).toHaveCount(1)});
+
+test('card upload accepts an empty 201 attachment response without deleting or retrying',async({page})=>{
+await boot(page,'admin',1);
+let saves=0,deletes=0;
+await page.route('**/storage/v1/object/sic-cards/**',r=>{if(r.request().method()==='DELETE')deletes++;return r.fulfill({json:{Key:'saved-card'}})});
+await page.route('**/storage/v1/object/sic-cards',r=>{deletes++;return r.fulfill({json:[]})});
+await page.route('**/rest/v1/sic_attachments',r=>{saves++;return r.fulfill({status:201,body:''})});
+await page.getByRole('button',{name:'Upload SIC Cards',exact:true}).click();
+await page.locator('#upload-record').selectOption('30000000-0000-0000-0000-000000000001');
+await page.locator('#upload-files').setInputFiles({name:'card.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nTest SIC card')});
+await page.locator('#upload-form button[type="submit"]').click();
+await expect(page.locator('#upload-status')).toContainText('Cards uploaded successfully');
+expect(saves).toBe(1);expect(deletes).toBe(0);
+await expect(page.locator('#upload-preview .sic-preview')).toHaveCount(0);
+});
