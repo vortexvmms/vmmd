@@ -5,14 +5,15 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v89-attendance-workspace';
+const CACHE = 'vcms-v90-worker-cards';
 const APP_SHELL = [
+  'worker-cards.html','css/worker-cards.css?v=20261020-1','js/worker-cards.js?v=20261020-1',
   'css/attendance-desktop.css?v=20261020-1','js/attendance-desktop.js?v=20261020-1',
   'js/verification-export.js?v=20261016-1',
   'sic-register.html','css/sic-register.css?v=20261016-1','js/sic-domain.js?v=20261016-2','js/sic-register.js?v=20261017-upload1',
   'js/pr-support.js?v=20261010-2',
   'js/attendance-completion.js?v=20261002-1','./','home.html','attendance.html','request.html','whatsapp.html','dpr.html','dpr-projects.html','pcs-dashboard.html','pcs-report.html','camera.html','camera-settings.html','camera-photos.html','tipper-trucks.html','js/tipper.js?v=20261007-1','js/tipper-shared.js?v=20261007-1','lifting.html','css/lifting.css','js/lifting.js?v=20260930-1','audit-log.html','camera-manifest.json',
-  'css/app.css','css/assistant.css?v=20260828-1','js/core-bundle.js?v=20260904-history1','js/auth.js?v=20260930-upload2','js/ui.js?v=20260825-ui5','js/pcs-dpr.js?v=20260905-navyheaders','js/shell.js?v=20261016-sic1','js/workflow.js?v=20260927-1','js/chatbot.js?v=20260828-1','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'
+  'css/app.css','css/assistant.css?v=20260828-1','js/core-bundle.js?v=20260904-history1','js/auth.js?v=20260930-upload2','js/ui.js?v=20260825-ui5','js/pcs-dpr.js?v=20260905-navyheaders','js/shell.js?v=20261020-cards1','js/workflow.js?v=20260927-1','js/chatbot.js?v=20260828-1','vendor/heic2any.min.js?v=0.0.4','js/camera-queue.js?v=20260814-2','js/camera-capture.js?v=20260814-13','icons/icon-192.png'
 ];
 
 self.addEventListener('install', (e) => {

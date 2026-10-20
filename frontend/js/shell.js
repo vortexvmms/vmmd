@@ -24,8 +24,8 @@
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
         full:null,
-        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","pr-import.html","whatsapp.html","dashboard.html","timesheet.html","tipper-trucks.html","lifting.html","sic-register.html","settings.html","help.html"]),
-        supervisor:new Set(["home.html","todo.html","request.html","attendance.html","dpr.html","dprlist.html","camera.html","camera-photos.html","pr-new.html","whatsapp.html","dashboard.html","sic-register.html","settings.html","help.html"]),
+        manager:new Set(["home.html","todo.html","request.html","attendance.html","verify.html","dpr.html","dprlist.html","dpr-projects.html","camera.html","camera-settings.html","camera-photos.html","resource-summary.html","site-dashboard.html","pr-directory.html","pr-new.html","pr-dashboard.html","pr-import.html","whatsapp.html","dashboard.html","timesheet.html","tipper-trucks.html","lifting.html","sic-register.html","worker-cards.html","settings.html","help.html"]),
+        supervisor:new Set(["home.html","todo.html","request.html","attendance.html","dpr.html","dprlist.html","camera.html","camera-photos.html","pr-new.html","whatsapp.html","dashboard.html","sic-register.html","worker-cards.html","settings.html","help.html"]),
         payroll:new Set(["home.html","todo.html","verify.html","timesheet.html","manhours.html","settings.html","help.html"])
       };
       var ICONS = {
@@ -49,13 +49,13 @@
           {group:"Procurement",items:[["New PR","pr-new.html","cart"]]},
           {group:"More",items:[["Settings","settings.html","gear"],["How to use","help.html","help"]]}
           ];
-          supervisorSections.splice(2,0,{group:"Equipment & Machineries",items:viewRole === "logistics_sup"?[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]]:[["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]]});
+          supervisorSections.splice(2,0,{group:"Equipment & Machineries",items:viewRole === "logistics_sup"?[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"],["Worker Cards","worker-cards.html","document"]]:[["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"],["Worker Cards","worker-cards.html","document"]]});
           return supervisorSections;
         }
         var sections = [
           {items:[["Home","home.html","home"],["To-do","todo.html","check"]]},
           {group:"Manpower",items:[["Workers","workers.html","user"],["Sites","sites.html","building"],["Allocation","allocation.html","calendar"],["Attendance","attendance.html","check"],["End-time","verify.html","clock"]]},
-          {group:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"]]},
+          {group:"Equipment & Machineries",items:[["Tipper Truck Supply","tipper-trucks.html","truck"],["Lifting","lifting.html","document"],["SIC Register","sic-register.html","shield"],["Worker Cards","worker-cards.html","document"]]},
           {group:"Site progress",items:[["VCMS Camera","camera.html","chart"],["Project directory","dpr-projects.html","building"],["Daily report","dpr.html","document"],["DPR history","dprlist.html","list"]]},
           {group:"Procurement",items:[["PR directory","pr-directory.html","list"],["New PR","pr-new.html","cart"],["Import PR PDFs","pr-import.html","upload"]]},
           {group:"Reports & Analytics",items:[["Operational Dashboard","dashboard.html","chart"],["Timesheets","timesheet.html","grid"],["Resource Summary","resource-summary.html","grid"],["Site Board","site-dashboard.html","chart"],["PR Board","pr-dashboard.html","chart"]]},
