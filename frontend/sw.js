@@ -5,8 +5,9 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v88-sic-upload-response';
+const CACHE = 'vcms-v89-attendance-workspace';
 const APP_SHELL = [
+  'css/attendance-desktop.css?v=20261020-1','js/attendance-desktop.js?v=20261020-1',
   'js/verification-export.js?v=20261016-1',
   'sic-register.html','css/sic-register.css?v=20261016-1','js/sic-domain.js?v=20261016-2','js/sic-register.js?v=20261017-upload1',
   'js/pr-support.js?v=20261010-2',
