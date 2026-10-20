@@ -9,7 +9,7 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && pip install --force-reinstall --no-deps opencv-python-headless==4.11.0.86
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
