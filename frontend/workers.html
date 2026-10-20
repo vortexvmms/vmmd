@@ -93,11 +93,12 @@
     <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-6">
       <h2 id="m-title" class="text-lg font-bold text-gray-800 mb-4">Add Worker</h2>
 
-      <label class="block text-sm font-medium text-gray-700 mb-1">Worker ID</label>
+      <label for="m-code" class="block text-sm font-medium text-gray-700 mb-1">Worker ID</label>
       <input id="m-code" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 uppercase" placeholder="e.g. W013">
 
-      <label class="block text-sm font-medium text-gray-700 mb-1">Full Name (as in WhatsApp message)</label>
+      <label for="m-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name (as in WhatsApp message)</label>
       <input id="m-name" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3" placeholder="e.g. Arumugam Kumaravel">
+      <p class="text-xs text-gray-500 mb-3">Correct the ID or name here. Attendance and allocation history stay with this worker.</p>
 
       <div id="m-status-wrap" class="hidden">
         <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -149,6 +150,9 @@
     }
 
     async function load() {
+      // The master-data editor must show current values, including corrections
+      // made on another device or directly in the database.
+      vmmsClearRefCache("/api/v1/workers");
       const r = await vmmsApi("/api/v1/workers");
       if (!r.ok) { toast("Could not load workers"); return; }
       ALL = await r.json();
@@ -210,7 +214,6 @@
       EDIT_ID = w ? w.id : null;
       document.getElementById("m-title").textContent = w ? "Edit Worker" : "Add Worker";
       document.getElementById("m-code").value = w ? w.worker_code : "";
-      document.getElementById("m-code").disabled = !!w;   // Worker ID immutable (spec FR-2)
       document.getElementById("m-name").value = w ? w.name : "";
       document.getElementById("m-name").disabled = false;   // full-access tier edits everything
       document.getElementById("m-status-wrap").classList.toggle("hidden", !w);
@@ -227,12 +230,16 @@
       err.classList.add("hidden");
       btn.disabled = true; btn.textContent = "Saving…";
       try {
+        const worker_code = document.getElementById("m-code").value.trim().toUpperCase();
+        const name = document.getElementById("m-name").value.trim();
+        if (!worker_code || !name) throw new Error("Worker ID and name are required");
         let r;
         if (EDIT_ID) {
           r = await vmmsApi(`/api/v1/workers/${EDIT_ID}`, {
             method: "PATCH",
             body: JSON.stringify({
-              name: document.getElementById("m-name").disabled ? undefined : document.getElementById("m-name").value,
+              worker_code,
+              name,
               status: document.getElementById("m-status").value,
             }),
           });
@@ -240,8 +247,8 @@
           r = await vmmsApi("/api/v1/workers", {
             method: "POST",
             body: JSON.stringify({
-              worker_code: document.getElementById("m-code").value,
-              name: document.getElementById("m-name").value,
+              worker_code,
+              name,
             }),
           });
         }
