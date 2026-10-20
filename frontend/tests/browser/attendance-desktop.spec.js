@@ -120,3 +120,27 @@ test('phone keeps the original tool order and desktop options stay hidden', asyn
   await expect(page.locator('header>.vcms-page-toolbar')).toHaveCount(1);
   await expect(page.locator('#att-bulk-options')).toHaveCount(0);
 });
+
+test('transfer popup stays above the footer and dismisses with Escape or its backdrop', async ({page}) => {
+  await fixture(page);
+  await page.locator('#addbtn').scrollIntoViewIfNeeded();
+  await page.locator('#addbtn').click();
+  await expect(page.locator('#tr-modal')).toBeVisible();
+  const layout=await page.evaluate(()=>{
+    const modal=document.getElementById('tr-modal');
+    const panel=document.getElementById('tr-panel').getBoundingClientRect();
+    return {modalZ:Number(getComputedStyle(modal).zIndex),
+      footerZ:Number(getComputedStyle(document.getElementById('att-actions')).zIndex),
+      top:panel.top,bottom:panel.bottom,height:innerHeight};
+  });
+  expect(layout.modalZ).toBeGreaterThan(layout.footerZ);
+  expect(layout.top).toBeGreaterThanOrEqual(0);
+  expect(layout.bottom).toBeLessThanOrEqual(layout.height);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#tr-modal')).toBeHidden();
+  await expect(page.locator('#addbtn')).toBeFocused();
+  await page.locator('#addbtn').click();
+  await page.locator('#tr-modal').click({position:{x:4,y:4}});
+  await expect(page.locator('#tr-modal')).toBeHidden();
+  await expect(page.locator('#addbtn')).toBeFocused();
+});
