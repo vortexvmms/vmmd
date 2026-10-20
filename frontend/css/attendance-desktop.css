@@ -1,0 +1,105 @@
+/* Attendance owns its compact workspace; shared page styles remain unchanged. */
+body.att-compact-desktop #attendance-page-header>.vcms-page-header__row {
+  display:grid!important;
+  grid-template-columns:125px 330px minmax(0,1fr);
+  gap:16px!important;
+  min-height:68px!important;
+  padding:8px 18px!important;
+}
+body.att-compact-desktop #attendance-page-header .vcms-page-toolbar {
+  display:grid!important;
+  grid-template-columns:145px minmax(0,1fr)!important;
+  gap:8px;
+  padding:0!important;
+  min-width:0;
+  background:none;
+}
+body.att-compact-desktop #attendance-page-header .vcms-control {width:100%;max-width:none;height:38px;min-height:38px}
+body.att-compact-desktop #attendance-page-header h1 {font-size:18px!important}
+body.att-compact-desktop #attendance-page-header #summary {font-size:10px}
+body.att-compact-desktop #att-kpis {display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;min-width:0}
+body.att-compact-desktop .att-kpi {min-width:0;padding:0 10px;border:0;border-left:1px solid var(--vcms-line,#dce1e8);border-radius:0;box-shadow:none;background:transparent}
+body.att-compact-desktop .att-kpi b {display:block;font-size:19px;line-height:1.2;color:var(--vcms-ink,#182230)}
+body.att-compact-desktop .att-kpi span {display:block;font-size:9px;line-height:1.25;color:var(--vcms-muted,#667085)}
+body.att-compact-desktop .vcms-flowbar {min-height:32px!important;margin:0!important;padding:5px 18px!important;border:0!important;border-bottom:1px solid var(--vcms-line,#dce1e8)!important;border-radius:0!important;box-shadow:none!important}
+body.att-compact-desktop .vcms-flow-title {display:none!important}
+body.att-compact-desktop .vcms-flow-steps {gap:10px!important}
+body.att-compact-desktop .vcms-flow-step {font-size:10px!important;padding:0!important;min-height:24px!important}
+body.att-compact-desktop .vcms-flow-step span {width:20px!important;height:20px!important}
+body.att-compact-desktop #att-main {
+  width:100%!important;
+  max-width:none!important;
+  padding:10px 18px calc(var(--att-footer-height,90px) + 24px)!important;
+}
+body.att-compact-desktop #att-statusline {display:flex;align-items:center;gap:10px;margin-bottom:10px;min-width:0}
+body.att-compact-desktop #att-filters {flex:none;margin:0;padding:0;overflow:visible}
+body.att-compact-desktop .att-filter {padding:7px 10px;font-size:11px}
+body.att-compact-desktop #banner,
+body.att-compact-desktop #completion-panel {min-width:0;margin:0!important;padding:7px 10px!important;border-radius:8px!important;font-size:11px;line-height:1.4;text-align:left;box-shadow:none!important}
+body.att-compact-desktop #banner {flex:1}
+body.att-compact-desktop #completion-panel {flex:0 1 280px}
+body.att-compact-desktop #completion-panel p {font-size:11px;margin:3px 0}
+body.att-compact-desktop #completion-panel .vcms-btn {display:none} /* The fixed footer owns desktop submission. */
+body.att-compact-desktop .att-work {display:block}
+body.att-compact-desktop .att-tools {display:none}
+body.att-compact-desktop #list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;align-items:start}
+body.att-compact-desktop #list>div {margin:0!important}
+body.att-compact-desktop #list .worker-card {padding:12px!important;border-radius:12px!important}
+body.att-compact-desktop .worker-card .tchip,
+body.att-compact-desktop .worker-card .tmore,
+body.att-compact-desktop .worker-card .tcustom {padding:5px 8px;font-size:11px}
+body.att-compact-desktop .worker-card .save-state {font-size:10px}
+body.att-compact-desktop .worker-card>div:last-child {margin-top:8px;padding-top:6px}
+body.att-compact-desktop .worker-card .remove-day {padding:4px 0;font-size:11px}
+body.att-compact-desktop #att-actions {left:0;padding:10px 18px;container-type:inline-size;container-name:attendance-footer}
+body.vcms-shelled.att-compact-desktop #att-actions {left:236px;z-index:985}
+body.vcms-shelled.vcms-rail-mini.att-compact-desktop #att-actions {left:72px}
+body.att-compact-desktop #att-actions-inner {display:flex;align-items:center;gap:14px;max-width:none!important;width:100%}
+body.att-compact-desktop .att-action-status {flex:0 1 230px;min-width:140px}
+body.att-compact-desktop .att-action-status p {margin:0;text-align:left;font-size:11px;line-height:1.5}
+body.att-compact-desktop #completion-footer {font-size:12px;color:var(--vcms-ink,#182230)}
+body.att-compact-desktop .att-footer-tools {display:flex;align-items:center;flex:1;gap:10px;min-width:0}
+body.att-compact-desktop .att-submit-actions {flex:none;gap:8px}
+body.att-compact-desktop #att-actions .vcms-btn {min-height:40px;padding:0 12px;font-size:12px;flex:none}
+body.att-compact-desktop #bulkbar,
+body.att-compact-desktop #morningbar {position:relative;padding:0!important;margin:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+body.att-compact-desktop #bulkbar {min-width:0;display:flex;align-items:center;gap:8px}
+body.att-compact-desktop #bulkbar.hidden,
+body.att-compact-desktop #morningbar.hidden {display:none}
+body.att-compact-desktop #bulkbar>p {display:none}
+body.att-compact-desktop #bulkbar>.flex {flex-wrap:nowrap;gap:5px}
+body.att-compact-desktop #bulkbar>.flex:before {content:'All present';font-size:10px;font-weight:800;color:var(--vcms-muted,#667085);white-space:nowrap}
+body.att-compact-desktop #bulkbar>.flex>button {padding:0 10px;min-height:36px;white-space:nowrap;font-size:11px;border-radius:8px}
+body.att-compact-desktop #bulk-time {width:98px;min-width:98px;height:36px;min-height:36px;padding:0 6px;flex:none}
+body.att-compact-desktop #morningbar>p,body.att-compact-desktop #morningbar>span {display:none}
+body.att-compact-desktop #morningbar button {font-size:11px;padding:0 10px;min-height:36px;white-space:nowrap}
+body.att-compact-desktop #att-bulk-options {position:relative;flex:none;font-size:11px}
+body.att-compact-desktop #att-bulk-options summary {cursor:pointer;white-space:nowrap;padding:9px 4px;color:var(--vcms-brand,#175cd3);font-weight:800}
+body.att-compact-desktop #att-bulk-options .bulk-help {position:absolute;bottom:calc(100% + 16px);right:0;width:min(350px,calc(100vw - 48px));margin:0;padding:16px;background:var(--vcms-surface,#fff);border:1px solid var(--vcms-line,#dce1e8);border-radius:12px;box-shadow:0 8px 30px #18223026}
+body.att-compact-desktop #att-bulk-options .bulk-help>.flex {flex-wrap:wrap}
+body.att-compact-desktop #groupbar {position:static;min-width:0;width:100%;padding:0}
+body.att-compact-desktop #groupbar>div {display:flex;align-items:center;gap:10px;max-width:none;margin:0;padding:6px 10px;border-radius:10px;box-shadow:none}
+body.att-compact-desktop #groupbar>div>.flex {margin:0;gap:8px;flex:none;white-space:nowrap}
+body.att-compact-desktop #groupbar #groupchips {flex:1 1 0;flex-wrap:nowrap;overflow:auto;min-width:0;padding:3px;scrollbar-width:thin}
+body.att-compact-desktop #groupchips button {flex:none;white-space:nowrap}
+body.att-compact-desktop #group-time {width:100px;min-width:100px;margin:0;padding:4px}
+body.att-compact-desktop.att-group-selected #bulkbar,
+body.att-compact-desktop.att-group-selected #morningbar {display:none!important}
+body.att-compact-desktop.att-group-selected #att-main {padding-bottom:calc(var(--att-footer-height,90px) + 24px)!important}
+body.att-compact-desktop #sync-state {bottom:calc(var(--att-footer-height,90px) + 10px);z-index:986}
+body.att-compact-desktop .vcms-toast {bottom:calc(var(--att-footer-height,90px) + 10px);z-index:986}
+@media(max-width:1250px) {
+  body.att-compact-desktop #attendance-page-header>.vcms-page-header__row {grid-template-columns:115px minmax(0,1fr);gap:8px!important}
+  body.att-compact-desktop #att-kpis {grid-column:1/-1;justify-content:flex-start}
+  body.att-compact-desktop .att-kpi {flex:1}
+  body.att-compact-desktop #att-statusline {flex-wrap:wrap}
+  body.att-compact-desktop #att-filters {width:100%}
+  body.att-compact-desktop #completion-panel {flex:1}
+}
+@container attendance-footer (max-width:1100px) {
+  body.att-compact-desktop #att-actions-inner {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  body.att-compact-desktop .att-action-status {grid-row:2}
+  body.att-compact-desktop .att-submit-actions {grid-row:2;grid-column:2}
+  body.att-compact-desktop .att-footer-tools {grid-column:1/-1;grid-row:1;flex-wrap:wrap}
+  body.att-compact-desktop #groupbar>div {min-width:0}
+}

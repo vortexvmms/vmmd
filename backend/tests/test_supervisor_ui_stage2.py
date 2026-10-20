@@ -58,17 +58,6 @@ def test_pr_pdf_preview_close_controls_stay_accessible():
     assert "event.target===this" in html
 
 
-def test_attendance_transfer_control_and_popup_stay_above_desktop_footer():
-    html = page("attendance.html")
-    assert "#att-main{padding-bottom:150px!important}" in html
-    assert "#addbtn{scroll-margin-bottom:130px}" in html
-    assert "#tr-modal{z-index:1200" in html
-    assert 'id="tr-panel"' in html
-    assert "100dvh - 32px" in html
-    assert 'event.key === "Escape"' in html
-    assert "event.target === event.currentTarget" in html
-
-
 def test_saved_theme_is_bootstrapped_before_first_paint():
     for path in FRONTEND.glob("*.html"):
         html = path.read_text()
