@@ -77,8 +77,8 @@ test('attendance transfer button and popup are not covered by the fixed action f
   await expect(page.getByRole('button', { name: 'Close' })).toBeVisible();
 });
 
-test('retired worker-card pages are not published', async ({ request }) => {
-  for (const path of ['/cards.html', '/worker-cards.html', '/training-matrix.html']) {
+test('retired alternate card pages are not published', async ({ request }) => {
+  for (const path of ['/cards.html', '/training-matrix.html']) {
     expect((await request.get(path)).status()).toBe(404);
   }
 });

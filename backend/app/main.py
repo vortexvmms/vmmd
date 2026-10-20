@@ -40,6 +40,7 @@ from .settings import (
     PR_R2_ENABLED, R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY, SUPABASE_URL,
 )
+from .storage import r2_presign_get as _r2_presign_get
 from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
 from .storage import pr_r2_presign_get as _pr_r2_presign_get
@@ -48,6 +49,7 @@ from .modules.planning.router import PlanningContext, build_planning_router; fro
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
 from .modules.lifting.router import LiftingContext, build_lifting_router
+from .modules.worker_documents.router import WorkerDocumentsContext, build_worker_documents_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
@@ -117,6 +119,12 @@ app.include_router(build_equipment_router(EquipmentContext(
 app.include_router(build_lifting_router(LiftingContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit,
+)))
+
+app.include_router(build_worker_documents_router(WorkerDocumentsContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
+    r2_presign_get=_r2_presign_get if R2_ENABLED else None,
 )))
 
 @app.get("/api/v1/audit-log")

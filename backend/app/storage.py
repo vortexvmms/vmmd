@@ -55,6 +55,10 @@ def r2_presign_put(key: str, expires: int = 600) -> str:
     return _presign(key, "PUT", expires)
 
 
+def r2_presign_get(key: str, expires: int = 600) -> str:
+    return _presign(key, "GET", expires)
+
+
 def r2_presign_delete(key: str, expires: int = 600) -> str:
     return _presign(key, "DELETE", expires)
 

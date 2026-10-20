@@ -15,7 +15,7 @@ def test_backend_foundations_are_modular():
 def test_retired_features_are_not_published_or_callable():
     main = (ROOT / "backend/app/main.py").read_text()
     sw = (ROOT / "frontend/sw.js").read_text()
-    for page in ("cards.html", "worker-cards.html", "training-matrix.html"):
+    for page in ("cards.html", "training-matrix.html"):
         assert not (ROOT / "frontend" / page).exists()
     assert '@app.get("/api/v1/notifications")' not in main
     assert '@app.post("/api/v1/push/subscribe")' not in main
