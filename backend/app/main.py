@@ -235,6 +235,7 @@ class WorkerCreate(BaseModel):
 
 
 class WorkerUpdate(BaseModel):
+    worker_code: str | None = None
     name: str | None = None
     status: str | None = None  # active | on_leave | inactive
     fin: str | None = None     # work-permit / FIN number (for card sheets)
@@ -333,8 +334,19 @@ async def bulk_create_workers(body: WorkerBulk, user: dict = Depends(get_current
 @app.patch("/api/v1/workers/{worker_id}")
 async def update_worker(worker_id: str, body: WorkerUpdate,
                         user: dict = Depends(get_current_user)):
+    # Keep master-data corrections within the existing full-access tier.
+    if user["role"] not in FULL_ROLES:
+        raise HTTPException(status_code=403, detail="Only management can edit workers")
+
     changes = {}
-    if body.name is not None and body.name.strip():
+    if "worker_code" in body.model_fields_set:
+        code = (body.worker_code or "").strip().upper()
+        if not code:
+            raise HTTPException(status_code=400, detail="Worker ID is required")
+        changes["worker_code"] = code
+    if "name" in body.model_fields_set:
+        if not body.name or not body.name.strip():
+            raise HTTPException(status_code=400, detail="Worker name is required")
         changes["name"] = body.name.strip()
     if body.status is not None:
         if body.status not in VALID_STATUS:
@@ -345,10 +357,6 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
     if not changes:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
-    # Rev 6: only the full-access tier (admin/GM/OM/HR) edits workers.
-    if user["role"] not in FULL_ROLES:
-        raise HTTPException(status_code=403, detail="Only management can edit workers")
-
     changes["updated_by"] = user["user_id"]
 
     async with shared_client() as client:
@@ -357,7 +365,9 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
             params={"id": f"eq.{worker_id}", "select": "worker_code,name,status"},
             headers=supabase_headers(user["token"]),
         )
-        old_rows = old.json() if old.status_code == 200 else []
+        if old.status_code != 200:
+            raise HTTPException(status_code=503, detail="Could not load worker for editing")
+        old_rows = old.json()
         if not old_rows:
             raise HTTPException(status_code=404, detail="Worker not found")
 
@@ -367,6 +377,9 @@ async def update_worker(worker_id: str, body: WorkerUpdate,
             headers={**supabase_headers(user["token"]), "Prefer": "return=representation"},
             json=changes,
         )
+        if r.status_code == 409:
+            raise HTTPException(status_code=409,
+                                detail=f"Worker ID {changes.get('worker_code', old_rows[0]['worker_code'])} already exists")
         if r.status_code != 200 or not r.json():
             raise HTTPException(status_code=500, detail="Could not update worker")
         row = r.json()[0]
