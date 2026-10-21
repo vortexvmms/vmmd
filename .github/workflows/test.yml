@@ -29,6 +29,7 @@ jobs:
       - run: node --check frontend/js/ui.js
       - run: node --check frontend/js/shell.js
       - run: node --check frontend/js/worker-cards.js
+      - run: node --check frontend/js/document-masking.js
       - run: node --check frontend/js/lifting.js
       - run: node --check frontend/js/sic-register.js
       - run: node --test frontend/tests/sic-domain.test.cjs frontend/tests/verification-export.test.cjs

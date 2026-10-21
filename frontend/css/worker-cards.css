@@ -3,3 +3,5 @@
 .vcms-legacy-header>div{display:flex;flex-direction:column;align-items:flex-start;gap:3px}.vcms-legacy-header p{margin:0}
 
 .wc-date-field>button{margin-top:6px;font-size:12px;min-height:30px;padding:4px 9px}
+#mask-review{border:1px solid #cbd5e1;padding:14px;border-radius:10px;margin:16px 0}#mask-canvas{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair;border:1px solid #cbd5e1;background:#fff}.wc-mask-box{display:flex;align-items:end;gap:10px;margin:10px 0}.wc-mask-box label{flex:1;min-width:0}.wc-mask-box input{font-weight:400}#mask-message{font-size:13px;line-height:1.5}#mask-review .wc-toolbar{margin-top:16px}
+#mask-stage{max-height:65vh;overflow:auto}

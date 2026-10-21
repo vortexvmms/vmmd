@@ -7,12 +7,15 @@ from urllib.parse import quote, unquote, urlsplit
 from uuid import UUID, uuid4
 
 import struct
+import json
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from ...core.roles import ATTENDANCE_ROLES
+from . import masking
 
 MAX_FILE = 20 * 1024 * 1024
 TABLES = {'cards': 'worker_cards', 'certificates': 'worker_certificates'}
@@ -132,6 +135,23 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             raise HTTPException(404, 'Document not found or outside your current site allocations')
         return rows[0]
 
+    async def read_file(request):
+        data = bytearray()
+        async for chunk in request.stream():
+            if len(data) + len(chunk) > MAX_FILE:
+                raise HTTPException(413, 'Files must be 20 MB or smaller')
+            data.extend(chunk)
+        raw = bytes(data)
+        return raw, file_type(raw)
+
+    @router.post('/mask-preview')
+    async def mask_preview(worker_id: UUID, request: Request, page: int = 0,
+                           user: dict = Depends(ctx.get_current_user)):
+        require(user); await accessible(user, worker_id)
+        data, mime = await read_file(request)
+        result = await run_in_threadpool(masking.process, masking.prepare, data, mime, page)
+        return Response(json.dumps(result), media_type='application/json', headers={'Cache-Control': 'no-store'})
+
     @router.get('/workers')
     async def workers(search: str = '', offset: int = 0, user: dict = Depends(ctx.get_current_user)):
         require(user)
@@ -176,14 +196,11 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             raise HTTPException(422, 'Refresh the document before replacing a file')
         if side == 'back' and (not old or kind != 'cards'):
             raise HTTPException(422, 'Save the front of a card before adding its back')
-        data = bytearray()
-        async for chunk in request.stream():
-            if len(data) + len(chunk) > MAX_FILE:
-                raise HTTPException(413, 'Files must be 20 MB or smaller')
-            data.extend(chunk)
-        mime = file_type(bytes(data))
+        data, mime = await read_file(request)
         if kind == 'cards' and mime == 'application/pdf':
             raise HTTPException(415, 'Card sides must be JPG or PNG. Upload PDFs under Certificates.')
+        data, mime = await run_in_threadpool(masking.process, masking.apply, data, mime,
+                                             request.headers.get('X-Document-Masking'), MAX_FILE)
         extension = {'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf'}[mime]
         key = f'{worker_id}/{uuid4()}.{extension}'
         async with ctx.shared_client() as client:
