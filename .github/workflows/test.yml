@@ -32,7 +32,9 @@ jobs:
       - run: node --check frontend/js/document-masking.js
       - run: node --check frontend/js/lifting.js
       - run: node --check frontend/js/sic-register.js
-      - run: node --test frontend/tests/sic-domain.test.cjs frontend/tests/verification-export.test.cjs
+      - run: node --check frontend/js/sic-card-data.js
+      - run: node --check frontend/js/sic-card-reader.js
+      - run: node --test frontend/tests/sic-domain.test.cjs frontend/tests/sic-card-data.test.cjs frontend/tests/verification-export.test.cjs
       - run: node --check frontend/js/verification-export.js
       - run: node --check frontend/js/theme-ext.js
       - run: node --check frontend/js/theme-designer.js
