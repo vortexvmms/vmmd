@@ -177,7 +177,8 @@ def test_unreviewed_changed_and_invalid_masks_never_reach_storage(api):
     assert not s['uploads'] and not s['writes']
 
 
-def test_real_ocr_preview_and_saved_copy_keep_only_the_requested_endings(api):
+@pytest.mark.parametrize("large_scan", [False, True])
+def test_real_ocr_preview_and_saved_copy_keep_only_the_requested_endings(api, large_scan):
     from app.modules.worker_documents.masking import recognise
     c,s=api
     with fitz.open() as doc:
@@ -185,7 +186,7 @@ def test_real_ocr_preview_and_saved_copy_keep_only_the_requested_endings(api):
         for y,text in [(70,'FIN: G1234567X'),(140,'Date of Birth: 12/05/1990'),
                        (210,'Work Permit No: 012345678'),(280,'Expiry: 12/05/2028')]:
             page.insert_text((40,y),text,fontsize=26)
-        original=doc.tobytes()
+        original=doc[0].get_pixmap(matrix=fitz.Matrix(2,2)).tobytes('png') if large_scan else doc.tobytes()
     r=c.post(f'/api/v1/worker-documents/mask-preview?worker_id={W}',content=original)
     assert r.status_code==200 and r.headers['cache-control']=='no-store'
     p=r.json()
