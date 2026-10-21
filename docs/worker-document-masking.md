@@ -52,7 +52,7 @@ the organisation's PDPA procedures.
 
 One document-processing operation runs at a time per application process. Other
 operations receive a retry message. Pages are rendered at up to 4 megapixels and
-a 4096-pixel longest edge; OCR uses overlapping 640-pixel tiles and batch size one.
+a 4096-pixel longest edge; OCR uses a 640-pixel square overview, overlapping 640-pixel tiles and batch size one. The overview preserves complete labels and numbers that span tile boundaries; tile fragments contained in an overview line are discarded at the OCR boundary.
 The existing 20 MB input/output and 150-page input limits apply. Oversized masked
 PDFs must be split rather than saved partially.
 
@@ -87,3 +87,13 @@ save 0.16 seconds, CPU 3.11 seconds, peak process memory 1125.9 MiB; after tilin
 2.35/2.06 seconds, save 0.16 seconds, CPU 4.86 seconds, peak 362.7 MiB. These are
 sample measurements, not Render/Linux capacity verification. Agent token cost and
 browser process-family memory were not measured.
+
+A live fictional 1400×840 PNG exposed a tiling gap: all three fields crossed
+tile boundaries and produced no masks. The overview correction detects FIN
+567X, DOB (fully hidden), and Work Permit ending 5678. The same API regression
+also uploads and re-recognises the flattened result with mocked Storage.
+Sequential local macOS measurements on that PNG (one process per version,
+two previews): before, cold/warm 3.20/2.83 seconds, CPU 3.18/2.83 seconds,
+peak 351.7 MiB, zero masks; after, 3.50/3.20 seconds, CPU 3.49/3.20 seconds,
+peak 355.3 MiB, three masks. This is process peak memory, not process-family
+or Render/Linux capacity evidence. Agent tokens were not measured.

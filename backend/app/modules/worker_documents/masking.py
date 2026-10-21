@@ -66,7 +66,17 @@ def recognise(png):
         tile_size, stride = 640, 480
         def starts(length):
             return sorted(set(min(i, max(0,length-tile_size)) for i in range(0,length,stride)))
-        lines = []
+        # A bounded overview preserves complete labels/values that span tiles.
+        # Tiles then recover smaller text without running a full-resolution page
+        # through the detector. Keep all coordinates in the original raster.
+        overview = image.copy()
+        overview.thumbnail((tile_size, tile_size), Image.Resampling.LANCZOS)
+        padded = Image.new('RGB', (tile_size, tile_size), 'white')
+        padded.paste(overview, (0, 0))
+        result, _ = _ocr(np.asarray(padded))
+        sx, sy = image.width/overview.width, image.height/overview.height
+        lines = [[[[p[0]*sx, p[1]*sy] for p in points], text, score]
+                 for points, text, score in result or []]
         for y in starts(image.height):
             for x in starts(image.width):
                 tile = Image.new('RGB', (tile_size,tile_size), 'white')
@@ -78,7 +88,11 @@ def recognise(png):
                     cx = sum(p[0] for p in translated)/4
                     cy = sum(p[1] for p in translated)/4
                     height = max(p[1] for p in translated)-min(p[1] for p in translated)
-                    if not any(str(old[1])==str(text) and abs(sum(p[0] for p in old[0])/4-cx)<height
+                    # Overview lines own contained tile fragments. Comparing both
+                    # text and position avoids dropping repeated values elsewhere.
+                    normal = re.sub(r'\s', '', str(text)).casefold()
+                    if not any(normal in re.sub(r'\s', '', str(old[1])).casefold()
+                               and min(p[0] for p in old[0])-height <= cx <= max(p[0] for p in old[0])+height
                                and abs(sum(p[1] for p in old[0])/4-cy)<height for old in lines):
                         lines.append([translated,text,score])
                     if len(lines)>2000:
