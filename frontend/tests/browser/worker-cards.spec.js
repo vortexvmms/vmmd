@@ -1,6 +1,7 @@
 const {test,expect}=require('@playwright/test');
 const W='10000000-0000-0000-0000-000000000001',C='30000000-0000-0000-0000-000000000001';
-const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=','base64');
+// A valid PNG is required: Linux WebKit rejects corrupt chunk checksums.
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAGQAAAA8CAIAAAAfXYiZAAAAlUlEQVR4nO3QsQEAIAyAMPX/n+sLZU9mJu7MHHbessOsxqzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCss/cBpwsDdcmiT80AAAAASUVORK5CYII=','base64');
 async function fixture(page,{conflict=false}={}){
  const writes=[],cards=[{id:C,worker_id:W,category:'course',label:'Construction Safety Orientation',institute:'Sample Training Centre',cert_no:'COURSE-001',issued_date:'2025-01-10',expiry_date:'2025-12-31',image_path:W+'/front.jpg',back_image_path:W+'/back.jpg',updated_at:'v1'},{id:'30000000-0000-0000-0000-000000000002',worker_id:W,category:'work_permit',label:'Work permit',expiry_date:'2028-06-30',image_path:W+'/permit.jpg',updated_at:'v1'}],certificates=[];
  await page.addInitScript(()=>localStorage.setItem('vmms_session',JSON.stringify({access_token:'test',expires_at:Date.now()+3600000})));
