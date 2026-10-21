@@ -14,7 +14,7 @@ function date(value){
   return v.getUTCFullYear()===+y&&v.getUTCMonth()===+m-1&&v.getUTCDate()===+d?v.toISOString().slice(0,10):'';
 }
 const DATE='(?:\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{4}|\\d{1,2}[\\s-]+[A-Za-z]{3,9}[\\s,-]+\\d{4})';
-const labels={name:'(?:worker(?:[ \\t]+name)?|name(?:[ \\t]+of[ \\t]+(?:worker|participant))?|participant[ \\t]+name|card[ \\t]*holder)',site:'(?:site(?![ \\t]+induction)(?:[ \\t]+name)?|project(?:[ \\t]+name)?)',reference:'(?:(?:card|certificate|cert|reference)[ \\t]*(?:no\\.?|number|#|reference))',issuer:'(?:issued[ \\t]+by|issuer|training[ \\t]+provider)',sic_date:'(?:sic[ \\t]+date|(?:date[ \\t]+of[ \\t]+)?(?:site[ \\t]+)?induction(?:[ \\t]+date)?|course[ \\t]+date|issue[ \\t]+date|date[ \\t]+of[ \\t]+issue)',expiry_date:'(?:expiry(?:[ \\t]+date)?|expiration(?:[ \\t]+date)?|valid[ \\t]+(?:until|till|to)|date[ \\t]+of[ \\t]+expiry)'};
+const labels={name:'(?:worker(?:[ \\t]+name)?|name(?:[ \\t]+of[ \\t]+(?:worker|participant))?|participant[ \\t]+name|card[ \\t]*holder)',designation:'(?:designation|job[ \\t]+title|position|occupation)',site:'(?:site(?![ \\t]+induction)(?:[ \\t]+name)?|project(?:[ \\t]+name)?)',reference:'(?:(?:card|certificate|cert|reference)[ \\t]*(?:no\\.?|number|#|reference))',issuer:'(?:issued[ \\t]+by|issuer|training[ \\t]+provider)',sic_date:'(?:sic[ \\t]+date|(?:date[ \\t]+of[ \\t]+)?(?:site[ \\t]+)?induction(?:[ \\t]+date)?|course[ \\t]+date|issue[ \\t]+date|date[ \\t]+of[ \\t]+issue)',expiry_date:'(?:expiry(?:[ \\t]+date)?|expiration(?:[ \\t]+date)?|valid[ \\t]+(?:until|till|to)|date[ \\t]+of[ \\t]+expiry)'};
 function labelled(text,label,pattern){
   const re=new RegExp('(?:^|\\n)[ \\t]*'+label+'[ \\t]*[:#-]?[ \\t]*(?:\\n[ \\t]*)?('+pattern+')','gim');
   return [...text.matchAll(re)].map(m=>m[1].trim());
@@ -23,7 +23,7 @@ function parse(text){
   text=String(text||'').replace(/\r/g,'').slice(0,100000);
   const fields={};
   fields.fin=unique([...text.toUpperCase().matchAll(/\b[STFGM]\d{7}[A-Z]\b/g)].map(m=>m[0]));
-  for(const k of ['name','site','reference','issuer'])fields[k]=unique(labelled(text,labels[k],'[^\\n]+'));
+  for(const k of ['name','designation','site','reference','issuer'])fields[k]=unique(labelled(text,labels[k],'[^\\n]+'));
   for(const k of ['sic_date','expiry_date'])fields[k]=unique(labelled(text,labels[k],DATE).map(date));
   fields.validity_months=unique(labelled(text,'(?:validity(?:[ \\t]+period)?|valid[ \\t]+for)','\\d{1,3}[ \\t]*(?:months?|years?)').map(v=>{const n=parseInt(v,10)*(/year/i.test(v)?12:1);return n>=1&&n<=120?n:null}));
   return fields;

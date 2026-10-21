@@ -135,8 +135,8 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f backend/tests/sic_db_foundation.sql -f db/migrations/0023_sic_register.sql -f db/migrations/0024_sic_storage_record_key.sql -f db/migrations/0025_recoverable_site_removal.sql
-          (echo 'begin;'; cat backend/tests/sic_rollback_checks.sql backend/tests/site_removal_checks.sql; echo 'rollback;') | psql -h localhost -U postgres -v ON_ERROR_STOP=1
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f backend/tests/sic_db_foundation.sql -f db/migrations/0023_sic_register.sql -f db/migrations/0024_sic_storage_record_key.sql -f db/migrations/0025_recoverable_site_removal.sql -f supabase/migrations/20261021083812_sic_designation_snapshot.sql
+          (echo 'begin;'; cat backend/tests/sic_rollback_checks.sql backend/tests/site_removal_checks.sql backend/tests/sic_designation_checks.sql; echo 'rollback;') | psql -h localhost -U postgres -v ON_ERROR_STOP=1
 
   worker-documents-database:
     runs-on: ubuntu-latest

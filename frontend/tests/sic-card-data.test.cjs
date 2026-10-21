@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const C=require('../js/sic-card-data.js');
 test('labelled fields preserve printed dates, reference and issuer',()=>{
   const f=C.parse('SITE INDUCTION COURSE\nName: TEST WORKER\nFIN: G1234567X\nSite: CCP3\nSIC Date: 01/10/2026\nExpiry Date: 30 Sep 2027\nValidity: 1 year\nCard No: SIC-123\nIssued by: SITE OFFICE');
-  assert.deepEqual(f,{fin:['G1234567X'],name:['TEST WORKER'],site:['CCP3'],reference:['SIC-123'],issuer:['SITE OFFICE'],sic_date:['2026-10-01'],expiry_date:['2027-09-30'],validity_months:[12]});
+  assert.deepEqual(f,{fin:['G1234567X'],name:['TEST WORKER'],designation:[],site:['CCP3'],reference:['SIC-123'],issuer:['SITE OFFICE'],sic_date:['2026-10-01'],expiry_date:['2027-09-30'],validity_months:[12]});
 });
 test('malformed and ambiguous dates are not invented',()=>{
   for(const s of ['29/02/2025','31/04/2026','2026-13-01','1/2/26','01/01/0001'])assert.equal(C.date(s),'');
@@ -38,4 +38,7 @@ test('a unique name can match a worker with no directory FIN while preserving ca
   const fields=C.parse('Name: TEST WORKER\nFIN: G1234567X');
   assert.equal(C.matchWorker(fields,[{id:'a',name:'TEST WORKER',fin:null,status:'active'}]).id,'a');
   assert.equal(C.matchWorker(fields,[{id:'a',name:'TEST WORKER',fin:'M7654321Y',status:'active'}]),null);
+});
+test('only explicit role labels produce a designation suggestion',()=>{
+ assert.deepEqual(C.parse('Designation: Rigger & Signalman').designation,['Rigger & Signalman']);assert.deepEqual(C.parse('Job Title: WAH Supervisor').designation,['WAH Supervisor']);assert.deepEqual(C.parse('Trade: Welder\nCourse: Lifting Supervisor').designation,[]);assert.deepEqual(C.parse('Designation: Welder\nDesignation: Driver').designation,['Welder','Driver']);
 });

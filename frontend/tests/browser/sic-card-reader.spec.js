@@ -8,7 +8,7 @@ test('real browser OCR and PDF text extraction on synthetic SIC cards',async({pa
   await page.goto('/sic-reader-smoke');
   const result=await page.evaluate(async()=>{
     const canvas=document.createElement('canvas');canvas.width=1600;canvas.height=850;const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,1600,850);c.fillStyle='black';c.font='48px Arial';
-    const lines=['SITE INDUCTION COURSE','Name: TEST WORKER','FIN: G1234567X','Site: CCP3','SIC Date: 01/10/2026','Expiry Date: 30/09/2027','Card No: SIC-123'];
+    const lines=['SITE INDUCTION COURSE','Name: TEST WORKER','FIN: G1234567X','Designation: Rigger & Signalman','Site: CCP3','SIC Date: 01/10/2026','Expiry Date: 30/09/2027','Card No: SIC-123'];
     lines.forEach((line,i)=>c.fillText(line,60,90+i*95));
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     const image=await SICCardReader.read([{file:new File([blob],'synthetic-card.png',{type:'image/png'}),type:'image/png'}]);
@@ -20,7 +20,7 @@ test('real browser OCR and PDF text extraction on synthetic SIC cards',async({pa
     return {image:SICCardData.merge(image),text:SICCardData.merge(text),imageOCR:image[0].ocr,pdfOCR:text[0].ocr};
   });
   expect(result.imageOCR).toBe(true);expect(result.pdfOCR).toBe(false);
-  for(const fields of [result.image,result.text]){expect(fields.fin).toEqual(['G1234567X']);expect(fields.name).toEqual(['TEST WORKER']);expect(fields.site).toEqual(['CCP3']);expect(fields.sic_date).toEqual(['2026-10-01']);expect(fields.expiry_date).toEqual(['2027-09-30']);expect(fields.reference).toEqual(['SIC-123'])}
+  for(const fields of [result.image,result.text]){expect(fields.fin).toEqual(['G1234567X']);expect(fields.name).toEqual(['TEST WORKER']);expect(fields.designation).toEqual(['Rigger & Signalman']);expect(fields.site).toEqual(['CCP3']);expect(fields.sic_date).toEqual(['2026-10-01']);expect(fields.expiry_date).toEqual(['2027-09-30']);expect(fields.reference).toEqual(['SIC-123'])}
 });
 test('cancellation releases a late OCR worker and settles the reader',async({page})=>{
   await page.route('**/sic-reader-cancel',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><script src="/js/sic-card-reader.js"></script>'}));
