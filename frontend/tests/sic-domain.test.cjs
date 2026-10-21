@@ -9,3 +9,17 @@ test('Excel values cannot become formulas',()=>{assert.equal(S.excelText('=1+1')
 test('site choices hide an unused archived duplicate and retain independent archived sites or linked history',()=>{const sites=[{id:'active',site_name:'TUAS LOT',status:'active'},{id:'old',site_name:' tuas  lot ',status:'archived'},{id:'advario',site_name:'ADVARIO',status:'archived'}];assert.deepEqual(S.siteChoices(sites).map(s=>s.id),['active','advario']);assert.deepEqual(S.siteChoices(sites,[{site_id:'old'}]).map(s=>s.id),['active','old','advario']);assert.deepEqual(S.siteChoices([sites[1]]).map(s=>s.id),['old'])});
 
 test('removed sites stay out of new choices but retain linked history',()=>{const s={id:'gone',site_name:'OLD',status:'archived',removed_at:'2026-10-16'};assert.deepEqual(S.siteChoices([s]),[]);assert.deepEqual(S.siteChoices([s],[{site_id:'gone'}]),[s])});
+test('dashboard shortcuts intersect date filters and include expiry today',()=>{
+ const rows=[{id:'a',name:'A',expiry_date:'2026-10-20'},{id:'b',name:'B',expiry_date:'2026-10-21'},{id:'c',name:'C',expiry_date:'2026-10-28'},{id:'d',name:'D',expiry_date:'2026-11-20'},{id:'e',name:'E',expiry_date:'2026-11-21'},{id:'f',name:'F',expiry_date:'2026-12-20'},{id:'g',name:'G',expiry_date:'2026-12-21'}];
+ const now='2026-10-21',ids=view=>S.filter(rows,S.dashboardSelection({},view,now),now).map(r=>r.id);
+ assert.deepEqual(ids('urgent'),['a','b','c','d']);assert.deepEqual(ids('7'),['b','c']);assert.deepEqual(ids('30'),['b','c','d']);assert.deepEqual(ids('60'),['b','c','d','e','f']);assert.deepEqual(ids('expired'),['a']);assert.deepEqual(ids('valid'),['e','f','g']);
+ assert.deepEqual(S.dashboardSelection({expiryFrom:'2026-11-01',expiryTo:'2026-11-10',site:'s'},'30',now),{expiryFrom:'2026-11-01',expiryTo:'2026-11-10',site:'s'});
+ assert.equal(S.filter(rows,S.dashboardSelection({expiryFrom:'2026-12-01'},'7',now),now).length,0);
+});
+test('dashboard counts distinct workers separately from SIC records and ranks sites by urgency',()=>{
+ const rows=[{worker_id:'a',site_id:'b',site_name:'Beta',expiry_date:'2026-11-01'},{worker_id:'a',site_id:'a',site_name:'Alpha',expiry_date:'2026-10-01'},{worker_id:'b',site_id:'c',site_name:'Charlie',expiry_date:'2027-01-01'},{worker_id:'c',site_id:'a',site_name:'Alpha',expiry_date:'2026-10-02'}];
+ const summary=S.dashboardSummary(rows,'2026-10-21');assert.deepEqual(summary.counts,{workers:3,records:4,valid:1,soon:1,expired:2});assert.deepEqual(summary.sites.map(s=>s.id),['a','b','c']);assert.equal(summary.sites[0].expired,2);assert.deepEqual(S.dashboardSummary([],'2026-10-21').sites,[]);
+});
+test('recent activity sorts newest records first without losing tie stability',()=>{
+ const rows=[{id:'a',name:'A',created_at:'2026-10-01'},{id:'c',name:'C',created_at:'2026-10-20'},{id:'b',name:'B',created_at:'2026-10-20'}];assert.deepEqual(S.filter(rows,{sort:'created_at'}).map(r=>r.id),['b','c','a']);
+});

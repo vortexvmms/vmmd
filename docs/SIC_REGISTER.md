@@ -24,11 +24,15 @@ The log has seven standard columns, with screen-only status/card/actions. Search
 
 ## Deploy / rollback
 
-Apply `db/migrations/0023_sic_register.sql` once before publishing the frontend. All schema changes are additive. GitHub Pages publishes after the full Test workflow succeeds on main. Service-worker cache v92 updates navigation/assets.
+Apply `db/migrations/0023_sic_register.sql` once before publishing the frontend. All schema changes are additive. GitHub Pages publishes after the full Test workflow succeeds on main. Service-worker cache v93 updates navigation/assets.
 
-If the SIC module fails, revert the frontend commit or hide its navigation entry. Retain the SIC tables, private bucket and audit history; never drop populated tables as a routine rollback. The previous production commit is d7d1801edd94645fabaac71047fcf8cfb2926183.
+If the SIC module fails, revert the frontend commit or hide its navigation entry. Retain the SIC tables, private bucket and audit history; never drop populated tables as a routine rollback. The production commit before the streamlined dashboard is b60d777bfdc0e06d65adc2a93f39618933c95a91; restore its frontend files to roll back this dashboard without deleting data.
 
-Dashboard filters support site, SIC status, worker status, card availability, record archive status, search and expiry ranges. KPI tiles and the filtered-log action carry the selected scope into the log. Archived sites remain selectable in SIC (clearly labelled) without changing their master status. Missing-card metrics/options are omitted.
+The dashboard uses a compact Site / Search / More filters / Clear row. More filters contains worker status, card availability, record archive status and custom expiry ranges. Defaults are active/on-leave workers and current records. Four cards show registered workers (distinct worker IDs), valid records (>30 days), expiring records (today through 30 days), and expired records. Status selections affect the action list without changing the overview counts for the selected filter scope.
+
+One Action required table replaces the separate upcoming, expired and recent lists. It shows at most ten rows, the full matching count, days left/overdue, direct renewal for authorized managers and card viewing. Expired rows appear first, ordered by expiry date. Shortcuts cover action required (overdue plus next 30 days), expired, next 7/30/60 days and all records. Date shortcuts intersect any custom date range. Open in SIC Log preserves the selected scope and shortcut. The site summary omits sites with no matching records, ranks expired and expiring counts first, and links each count to matching log rows. Mobile action rows stack with visible actions; site totals appear under site names while valid/total columns are omitted.
+
+Recent activity is available through Recently added / renewed in SIC Log, sorted newest first. Site validity settings remain collapsed at the bottom of the dashboard. Successful refresh reloads SIC data, worker/site directories and assigned-site scope together, then records an Updated time in Asia/Singapore. A failed refresh retains the last complete snapshot and timestamp and displays the failure. No database changes are required. Archived sites remain selectable in SIC (clearly labelled) without changing their master status. Missing-card metrics/options are omitted.
 
 SIC site choices hide an archived duplicate when an active site with the same normalized name exists and the archived site has no SIC history. Independent archived sites such as Advario remain selectable. Historical links and site-master rows are preserved.
 
