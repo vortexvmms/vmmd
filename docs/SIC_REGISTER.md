@@ -24,7 +24,7 @@ SIC Log shows Worker/FIN, Designation, Site, SIC Date, Expiry/Status and Actions
 
 ## Deploy / rollback
 
-Apply `db/migrations/0023_sic_register.sql` once before publishing the frontend. All schema changes are additive. GitHub Pages publishes after the full Test workflow succeeds on main. Service-worker cache v94 updates navigation/assets.
+Apply `db/migrations/0023_sic_register.sql` once before publishing the frontend. All schema changes are additive. GitHub Pages publishes after the full Test workflow succeeds on main. Service-worker cache v95 updates navigation/assets.
 
 If the SIC module fails, revert the frontend commit or hide its navigation entry. Retain the SIC tables, private bucket and audit history; never drop populated tables as a routine rollback. The production commit before designation and the streamlined log is aac0ae49de3d793effc71de16c41a93301ff3343. Restore its frontend files to roll back while retaining the additive designation column and compatible save RPC.
 
@@ -42,7 +42,7 @@ The main Sites directory supports recoverable removal of archived sites and rest
 
 ## Designation snapshots
 
-Apply `supabase/migrations/20261021083812_sic_designation_snapshot.sql` before this frontend. The nullable designation column leaves existing records unknown; no roles are inferred from worker names or blank directory trades. New entries and renewals require one primary designation. Legacy edits may keep an unspecified role. The searchable options are General Worker, Welder, Rigger & Signalman, Lifting Supervisor, Supervisor, CS Supervisor, WAH Supervisor, Safety Supervisor, Driver, Lorry Crane Operator, Traffic Controller & Banksman and Fire Watchman, plus Other — specify (up to 120 characters). CS and WAH are preserved verbatim. A recorded role does not verify competency or certification.
+Apply `supabase/migrations/20261021083812_sic_designation_snapshot.sql` before this frontend. The nullable designation column leaves existing records unknown; no roles are inferred from worker names or blank directory trades. New entries and renewals require one primary designation. Legacy edits may keep an unspecified role. The searchable options are General Worker, Welder, Rigger & Signalman, Lifting Supervisor, Supervisor, CS Supervisor, WAH Supervisor, Safety Supervisor, WSHC, Driver, Lorry Crane Operator, Traffic Controller & Banksman and Fire Watchman, plus Other — specify. Users can also type a custom designation directly (up to 120 characters). CS and WAH are preserved verbatim. A recorded role does not verify competency or certification.
 
 Designation is a per-course/site snapshot, prefilled for renewal and included in history, audit evidence and exports. Explicit Designation, Job Title, Position or Occupation card labels can suggest it; trade/course names alone are not used to infer it. Missing and conflicting values remain for user review. The save RPC preserves an existing designation when older clients omit the JSON key during rollout; new clients send the key and cannot create a blank role or clear a known role. Existing invoker authority, grants, site authorization, stale-edit checks and atomic renewal are retained.
 

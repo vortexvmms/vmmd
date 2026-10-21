@@ -1,7 +1,7 @@
 /* Pure SIC date/filter rules, shared by the page and regression tests. */
 (function(root){'use strict';
 const iso=d=>d.toISOString().slice(0,10);
-const designations=['General Worker','Welder','Rigger & Signalman','Lifting Supervisor','Supervisor','CS Supervisor','WAH Supervisor','Safety Supervisor','Driver','Lorry Crane Operator','Traffic Controller & Banksman','Fire Watchman'];
+const designations=['General Worker','Welder','Rigger & Signalman','Lifting Supervisor','Supervisor','CS Supervisor','WAH Supervisor','Safety Supervisor','WSHC','Driver','Lorry Crane Operator','Traffic Controller & Banksman','Fire Watchman'];
 function designationChoice(value){const key=String(value||'').trim().replace(/\s+/g,' ').toLowerCase();return designations.find(v=>v.toLowerCase()===key)||null}
 function designationLabel(value){return value||'Not specified'}
 function expiry(date,months){if(!date||!Number.isInteger(+months)||+months<1||+months>120)return '';const [y,m,d]=date.split('-').map(Number);const start=new Date(Date.UTC(y,m-1,d));if(iso(start)!==date)return '';const first=new Date(Date.UTC(y,m-1+(+months),1));first.setUTCDate(Math.min(d,new Date(Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,0)).getUTCDate()));first.setUTCDate(first.getUTCDate()-1);return iso(first)}

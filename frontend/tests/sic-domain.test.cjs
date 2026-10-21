@@ -24,7 +24,7 @@ test('recent activity sorts newest records first without losing tie stability',(
  const rows=[{id:'a',name:'A',created_at:'2026-10-01'},{id:'c',name:'C',created_at:'2026-10-20'},{id:'b',name:'B',created_at:'2026-10-20'}];assert.deepEqual(S.filter(rows,{sort:'created_at'}).map(r=>r.id),['b','c','a']);
 });
 test('designation options preserve the agreed combined roles and acronyms',()=>{
- assert.deepEqual(S.designations,['General Worker','Welder','Rigger & Signalman','Lifting Supervisor','Supervisor','CS Supervisor','WAH Supervisor','Safety Supervisor','Driver','Lorry Crane Operator','Traffic Controller & Banksman','Fire Watchman']);
+ assert.deepEqual(S.designations,['General Worker','Welder','Rigger & Signalman','Lifting Supervisor','Supervisor','CS Supervisor','WAH Supervisor','Safety Supervisor','WSHC','Driver','Lorry Crane Operator','Traffic Controller & Banksman','Fire Watchman']);
  assert.equal(S.designationChoice('  wah   supervisor  '),'WAH Supervisor');assert.equal(S.designationChoice('Confined Space Supervisor'),null);assert.equal(S.designationLabel(null),'Not specified');
 });
 test('designation search and filters distinguish missing data from custom names',()=>{
