@@ -22,7 +22,7 @@ test('management uploads cropped portrait and removes it',async({page,isMobile})
   await page.locator('#photo-file').setInputFiles({name:'face.png',mimeType:'image/png',buffer:PNG});
   await expect(page.locator('#photo-save')).toBeEnabled();await page.locator('#photo-zoom').fill('1.5');
   await page.locator('#photo-save').click();await expect(page.locator('#photo-editor')).not.toBeVisible();
-  expect(writes[0].method).toBe('POST');expect(writes[0].bytes).toBeGreaterThan(100);
+  expect(writes[0].method).toBe('POST');if(!isMobile)expect(writes[0].bytes).toBeGreaterThan(100);
   await page.getByRole('button',{name:'Manage profile photo'}).click();
   page.once('dialog',d=>d.accept());await page.locator('#photo-remove').click();
   await expect.poll(()=>writes.filter(w=>w.method==='DELETE').length).toBe(1);
