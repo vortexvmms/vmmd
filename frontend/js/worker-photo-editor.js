@@ -62,3 +62,47 @@
     }
   };
 })();
+
+/* Filename import remains a review step before any photo is uploaded. */
+(function () {
+  const button=document.createElement('button');button.type='button';button.className='photo-manage worker-photo-bulk-open';button.textContent='Bulk upload profile photos';
+  document.querySelector('.worker-main').prepend(button);
+  const dialog=document.createElement('dialog');dialog.id='photo-bulk-editor';dialog.className='photo-bulk-editor';
+  dialog.innerHTML='<h2>Bulk worker photos</h2><p>Name each file with its worker ID, for example VEW110.jpg. Review the matches before uploading. Photos use a centred square crop; adjust individual photos afterwards under Edit Worker.</p><input id="bulk-photo-files" type="file" accept="image/jpeg,image/png,image/webp" multiple><div id="bulk-photo-matches"></div><p id="bulk-photo-status" role="status"></p><button id="bulk-photo-close">Close</button> <button id="bulk-photo-upload" disabled>Upload matched photos</button>';
+  document.body.append(dialog);
+  const files=document.getElementById('bulk-photo-files'),matches=document.getElementById('bulk-photo-matches'),status=document.getElementById('bulk-photo-status'),upload=document.getElementById('bulk-photo-upload'),close=document.getElementById('bulk-photo-close');
+  let pending=[],busy=false;
+  button.onclick=()=>{files.value='';matches.replaceChildren();status.textContent='';pending=[];upload.disabled=true;dialog.showModal();};
+  close.onclick=()=>{if(!busy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});
+  files.onchange=()=>{
+    const chosen=[...files.files];pending=[];matches.replaceChildren();
+    if(chosen.length>100){status.textContent='Choose up to 100 photos per batch.';upload.disabled=true;return;}
+    const counts=new Map();for(const f of chosen){const code=f.name.replace(/\.[^.]+$/,'').toUpperCase();counts.set(code,(counts.get(code)||0)+1);}
+    for(const f of chosen){
+      const code=f.name.replace(/\.[^.]+$/,'').toUpperCase(),workers=ALL.filter(w=>w.worker_code.toUpperCase()===code);
+      const valid=workers.length===1&&counts.get(code)===1&&f.size<=20*1024*1024&&/^image\/(jpeg|png|webp)$/.test(f.type);
+      const line=document.createElement('p');line.textContent=f.name+' → '+(valid?workers[0].name:counts.get(code)>1?'Duplicate worker photo — skipped':workers.length!==1?'No unique worker match — skipped':'Unsupported or oversized photo — skipped');matches.append(line);
+      if(valid)pending.push({file:f,worker:workers[0]});
+    }
+    status.textContent=pending.length+' matched / '+chosen.length+' selected. Existing photos will be replaced for matched workers.';upload.disabled=!pending.length;
+  };
+  upload.onclick=async()=>{
+    if(busy||!pending.length)return;busy=true;upload.disabled=true;close.disabled=true;files.disabled=true;
+    let done=0;const failed=[];
+    for(const item of pending){
+      let url;
+      try{
+        status.textContent='Uploading '+(done+failed.length+1)+' / '+pending.length+'…';
+        url=URL.createObjectURL(item.file);const image=new Image();image.src=url;await image.decode();
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=480;const size=Math.min(image.naturalWidth,image.naturalHeight);
+        canvas.getContext('2d').drawImage(image,(image.naturalWidth-size)/2,(image.naturalHeight-size)/2,size,size,0,0,480,480);
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.85));if(!blob)throw Error('Cannot prepare photo');
+        const r=await vmmsApi('/api/v1/worker-photos/'+encodeURIComponent(item.worker.id),{method:'POST',body:blob,headers:{'Content-Type':'image/jpeg'}});
+        if(!r.ok){const d=await r.json();throw Error(d.detail||'Upload failed');}done++;
+      }catch(e){failed.push(item.file.name+': '+e.message);}finally{if(url)URL.revokeObjectURL(url);}
+    }
+    vmmsClearRefCache('/api/v1/workers');try{await load();}catch(e){}
+    status.textContent=done+' saved. '+failed.length+' failed.';for(const message of failed){const p=document.createElement('p');p.textContent=message;status.append(p);}
+    pending=[];busy=false;close.disabled=false;files.disabled=false;
+  };
+})();

@@ -23,6 +23,7 @@ test('views preserve selected workers, search and pending attendance',async({pag
     await expect(page.locator('.sel-cb').first()).toBeChecked();
     await expect(page.locator('#groupcount')).toHaveText('1');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await page.screenshot({path:'test-results/attendance-'+view+'-'+(isMobile?'mobile':'desktop')+'.png'});
   }
   await page.locator('#att-search').fill('EMP-1');await expect(page.locator('.worker-card')).toHaveCount(1);
   await page.locator('[data-view=gallery]').click();await expect(page.locator('#att-search')).toHaveValue('EMP-1');

@@ -5,9 +5,11 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 values('worker-photos','worker-photos',false,2097152,array['image/jpeg'])
 on conflict(id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 -- A restrictive guard prevents older broad permissive storage policies granting access.
-create policy worker_photos_guard on storage.objects as restrictive for all to public
+create policy worker_photos_guard on storage.objects as restrictive for all to authenticated
  using(bucket_id <> 'worker-photos' or ((select auth.uid()) is not null and public.worker_documents_object_access(name)))
  with check(bucket_id <> 'worker-photos' or ((select auth.uid()) is not null and public.is_full() and public.worker_documents_object_access(name)));
+create policy worker_photos_anon_guard on storage.objects as restrictive for all to anon
+ using(bucket_id <> 'worker-photos') with check(bucket_id <> 'worker-photos');
 create policy worker_photos_read on storage.objects for select to authenticated
  using(bucket_id='worker-photos' and public.worker_documents_object_access(name));
 create policy worker_photos_insert on storage.objects for insert to authenticated
