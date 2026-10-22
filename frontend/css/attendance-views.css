@@ -24,3 +24,10 @@ body[data-att-view=card] .worker-portrait{width:38px;height:38px;font-size:13px}
  .att-view-switch{width:100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
  .att-view-switch button{width:auto!important;min-width:0!important}
 }
+@media(min-width:900px){
+ body.att-compact-desktop #att-main{padding-top:6px!important}
+ .att-view-toolbar{margin-bottom:4px;gap:8px}
+ .att-view-toolbar input{height:32px;min-height:32px;padding:4px 10px}
+ .att-view-switch button{min-height:28px;padding:4px 12px}
+}
+body[data-att-view=gallery] #list>.worker-card{margin:0!important}
