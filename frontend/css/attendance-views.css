@@ -6,3 +6,21 @@ body[data-att-view=gallery] #list{display:grid!important;grid-template-columns:r
 .att-view-toolbar{margin-bottom:6px}.att-view-toolbar input{min-height:36px}
 body[data-att-view=card] .attendance-status{display:none}
 body[data-att-view=card] .worker-portrait{width:38px;height:38px;font-size:13px}
+@media(min-width:900px){
+ body.att-compact-desktop[data-att-view=card] #list .worker-card{padding:10px!important}
+ body.att-compact-desktop[data-att-view=card] .att-worker-head{margin-bottom:4px!important}
+ body.att-compact-desktop[data-att-view=card] .att-worker-footer{margin-top:4px!important;padding-top:2px!important}
+ body.att-compact-desktop[data-att-view=card] .remove-day{padding:2px 0!important}
+}
+@media(min-width:1100px){
+ body[data-att-view=list] #list .worker-card{grid-template-columns:minmax(0,1fr) 210px minmax(0,1.2fr)}
+ body[data-att-view=list] .att-list-summary{grid-column:2;grid-row:1;align-self:center}
+ body[data-att-view=list] .att-worker-presence,body[data-att-view=list] .att-worker-controls{grid-column:3;grid-row:1}
+ body[data-att-view=list] .att-worker-footer{grid-row:2}
+}
+@media(max-width:639px){
+ .att-view-toolbar{display:grid;grid-template-columns:minmax(0,1fr)}
+ .att-view-toolbar input{width:100%;min-width:0;max-width:none;box-sizing:border-box}
+ .att-view-switch{width:100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .att-view-switch button{width:auto!important;min-width:0!important}
+}

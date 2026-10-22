@@ -20,6 +20,8 @@ test('views preserve selected workers, search and pending attendance',async({pag
   await page.locator('.sel-cb').first().check();
   for(const view of ['gallery','list','card']){
     await page.locator('[data-view='+view+']').click();
+    await expect(page.locator('body')).toHaveAttribute('data-att-view',view);
+    await expect(page.locator('[data-view='+view+']')).toHaveAttribute('aria-pressed','true');
     await expect(page.locator('.sel-cb').first()).toBeChecked();
     await expect(page.locator('#groupcount')).toHaveText('1');
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
@@ -33,9 +35,11 @@ test('views preserve selected workers, search and pending attendance',async({pag
   expect(writes[0].changes[0]).toMatchObject({allocation_id:'a1',end_time:'19:00'});
   await page.reload();await expect(page.locator('body')).toHaveAttribute('data-att-view','list');
 });
-test('portrait fallback and gallery sizing on mobile and desktop',async({page})=>{
+test('portrait fallback and gallery sizing on mobile and desktop',async({page,isMobile})=>{
   await fixture(page);await page.locator('[data-view=gallery]').click();
   await expect(page.locator('.worker-portrait').first()).toContainText('W0');
   const size=await page.locator('.worker-portrait').first().boundingBox();expect(size.width).toBeGreaterThan(100);
+  await page.locator('.worker-card').first().scrollIntoViewIfNeeded();
+  await page.screenshot({path:'test-results/attendance-gallery-visible-'+(isMobile?'mobile':'desktop')+'.png'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
 });
