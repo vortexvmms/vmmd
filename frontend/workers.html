@@ -25,6 +25,7 @@
       body:not(.can-edit) .worker-head-actions{display:none!important}
     }
   </style>
+<link rel="stylesheet" href="css/worker-photos.css?v=20261022-1"><script src="js/worker-photos.js?v=20261022-1"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
@@ -93,6 +94,7 @@
     <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-6">
       <h2 id="m-title" class="text-lg font-bold text-gray-800 mb-4">Add Worker</h2>
 
+      <button type="button" id="worker-photo-manage" class="photo-manage" hidden>Manage profile photo</button>
       <label for="m-code" class="block text-sm font-medium text-gray-700 mb-1">Worker ID</label>
       <input id="m-code" class="w-full border border-gray-300 rounded-lg p-3 text-base mb-3 uppercase" placeholder="e.g. W013">
 
@@ -178,7 +180,7 @@
         const div = document.createElement("div");
         div.className = "bg-white rounded-xl shadow p-4 flex items-center justify-between";
         div.innerHTML =
-          `<div><p class="font-medium text-gray-800">${esc(w.name)}</p>
+          `${WorkerPhotos.markup(w)}<div><p class="font-medium text-gray-800">${esc(w.name)}</p>
            <p class="text-xs text-gray-400">${esc(w.worker_code)}</p></div>
            <span class="text-xs font-bold px-3 py-1 rounded-full ${cls}">${label}</span>`;
         if (isFull(ME.role)) {
@@ -187,6 +189,7 @@
         }
         list.appendChild(div);
       });
+      WorkerPhotos.hydrate(list);
       renderDesktop();
     }
 
@@ -203,7 +206,8 @@
       let rows=ALL.filter(w=>(!st||w.status===st)&&(!site||currentSite(w.id)===site)&&(!trade||(w.trade||"")===trade)&&(!q||w.name.toLowerCase().includes(q)||w.worker_code.toLowerCase().includes(q)));
       rows.sort((a,b)=>{if(sort==="code")return a.worker_code.localeCompare(b.worker_code);if(sort==="site")return currentSite(a.id).localeCompare(currentSite(b.id))||a.name.localeCompare(b.name);if(sort==="status")return a.status.localeCompare(b.status)||a.name.localeCompare(b.name);return a.name.localeCompare(b.name)});
       const labels={active:"Active",on_leave:"On Leave",inactive:"Inactive"};
-      document.getElementById("worker-tbody").innerHTML=rows.length?rows.map(w=>`<tr><td><b>${esc(w.worker_code)}</b></td><td class="wname">${esc(w.name)}</td><td>${esc(w.trade||"—")}</td><td>${esc(currentSite(w.id))}</td><td><span class="status-badge st-${w.status}">${labels[w.status]||esc(w.status)}</span></td><td>${isFull(ME.role)?`<button class="edit-worker" onclick="openWorker('${w.id}')">Edit</button>`:'—'}</td></tr>`).join(""):'<tr><td colspan="6" class="worker-empty">No workers match these filters.</td></tr>';
+      document.getElementById("worker-tbody").innerHTML=rows.length?rows.map(w=>`<tr><td><b>${esc(w.worker_code)}</b></td><td class="wname">${WorkerPhotos.markup(w)}${esc(w.name)}</td><td>${esc(w.trade||"—")}</td><td>${esc(currentSite(w.id))}</td><td><span class="status-badge st-${w.status}">${labels[w.status]||esc(w.status)}</span></td><td>${isFull(ME.role)?`<button class="edit-worker" onclick="openWorker('${w.id}')">Edit</button>`:'—'}</td></tr>`).join(""):'<tr><td colspan="6" class="worker-empty">No workers match these filters.</td></tr>';
+      WorkerPhotos.hydrate(document.getElementById("worker-tbody"));
       document.getElementById("count").textContent=`${rows.length} shown · ${counts.active} active of ${counts.all}`;
     }
     function setDesktopStatus(s){document.getElementById("d-status").value=s;renderDesktop()}
@@ -212,6 +216,7 @@
 
     function openForm(w = null) {
       EDIT_ID = w ? w.id : null;
+      const photoButton=document.getElementById("worker-photo-manage");photoButton.hidden=!w;photoButton.onclick=()=>openWorkerPhoto(ALL.find(x=>x.id===EDIT_ID)||w);
       document.getElementById("m-title").textContent = w ? "Edit Worker" : "Add Worker";
       document.getElementById("m-code").value = w ? w.worker_code : "";
       document.getElementById("m-name").value = w ? w.name : "";
@@ -318,5 +323,6 @@
     boot();
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
+<script src="js/worker-photo-editor.js?v=20261022-1"></script>
 </body>
 </html>

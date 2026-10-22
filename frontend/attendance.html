@@ -50,6 +50,8 @@
   <link rel="stylesheet" href="css/attendance-desktop.css?v=20261020-1" media="(min-width:900px)">
   <script src="js/attendance-desktop.js?v=20261020-1" defer></script>
   <style>.att-footer-tools{display:none}</style>
+<link rel="stylesheet" href="css/worker-photos.css?v=20261022-1"><link rel="stylesheet" href="css/attendance-views.css?v=20261022-1">
+<script src="js/worker-photos.js?v=20261022-1"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
 
@@ -68,6 +70,7 @@
   </header>
 
   <main id="att-main" class="vcms-supervisor-main flex-1 max-w-md">
+    <div class="att-view-toolbar"><input id="att-search" type="search" placeholder="Search worker name or ID…" aria-label="Search attendance workers"><div class="att-view-switch" role="group" aria-label="Attendance view"><button type="button" data-view="card" aria-pressed="false">Card</button><button type="button" data-view="list" aria-pressed="false">List</button><button type="button" data-view="gallery" aria-pressed="false">Gallery</button></div></div>
     <div id="att-statusline">
     <div id="banner" class="hidden rounded-xl p-3 mb-3 text-sm font-medium text-center"></div>
     <section id="completion-panel" class="hidden rounded-xl p-4 mb-3 border bg-white" role="status" aria-live="polite"></section>
@@ -351,6 +354,16 @@
     addEventListener('beforeunload',event=>{
       if(!ALLOW_LEAVE&&(completionStatus().ready||ROWS.some(x=>x.present&&x.end_time))&&!completionStatus().submitted){event.preventDefault();event.returnValue='';}
     });
+    function setAttendanceView(view, remember=true) {
+      if (!['card','list','gallery'].includes(view)) view=innerWidth>=900?'list':'card';
+      document.body.dataset.attView=view;
+      document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
+      if(remember)try{localStorage.setItem('vcms_att_view_v1',view);}catch(e){}
+    }
+    let preferredView;try{preferredView=localStorage.getItem('vcms_att_view_v1');}catch(e){}
+    setAttendanceView(preferredView,false);
+    document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setAttendanceView(b.dataset.view)));
+    document.getElementById('att-search').addEventListener('input',()=>render());
     function render() {
       DISPLAY_CONTEXT={date:document.getElementById('date').value,site:document.getElementById('site').value};
       updateCompletion();
@@ -410,7 +423,8 @@
       document.getElementById("submit-btn").disabled = total === 0 || fullySubmitted;
       document.getElementById("submit-btn").textContent = fullySubmitted ? "Submitted ✓" : "Submit End Times";
 
-      const visibleRows=ROWS.filter(x=>ATT_FILTER==="all" || (ATT_FILTER==="pending"&&x.present&&x.absence_type!=="class"&&!x.end_time) || (ATT_FILTER==="done"&&(!x.present||x.absence_type==="class"||!!x.end_time)) || (ATT_FILTER==="overnight"&&x.end_next_day));
+      const search=document.getElementById("att-search").value.trim().toLowerCase();
+      const visibleRows=ROWS.filter(x=>!search||`${x.worker_name} ${x.worker_code}`.toLowerCase().includes(search)).filter(x=>ATT_FILTER==="all" || (ATT_FILTER==="pending"&&x.present&&x.absence_type!=="class"&&!x.end_time) || (ATT_FILTER==="done"&&(!x.present||x.absence_type==="class"||!!x.end_time)) || (ATT_FILTER==="overnight"&&x.end_next_day));
       const empty=document.getElementById("empty"); empty.classList.toggle("hidden",visibleRows.length>0); empty.textContent=ROWS.length?"No workers in this filter.":"No workers allocated for this site and date.";
       visibleRows.forEach(x => {
         const absent = x.marked && !x.present;
@@ -418,28 +432,30 @@
         div.className = "worker-card bg-gray-100 border rounded-xl shadow-sm p-4 " + (x._saving ? "worker-saving " : "") +
           (absent ? "border-gray-300 opacity-60" : (!x.marked ? "border-yellow-300" : "border-gray-300"));
         div.innerHTML = `
-          <div class="flex items-center gap-2 mb-2">
+          <div class="att-worker-head flex items-center gap-2 mb-2">
             ${x.present && x.absence_type !== "class"
               ? `<input type="checkbox" title="Select for group end-time" class="w-5 h-5 accent-red-600 sel-cb shrink-0" ${SEL.has(x.allocation_id) ? "checked" : ""}>`
               : `<span class="inline-block w-5 shrink-0"></span>`}
+            ${WorkerPhotos.markup(x)}
             <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-800">${esc(x.worker_name)}
                 ${!x.marked ? '<span class="ml-1 text-[10px] font-bold text-yellow-700 bg-yellow-100 rounded px-1.5 py-0.5 align-middle">NOT MARKED</span>' : ''}</p>
-              <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${esc(x.start_time || x.default_start_time || "08:00")}</p>
+              <p class="text-xs text-gray-400">${esc(x.worker_code)} · start ${esc(x.start_time || x.default_start_time || "08:00")}</p><span class="attendance-status">${!x.marked?"Not marked":x.present?(x.absence_type==="class"?"Class":"Present"):(x.absence_type||"Absent").toUpperCase()}</span>
             </div>
             <label class="flex items-center gap-1 text-sm shrink-0">
               <input type="checkbox" class="w-5 h-5 accent-green-600 present-cb" ${x.present ? "checked" : ""}>
               Present
             </label>
           </div>
-          <div class="${x.present ? "hidden" : ""} flex items-center gap-2 mb-1 flex-wrap">
+          <div class="att-list-summary"><span><small>START / END</small><b>${esc(x.start_time||"08:00")} / ${esc(x.end_time||"—")}${x.end_next_day?" +1d":""}</b></span><span><small>NORMAL</small><b>${x.normal_hours||0}h</b></span><span><small>OT</small><b>${x.ot_hours||0}h</b></span></div>
+          <div class="att-worker-presence ${x.present ? "hidden" : ""} flex items-center gap-2 mb-1 flex-wrap">
             <span class="text-xs text-gray-500">Reason:</span>
             ${reasonsFor().map(([v, l, c]) =>
               `<button class="rsn text-xs font-bold px-3 py-1.5 rounded-full ${absent && x.absence_type === v ? c + " text-white" : "bg-gray-100 text-gray-600"}" data-r="${v}">${l}</button>`).join("")}
             ${isRestDay(document.getElementById("date").value) ? "" :
               `<button class="rsn-class text-xs font-bold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">📚 Class</button>`}
           </div>
-          <div class="${x.present ? "" : "hidden"}">
+          <div class="att-worker-controls ${x.present ? "" : "hidden"}">
             ${x.absence_type === "class"
               ? `<div class="flex items-center justify-between gap-2">
                    <span class="text-sm font-bold text-indigo-700">📚 CLASS (8h)</span>
@@ -472,7 +488,7 @@
                         class="end-in hidden mt-2 border border-gray-300 rounded-lg p-2 text-base w-full">
                  </div>`}
           </div>
-          <div class="mt-3 border-t pt-2"><button type="button" class="remove-day text-xs font-semibold text-red-700 underline py-2">Remove from this day</button></div>`;
+          <div class="att-worker-footer mt-3 border-t pt-2"><button type="button" class="remove-day text-xs font-semibold text-red-700 underline py-2">Remove from this day</button></div>`;
         div.querySelector('.remove-day').addEventListener('click',()=>openRemoval(x));
         const cb = div.querySelector(".present-cb");
         const ein = div.querySelector(".end-in");
@@ -498,6 +514,7 @@
         if (ein) ein.addEventListener("change", () => { if (ein.value) mark(x, { end_time: ein.value, end_next_day: nextDayFor(x, ein.value) }, div); });
         list.appendChild(div);
       });
+      WorkerPhotos.hydrate(list);
       updateGroupBar();
     }
 

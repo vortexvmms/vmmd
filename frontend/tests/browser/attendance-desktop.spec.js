@@ -9,9 +9,9 @@ async function fixture(page, {unmarked = false} = {}) {
     shift_type:'day', absence_type:i<22?'absent':'al',
   }));
   const writes = [];
-  await page.addInitScript(() => localStorage.setItem('vmms_session', JSON.stringify({
+  await page.addInitScript(() => { localStorage.setItem('vcms_att_view_v1','card'); localStorage.setItem('vmms_session', JSON.stringify({
     access_token:'test', expires_at:Date.now()+3600000,
-  })));
+  })); });
   await page.route('**/api/v1/**', async route => {
     const req=route.request(), path=new URL(req.url()).pathname;
     if (path.endsWith('/me')) return route.fulfill({json:{role:'admin', name:'Test Administrator', user_id:'u1'}});
