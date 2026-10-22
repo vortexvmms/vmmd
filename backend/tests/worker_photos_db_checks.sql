@@ -28,8 +28,10 @@ do $$begin
 end$$;
 reset role;
 select set_config('request.jwt.claim.sub','',false);
+insert into storage.objects(bucket_id,name) values('dpr-photos','public-test.jpg');
 set role anon;
 do $$begin
+ if not exists(select 1 from storage.objects where bucket_id='dpr-photos') then raise exception 'Existing public image access changed'; end if;
  if exists(select 1 from storage.objects where bucket_id='worker-photos') then raise exception 'Anonymous photo leak'; end if;
 end$$;
 reset role;

@@ -39,8 +39,9 @@
     };
   }), {rootMargin: '160px'});
   function hydrate(root = document) {
-    root.querySelectorAll('.worker-portrait').forEach(el => {
-      if (!el.dataset.observed) { el.dataset.observed = '1'; observer.observe(el); }
+    observer.disconnect();
+    document.querySelectorAll('.worker-portrait').forEach(el => {
+      if (!el.querySelector('img')) observer.observe(el);
     });
   }
   window.WorkerPhotos = {markup, hydrate, photo};

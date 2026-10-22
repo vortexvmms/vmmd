@@ -55,6 +55,7 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test attendance-views.spec.js worker-photos.spec.js
       - run: npm run test:browser
       - uses: actions/upload-artifact@v4
         if: always()
