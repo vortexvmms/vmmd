@@ -28,6 +28,8 @@ jobs:
       - run: node --check frontend/js/core-bundle.js
       - run: node --check frontend/js/ui.js
       - run: node --check frontend/js/shell.js
+      - run: node --check frontend/js/worker-photos.js
+      - run: node --check frontend/js/worker-photo-editor.js
       - run: node --check frontend/js/worker-cards.js
       - run: node --check frontend/js/document-masking.js
       - run: node --check frontend/js/lifting.js
@@ -53,7 +55,14 @@ jobs:
           node-version: "22"
       - run: npm install
       - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test attendance-views.spec.js worker-photos.spec.js attendance-desktop.spec.js
       - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-results
+          path: test-results/
+          retention-days: 3
 
   lifting-database:
     runs-on: ubuntu-latest
@@ -155,3 +164,5 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f backend/tests/worker_documents_db_foundation.sql -f supabase/migrations/20261020134501_restore_worker_documents.sql -f backend/tests/worker_documents_db_checks.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "create function public.is_full() returns boolean language sql stable as \$\$select public.my_role() in ('admin','general_manager','operation_manager','hr_assistant')\$\$;"
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20261022053310_worker_profile_photos.sql -f backend/tests/worker_photos_db_checks.sql

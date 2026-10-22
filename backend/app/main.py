@@ -50,6 +50,7 @@ from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
 from .modules.lifting.router import LiftingContext, build_lifting_router
 from .modules.worker_documents.router import WorkerDocumentsContext, build_worker_documents_router
+from .modules.worker_photos.router import build_worker_photos_router
 
 app = FastAPI(title="VCMS API", version="0.88.0")
 install_error_handlers(app)
@@ -125,6 +126,11 @@ app.include_router(build_worker_documents_router(WorkerDocumentsContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
     r2_presign_get=_r2_presign_get if R2_ENABLED else None,
+)))
+
+app.include_router(build_worker_photos_router(WorkerDocumentsContext(
+    get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
+    supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
 )))
 
 @app.get("/api/v1/audit-log")
@@ -255,7 +261,7 @@ VALID_STATUS = {"active", "on_leave", "inactive"}
 @app.get("/api/v1/workers")
 async def list_workers(search: str = "", status: str = "",
                        user: dict = Depends(get_current_user)):
-    params = {"select": "id,worker_code,name,status,fin,trade,updated_at", "order": "name.asc"}
+    params = {"select": "id,worker_code,name,status,fin,trade,updated_at,photo_path", "order": "name.asc"}
     if status:
         if status not in VALID_STATUS:
             raise HTTPException(status_code=400, detail="Invalid status filter")
@@ -1210,7 +1216,7 @@ class SubmitDay(BaseModel):
 
 async def _load_day(client, token, work_date: str, site_id: str | None):
     params = {"work_date": f"eq.{work_date}", "status": "eq.allocated",
-              "select": "id,work_date,site_id,worker_id,updated_at,sites(site_name,work_schedules),workers(name,worker_code),"
+              "select": "id,work_date,site_id,worker_id,updated_at,sites(site_name,work_schedules),workers(name,worker_code,photo_path),"
                         "attendance(id,present,start_time,end_time,end_next_day,"
                         "normal_hours,ot_hours,day_type,submitted_at,absence_type,"
                         "shift_type,partial_leave_type,leave_portion,leave_value,work_schedule,updated_at)"}
@@ -1238,6 +1244,8 @@ async def day_sheet(date: str, site_id: str = "",
                 "allocation_updated_at": a.get("updated_at"),
                 "attendance_updated_at": att.get("updated_at") if att else None,
                 "site_name": (a.get("sites") or {}).get("site_name", "?"),
+                "worker_id": a["worker_id"],
+                "photo_path": (a.get("workers") or {}).get("photo_path"),
                 "worker_name": (a.get("workers") or {}).get("name", "?"),
                 "worker_code": (a.get("workers") or {}).get("worker_code", ""),
                 # No default tick (site request): a worker is "marked" only once the

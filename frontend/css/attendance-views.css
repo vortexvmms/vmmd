@@ -1,0 +1,26 @@
+.att-view-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:0 0 12px}.att-view-toolbar input{flex:1;min-width:150px;max-width:400px;min-height:40px;padding:8px 12px;border:1px solid #ccd4df;border-radius:9px;background:var(--vcms-surface,#fff);color:var(--vcms-ink,#182230)}.att-view-switch{display:inline-flex;gap:3px;padding:3px;border:1px solid #d5dce6;border-radius:10px;background:var(--vcms-surface,#fff)}.att-view-switch button{min-height:36px;padding:6px 13px;font-size:12px;font-weight:800;border-radius:7px}.att-view-switch button[aria-pressed=true]{background:var(--vcms-brand,#b42318);color:#fff}.att-view-switch button:focus-visible{outline:3px solid #175cd3}.attendance-status{display:block;font-size:11px;font-weight:700;margin-top:3px;color:#667085}.att-list-summary{display:none}.att-list-summary span{display:block}.att-list-summary b{font-size:12px}.att-list-summary small{display:block;color:#667085;font-size:10px}.att-list-columns{display:none}
+body[data-att-view=list] #list{display:flex!important;flex-direction:column;gap:6px!important}body[data-att-view=list] #list .worker-card{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.5fr);gap:8px 16px;padding:10px 12px!important;width:100%;box-sizing:border-box}body[data-att-view=list] .att-worker-head{margin:0!important;align-self:start}body[data-att-view=list] .att-list-summary{display:grid;grid-template-columns:repeat(3,1fr);grid-column:1;gap:8px}body[data-att-view=list] .att-worker-presence,body[data-att-view=list] .att-worker-controls{grid-column:2;grid-row:1/4;align-self:center}body[data-att-view=list] .att-worker-presence:not(.hidden)+.att-worker-controls{display:none}body[data-att-view=list] .att-worker-footer{grid-column:1/-1;margin:0!important;padding-top:4px!important}body[data-att-view=list] .worker-card .remove-day{font-size:10px;padding:2px 0}body[data-att-view=list] .att-worker-head .worker-portrait{width:40px;height:40px}body[data-att-view=list] .worker-extra{display:block!important;margin:0!important;padding:0!important;border:0!important}body[data-att-view=list] .quick-end{display:none!important}
+body[data-att-view=gallery] #list{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))!important;gap:12px!important}body[data-att-view=gallery] .att-worker-head{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center}body[data-att-view=gallery] .att-worker-head .worker-portrait{grid-column:1/-1;grid-row:1;width:100%;height:auto;aspect-ratio:1;max-height:260px;margin:0 0 8px;font-size:48px;border-radius:10px}body[data-att-view=gallery] .att-worker-head .worker-portrait img{object-position:center}body[data-att-view=gallery] .att-worker-head .sel-cb,body[data-att-view=gallery] .att-worker-head>span{grid-row:2}body[data-att-view=gallery] .worker-card{background:var(--vcms-surface,#fff)!important}body[data-att-view=gallery] .worker-extra{display:block!important}
+@media(max-width:639px){body[data-att-view=list] #list .worker-card{grid-template-columns:minmax(0,1fr)}body[data-att-view=list] .att-worker-presence,body[data-att-view=list] .att-worker-controls{grid-column:1;grid-row:auto}body[data-att-view=gallery] #list{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}body[data-att-view=gallery] #list .worker-card{padding:9px!important;min-width:0}body[data-att-view=gallery] .att-worker-head{grid-template-columns:22px minmax(0,1fr)}body[data-att-view=gallery] .att-worker-head>label{grid-column:1/-1}body[data-att-view=gallery] .att-worker-head p{font-size:12px;overflow-wrap:anywhere}body[data-att-view=gallery] .worker-card button:not(.worker-portrait){font-size:11px}body[data-att-view=gallery] .quick-end{display:none!important}.att-view-toolbar{gap:6px}.att-view-switch button{padding:6px 10px}}
+/* Keep the Card workspace dense enough to review twelve workers above the footer. */
+.att-view-toolbar{margin-bottom:6px}.att-view-toolbar input{min-height:36px}
+body[data-att-view=card] .attendance-status{display:none}
+body[data-att-view=card] .worker-portrait{width:38px;height:38px;font-size:13px}
+@media(min-width:900px){
+ body.att-compact-desktop[data-att-view=card] #list .worker-card{padding:10px!important}
+ body.att-compact-desktop[data-att-view=card] .att-worker-head{margin-bottom:4px!important}
+ body.att-compact-desktop[data-att-view=card] .att-worker-footer{margin-top:4px!important;padding-top:2px!important}
+ body.att-compact-desktop[data-att-view=card] .remove-day{padding:2px 0!important}
+}
+@media(min-width:1100px){
+ body[data-att-view=list] #list .worker-card{grid-template-columns:minmax(0,1fr) 210px minmax(0,1.2fr)}
+ body[data-att-view=list] .att-list-summary{grid-column:2;grid-row:1;align-self:center}
+ body[data-att-view=list] .att-worker-presence,body[data-att-view=list] .att-worker-controls{grid-column:3;grid-row:1}
+ body[data-att-view=list] .att-worker-footer{grid-row:2}
+}
+@media(max-width:639px){
+ .att-view-toolbar{display:grid;grid-template-columns:minmax(0,1fr)}
+ .att-view-toolbar input{width:100%;min-width:0;max-width:none;box-sizing:border-box}
+ .att-view-switch{width:100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .att-view-switch button{width:auto!important;min-width:0!important}
+}
