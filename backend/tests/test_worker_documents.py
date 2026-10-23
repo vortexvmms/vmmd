@@ -43,11 +43,11 @@ def api():
                 if payload['p_updated_at'] != state['row']['updated_at']:
                     return httpx.Response(409,json={'code':'40001'})
                 state['receipt'] = {'record_id':ID,'worker_id':W,'title':'Course','pending_paths':[p for p in [state['row']['image_path'],state['row'].get('back_image_path')] if p], 'retained_shared':0,'completed_at':None}
-            return httpx.Response(200,json=state['receipt'])
+            return httpx.Response(200,json=[state['receipt']] if state.get('composite_array') else state['receipt'])
         if path.endswith('/rpc/worker_card_cleanup_done'):
             payload = json.loads(req.content)
             state['receipt']['pending_paths'].remove(payload['p_path'])
-            return httpx.Response(200,json=state['receipt'])
+            return httpx.Response(200,json=[state['receipt']] if state.get('composite_array') else state['receipt'])
         if path.endswith('/worker_card_deletions'):
             return httpx.Response(200,json=[state['receipt']] if state['receipt'] else [])
         if req.method == 'DELETE':
@@ -337,3 +337,9 @@ def test_cleanup_never_deletes_untrusted_or_cross_worker_paths(api,path):
     c,s=api;s['role']='admin';s['row']['image_path']=path
     r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
     assert r.status_code==200 and r.json()['cleanup_pending'] and not s['deletes']
+
+
+def test_deletion_accepts_postgrest_single_row_composite_arrays(api):
+    c,s=api;s['role']='admin';s['composite_array']=True
+    r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==200 and r.json()['deleted'] and not r.json()['cleanup_pending']

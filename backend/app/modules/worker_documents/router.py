@@ -167,7 +167,13 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
                        'Card or deletion receipt not found.' if status == 404 else
                        'Card deletion could not finish. Refresh and try again.')
             raise HTTPException(status, message)
-        return r.json()
+        result = r.json()
+        # PostgREST can represent a composite result as a one-row array.
+        if isinstance(result, list):
+            if len(result) != 1:
+                raise HTTPException(503, 'Deletion receipt could not be read. Refresh and try again.')
+            result = result[0]
+        return result
 
     async def cleanup_card(user, receipt):
         # The receipt commits atomically with removal; failed files stay queued for retry.
