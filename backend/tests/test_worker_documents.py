@@ -29,7 +29,9 @@ def api():
 
     def transport(req):
         path = req.url.path
-        if '/rest/v1/' in path or '/storage/v1/' in path:
+        if '/storage/v1/object/public/' in path:
+            assert 'Authorization' not in req.headers
+        elif '/rest/v1/' in path or '/storage/v1/' in path:
             assert req.headers['Authorization'] == 'Bearer test'
         if path.endswith('/rpc/worker_documents_can_access'):
             return httpx.Response(200, json=state['access'])
@@ -243,3 +245,23 @@ def test_manual_review_fallback_scope_and_busy_gate(api,monkeypatch):
     s['access']=False
     assert c.post(url,content=s['png']).status_code==404
     assert not s['uploads']
+
+
+
+def test_old_supabase_card_link_reads_the_migrated_copy_from_current_project(api):
+    c, s = api
+    key = f'worker-cards/{W}/original_front.jpg'
+    s['row']['image_path'] = 'https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/' + key
+    original = deepcopy(s['row'])
+    r = c.get(f'/api/v1/worker-documents/cards/{ID}/file')
+    assert r.status_code == 200 and r.content == s['png']
+    assert r.headers['Cache-Control'] == 'no-store'
+    assert s['reads'] == ['https://test.supabase.co/storage/v1/object/public/dpr-photos/' + key]
+    assert s['row'] == original and not s['writes']
+
+
+def test_old_supabase_link_cannot_read_another_workers_migrated_object(api):
+    c, s = api
+    s['row']['image_path'] = 'https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/worker-cards/another-worker/front.jpg'
+    assert c.get(f'/api/v1/worker-documents/cards/{ID}/file').status_code == 422
+    assert not s['reads']

@@ -154,3 +154,9 @@ leaving the page revokes its object URLs and clears the pack. Print selected /
 Save PDF uses the browser's print dialog and the existing A4 card sizing, keeping
 front and back together and labelling each side. Previously stored missing files
 are retained as records; unavailable originals still need recovery or replacement.
+
+Historical card links to the former Supabase project are resolved against the
+active project's migrated `dpr-photos` bucket using the same object key. The
+worker-scoped record check runs first, and the migrated key must belong to that
+worker. Reads retain no-store headers, file limits and image validation. Public
+bucket reads receive no user credentials; saved records are not rewritten.

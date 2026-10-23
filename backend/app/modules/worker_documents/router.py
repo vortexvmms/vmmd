@@ -234,6 +234,13 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             headers = ctx.supabase_headers(user['token'])
         elif legacy_url(path, ctx.r2_public_base):
             url, headers = path, {}
+            if urlsplit(path).netloc == 'lqnbdemtgkermhaqfboh.supabase.co':
+                # Storage was migrated with its original bucket/object keys.
+                # Resolve old links against the active project, after row scope.
+                key = unquote(urlsplit(path).path.removeprefix('/storage/v1/object/public/dpr-photos/'))
+                if not key.startswith('worker-cards/' + record['worker_id'] + '/') or '..' in key.split('/'):
+                    raise HTTPException(422, 'Invalid historical file location')
+                url = f'{storage}/object/public/dpr-photos/{quote(key, safe="/")}'
             if urlsplit(path).netloc == urlsplit(ctx.r2_public_base).netloc and ctx.r2_presign_get:
                 key = unquote(urlsplit(path).path).lstrip('/')
                 if '..' in key.split('/'):
@@ -255,3 +262,4 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             raise HTTPException(502, 'Original file is temporarily unavailable. The saved record is retained.')
         return Response(bytes(data), media_type=file_type(bytes(data)), headers={'Cache-Control': 'no-store', 'Content-Disposition': 'inline'})
     return router
+
