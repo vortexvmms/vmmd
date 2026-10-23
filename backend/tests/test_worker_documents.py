@@ -265,3 +265,18 @@ def test_old_supabase_link_cannot_read_another_workers_migrated_object(api):
     s['row']['image_path'] = 'https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/worker-cards/another-worker/front.jpg'
     assert c.get(f'/api/v1/worker-documents/cards/{ID}/file').status_code == 422
     assert not s['reads']
+
+
+def test_card_no_expiry_clears_date_and_can_be_reversed(api):
+    c, s = api
+    s['row']['expiry_date'] = '2028-01-01'
+    r = c.patch(f'/api/v1/worker-documents/cards/{ID}', json={'updated_at': 'version1', 'no_expiry': True})
+    assert r.status_code == 200 and r.json()['no_expiry'] is True and r.json()['expiry_date'] is None
+    r = c.patch(f'/api/v1/worker-documents/cards/{ID}', json={'updated_at': r.json()['updated_at'], 'expiry_date': '2030-01-01'})
+    assert r.status_code == 200 and r.json()['no_expiry'] is False and r.json()['expiry_date'] == '2030-01-01'
+
+
+def test_no_expiry_rejects_conflicting_date(api):
+    c, s = api
+    r = c.patch(f'/api/v1/worker-documents/cards/{ID}', json={'updated_at': 'version1', 'no_expiry': True, 'expiry_date': '2030-01-01'})
+    assert r.status_code == 422 and not s['writes']

@@ -41,6 +41,7 @@ class Details(BaseModel):
     cert_no: str | None = Field(default=None, max_length=200)
     issued_date: date | None = None
     expiry_date: date | None = None
+    no_expiry: bool | None = None
     title: str | None = Field(default=None, max_length=200)
 
 
@@ -173,10 +174,19 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
     @router.patch('/{kind}/{record_id}')
     async def edit(kind: str, record_id: UUID, body: Details, user: dict = Depends(ctx.get_current_user)):
         require(user); old = await row(user, kind, record_id)
+        if body.no_expiry and body.expiry_date:
+            raise HTTPException(422, 'A card marked No expiry cannot have an expiry date')
         if body.issued_date and body.expiry_date and body.expiry_date < body.issued_date:
             raise HTTPException(422, 'Expiry date must be on or after the issue date')
         fields = ('category', 'label', 'institute', 'cert_no', 'issued_date', 'expiry_date') if kind == 'cards' else ('title',)
         payload = {key: value for key, value in body.model_dump(mode='json').items() if key in fields}
+        if kind == 'cards':
+            if body.no_expiry is not None:
+                payload['no_expiry'] = body.no_expiry
+                if body.no_expiry:
+                    payload['expiry_date'] = None
+            elif body.expiry_date is not None:
+                payload['no_expiry'] = False
         rows = await db(user, table(kind), 'PATCH', params={'id': f'eq.{record_id}', 'updated_at': f'eq.{body.updated_at}'}, payload=payload)
         if not rows:
             raise HTTPException(409, 'This document changed. Refresh before editing again.')

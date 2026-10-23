@@ -160,3 +160,13 @@ active project's migrated `dpr-photos` bucket using the same object key. The
 worker-scoped record check runs first, and the migrated key must belong to that
 worker. Reads retain no-store headers, file limits and image validation. Public
 bucket reads receive no user credentials; saved records are not rewritten.
+
+## Existing photos and phone geometry
+
+Edit a card and choose **Edit saved front photo** or **Edit saved back photo** to reopen an image through the authenticated file endpoint. Confirm the photo review and save the record. File replacement uses the existing immutable upload/version conflict protection; metadata remains on the same card. Existing black pixels cannot be recovered by this editor. Saved PDFs remain replaceable under Certificates.
+
+Crop has eight touch/keyboard handles (four corners and four edge midpoints), a movable crop region, and free, landscape or portrait standard-card proportions (85.6 × 53.98 mm). **Auto crop card** proposes corners using local contrast detection; review them before applying. Uncertain detection opens manual corner placement. **Flatten · 4 corners** corrects perspective into a rectangular card. **Tilt / straighten** supports fine angle adjustment from −30° to +30°; Rotate 90° handles orientation. Flatten and tilt permanently composite current masks before resampling; review again after any geometry changes. These tools cannot restore blurred or obstructed text.
+
+**No expiry** is an explicit flag below the expiry date. It clears and disables the date, and displays “No expiry” in the register and print pack. Blank dates without the flag remain “No expiry recorded.” Existing courses are not automatically classified based on title.
+
+Printing uses four card records per A4 portrait page, with each selected front/back pair together. Side captions are removed; the worker and card headings remain. Use A4, 100% scale, and disable browser headers/footers for physical printing.
