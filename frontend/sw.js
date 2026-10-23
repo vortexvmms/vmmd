@@ -5,10 +5,10 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v97-worker-card-editor';
+const CACHE = 'vcms-v98-card-print-selection';
 const APP_SHELL = [
   'css/attendance-views.css?v=20261022-1','css/worker-photos.css?v=20261022-1','js/worker-photos.js?v=20261022-1','js/worker-photo-editor.js?v=20261022-1',
-  'js/worker-card-input.js?v=20261023-1','worker-cards.html','css/worker-cards.css?v=20261023-1','js/worker-cards.js?v=20261023-1','js/document-masking.js?v=20261023-1',
+  'js/worker-card-input.js?v=20261023-1','js/worker-card-print.js?v=20261023-print1','worker-cards.html','css/worker-cards.css?v=20261023-print1','js/worker-cards.js?v=20261023-print1','js/document-masking.js?v=20261023-1',
   'css/attendance-desktop.css?v=20261020-1','js/attendance-desktop.js?v=20261020-1',
   'js/verification-export.js?v=20261016-1',
   'sic-register.html','css/sic-register.css?v=20261021-role2','js/sic-domain.js?v=20261021-role2','js/sic-card-data.js?v=20261021-role2','js/sic-card-reader.js?v=20261021-1','js/sic-register.js?v=20261021-role2',

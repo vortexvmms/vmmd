@@ -55,7 +55,7 @@ test('card sheet loads both sides and retains the selected worker identity for p
  await fixture(page);
  await page.route('**/worker-documents/cards/*/file?*',route=>route.fulfill({status:200,contentType:'image/png',body:png}));
  await page.evaluate(()=>{window.print=()=>{window.cardPrintReady=true}});
- await page.locator('#print-cards').click();await expect.poll(()=>page.evaluate(()=>window.cardPrintReady)).toBeTruthy();
+ await page.locator('#print-cards').click();await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await page.locator('#card-print-go').click();await expect.poll(()=>page.evaluate(()=>window.cardPrintReady)).toBeTruthy();
  await expect(page.locator('#print-sheet img')).toHaveCount(3);
  await expect(page.locator('#print-sheet h1')).toHaveText('Sample Worker · EMP-050');
  await page.emulateMedia({media:'print'});await expect(page.locator('#print-sheet')).toBeVisible();await expect(page.locator('main')).toBeHidden();
@@ -116,4 +116,24 @@ test('desktop camera captures a photo and releases the camera after capture',asy
  await fixture(page);await page.locator('#add').click();
  await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=800;canvas.height=500;const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,800,500);c.fillStyle='black';c.font='30px Arial';c.fillText('Synthetic permit card',30,70);const stream=canvas.captureStream(10);window.testCameraStream=stream;Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:async()=>stream})});
  await page.locator('#front-drop').getByRole('button',{name:'Take photo',exact:true}).click();await expect(page.locator('#capture-shoot')).toBeEnabled();await page.locator('#capture-shoot').click();await expect(page.locator('#mask-canvas')).toBeVisible();expect(await page.evaluate(()=>window.testCameraStream.getTracks().every(t=>t.readyState==='ended'))).toBe(true);await checkPages(page);
+});
+
+
+test('print pack includes only selected sides in the arranged sequence',async({page})=>{
+ await fixture(page);const requests=[];await page.route('**/worker-documents/cards/*/file?*',route=>{requests.push(new URL(route.request().url()));return route.fulfill({status:200,contentType:'image/png',body:png})});
+ await page.locator('#print-cards').click();await expect(page.locator('#card-print-count')).toHaveText('2 of 2 cards selected · 3 sides');
+ await page.locator('#card-print-list [data-side=back]').first().uncheck();await page.getByRole('button',{name:'Move down: Construction Safety Orientation',exact:true}).click();
+ await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();
+ expect(requests.map(u=>u.searchParams.get('side'))).toEqual(['front','front']);expect(requests[0].pathname).toContain('30000000-0000-0000-0000-000000000002');
+ await expect(page.locator('#print-sheet h2').first()).toContainText('1. Work permit');await expect(page.locator('#print-sheet img')).toHaveCount(2);
+ await page.locator('#card-print-list [data-side=front]').first().uncheck();await expect(page.locator('#card-print-go')).toBeDisabled();await expect(page.locator('#print-sheet')).toBeEmpty();
+});
+test('one unavailable side is explained and requires explicit exclusion before printing',async({page})=>{
+ await fixture(page);await page.route('**/worker-documents/cards/*/file?*',route=>{const u=new URL(route.request().url());return u.pathname.includes(C)&&u.searchParams.get('side')==='front'?route.fulfill({status:502,json:{detail:'Original file is unavailable. Upload a replacement.'}}):route.fulfill({status:200,contentType:'image/png',body:png})});
+ await page.evaluate(()=>window.print=()=>window.cardPrintReady=true);await page.locator('#print-cards').click();await page.locator('#card-print-prepare').click();
+ await expect(page.locator('#card-print-message')).toContainText('1 selected side(s) unavailable');await expect(page.locator('#card-print-preview')).toContainText('Construction Safety Orientation (1) · front');await expect(page.locator('#card-print-go')).toBeDisabled();expect(await page.evaluate(()=>window.cardPrintReady)).toBeFalsy();
+ await page.locator('#card-print-exclude').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet img')).toHaveCount(2);await expect(page.locator('#print-sheet img').first()).toHaveAttribute('alt','back');await page.locator('#card-print-go').click();expect(await page.evaluate(()=>window.cardPrintReady)).toBe(true);
+});
+test('print selection has front-only and clear controls; closing discards the print pack',async({page})=>{
+ await fixture(page);await page.locator('#print-cards').click();await page.locator('#card-print-fronts').click();await expect(page.locator('#card-print-count')).toContainText('2 sides');await page.locator('#card-print-none').click();await expect(page.locator('#card-print-prepare')).toBeDisabled();await page.locator('#card-print-all').click();await expect(page.locator('#card-print-count')).toContainText('3 sides');await page.locator('#card-print-close').click();await expect(page.locator('#card-print-dialog')).toBeHidden();expect(await page.evaluate(()=>document.body.classList.contains('wc-print-ready'))).toBe(false);
 });

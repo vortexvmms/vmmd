@@ -133,3 +133,24 @@ peak 351.7 MiB, zero masks; after, 3.50/3.20 seconds, CPU 3.49/3.20 seconds,
 peak 355.3 MiB, three masks. This is process peak memory, not process-family
 or Render/Linux capacity evidence. Agent tokens were not measured.
 
+
+## Selected card print packs (23 October 2026)
+
+Print card sheet opens an ordered selection dialog. Front and back are independent
+checkboxes; Select all, Fronts only and Clear selection apply across the list.
+Use Move up/down on mobile or drag rows on desktop to arrange the client's pack.
+Selection and ordering apply only to this print session and do not change worker
+records. Use clear card labels for otherwise unnamed course cards.
+
+Prepare preview fetches only selected sides through the existing authenticated,
+worker-scoped file endpoint. Ready images are cached in memory for the dialog,
+with thumbnails and an ordered sheet preview. Missing, unreadable and timed-out
+images are named by card, sequence number and side. Print is disabled until all
+selected sides are ready. The user can retry, change the selection or explicitly
+Exclude unavailable sides; incomplete packs are never printed silently.
+
+Changing selection/order invalidates the prepared sheet. Closing the dialog or
+leaving the page revokes its object URLs and clears the pack. Print selected /
+Save PDF uses the browser's print dialog and the existing A4 card sizing, keeping
+front and back together and labelling each side. Previously stored missing files
+are retained as records; unavailable originals still need recovery or replacement.
