@@ -1,5 +1,40 @@
 # Worker document masking
 
+## Photo editor (23 October 2026)
+
+Photo uploads open locally in an enlarged dialog, without waiting for OCR or a
+backend preview request. The mobile editor uses the full viewport; the desktop
+editor grows to 1600 pixels. Staff can draw masks, pan, pinch/zoom, fit the image,
+rotate, crop, undo a mask and restore the source photo. Cropping intersects and
+remaps existing masks; rotating remaps their coordinates. Cropped suffixes are
+cleared so the uploader can review their visible ending again. Every image edit
+invalidates the page's review. Cropping/rotation apply to photos, not PDF pages.
+
+The front and back each accept file upload, drag/drop and clipboard image paste.
+On phones/tablets, Take photo opens the native camera file picker; on desktop it
+opens a getUserMedia camera preview with capture and camera-switch controls.
+Desktop camera access requires HTTPS (or localhost), permission and a camera.
+Streams stop on capture, close, page hide or tab hiding. Failed access leaves
+file upload available. HEIC/HEIF conversion uses the existing bundled heic2any
+library; unsupported photos produce an explicit error.
+
+Images are oriented by browser decoding and reduced to at most four megapixels
+and a 4096-pixel longest edge before editing. The edited, unmasked PNG is held in
+memory and uploaded only after review, with a SHA-256-bound manifest. The existing
+server checks and pixel-flattening still apply the masks before storage. Raw
+source photos and edited unmasked copies are not saved in Storage. Only pressing
+Suggest masks sends the edited image to the existing OCR preview endpoint;
+its failure or timeout does not block manual photo review. PDF previews continue
+to use the existing server-rendered, page-by-page workflow.
+
+Browser regressions use fictional images and mocked API/storage responses. They
+cover local preview with a failing OCR service, crop/rotation mask coordinates,
+front/back uploads, digest matching against upload bytes where exposed by the
+browser, drop/native camera selection, desktop synthetic camera capture and
+track cleanup, review invalidation, PDF review and existing metadata/print flows.
+Physical device cameras and HEIC conversion are not automated by these tests.
+
+
 New or replacement uploads in Worker Cards require a page-by-page review before
 the file is saved. The same policy applies to both card sides and certificate PDFs:
 
@@ -97,3 +132,4 @@ two previews): before, cold/warm 3.20/2.83 seconds, CPU 3.18/2.83 seconds,
 peak 351.7 MiB, zero masks; after, 3.50/3.20 seconds, CPU 3.49/3.20 seconds,
 peak 355.3 MiB, three masks. This is process peak memory, not process-family
 or Render/Linux capacity evidence. Agent tokens were not measured.
+
