@@ -24,7 +24,7 @@ def review(data, pages=1, boxes=None):
 @pytest.fixture
 def api():
     pix = fitz.Pixmap(fitz.csRGB, (0, 0, 20, 10));pix.clear_with(255)
-    state = {'role': 'site_sup', 'access': True, 'writes': [], 'uploads': [], 'reads': [], 'media_status': 200, 'audits': [], 'png': pix.tobytes('png'),
+    state = {'role': 'site_sup', 'access': True, 'writes': [], 'uploads': [], 'reads': [], 'media_status': 200, 'audits': [], 'deletes': [], 'cleanup_status': 200, 'receipt': None, 'png': pix.tobytes('png'),
              'row': {'id': ID, 'worker_id': W, 'image_path': W+'/00000000-0000-0000-0000-000000000001.png', 'back_image_path': None, 'category': 'course', 'updated_at': 'version1'}}
 
     def transport(req):
@@ -37,6 +37,22 @@ def api():
             return httpx.Response(200, json=state['access'])
         if path.endswith('/rpc/worker_documents_workers'):
             return httpx.Response(200, json=[{'id': W, 'name': 'Sample Worker', 'worker_code': 'EMP-1', 'status': 'active'}] if state['access'] else [])
+        if path.endswith('/rpc/worker_card_delete'):
+            payload = json.loads(req.content)
+            if not state['receipt']:
+                if payload['p_updated_at'] != state['row']['updated_at']:
+                    return httpx.Response(409,json={'code':'40001'})
+                state['receipt'] = {'record_id':ID,'worker_id':W,'title':'Course','pending_paths':[p for p in [state['row']['image_path'],state['row'].get('back_image_path')] if p], 'retained_shared':0,'completed_at':None}
+            return httpx.Response(200,json=state['receipt'])
+        if path.endswith('/rpc/worker_card_cleanup_done'):
+            payload = json.loads(req.content)
+            state['receipt']['pending_paths'].remove(payload['p_path'])
+            return httpx.Response(200,json=state['receipt'])
+        if path.endswith('/worker_card_deletions'):
+            return httpx.Response(200,json=[state['receipt']] if state['receipt'] else [])
+        if req.method == 'DELETE':
+            state['deletes'].append((str(req.url),json.loads(req.content) if req.content else None))
+            return httpx.Response(state['cleanup_status'],json=[])
         if '/storage/v1/object/' in path:
             if req.method == 'POST':
                 state['uploads'].append((str(req.url), bytes(req.content)))
@@ -70,7 +86,7 @@ def api():
         return {'role': state['role'], 'token': 'test', 'user_id': '00000000-0000-0000-0000-000000000001'}
 
     app = FastAPI()
-    app.include_router(build_worker_documents_router(WorkerDocumentsContext(user, shared, 'https://test.supabase.co/rest/v1', lambda t: {'Authorization': 'Bearer '+t}, audit, 'https://legacy.example', lambda key: 'https://legacy.example/'+key+'?signed=test')))
+    app.include_router(build_worker_documents_router(WorkerDocumentsContext(user, shared, 'https://test.supabase.co/rest/v1', lambda t: {'Authorization': 'Bearer '+t}, audit, 'https://legacy.example', lambda key: 'https://legacy.example/'+key+'?signed=test', lambda key: 'https://r2-delete.example/'+key+'?signed=test')))
     with TestClient(app) as client:
         yield client, state
 
@@ -280,3 +296,44 @@ def test_no_expiry_rejects_conflicting_date(api):
     c, s = api
     r = c.patch(f'/api/v1/worker-documents/cards/{ID}', json={'updated_at': 'version1', 'no_expiry': True, 'expiry_date': '2030-01-01'})
     assert r.status_code == 422 and not s['writes']
+
+@pytest.mark.parametrize('role',['site_sup','safety_sup','wshc','logistics_sup','main_sup','wshc_lead','general_manager','operation_manager','payroll'])
+def test_permanent_delete_denies_other_roles_without_storage_calls(api,role):
+    c,s=api;s['role']=role
+    r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==403 and not s['deletes'] and s['receipt'] is None
+
+@pytest.mark.parametrize('role',['admin','hr_assistant'])
+def test_delete_requires_exact_confirmation_and_fresh_version(api,role):
+    c,s=api;s['role']=role
+    url=f'/api/v1/worker-documents/cards/{ID}'
+    assert c.request('DELETE',url,json={'updated_at':'version1','confirmation':'delete'}).status_code==422
+    assert c.request('DELETE',url,json={'updated_at':'old','confirmation':'DELETE'}).status_code==409
+    assert not s['deletes'] and s['receipt'] is None
+    r=c.request('DELETE',url,json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==200 and r.json()['cleanup_pending'] is False
+    assert s['deletes'][0][1]=={'prefixes':[s['row']['image_path']]}
+
+
+def test_failed_cleanup_is_retryable_after_record_removal(api):
+    c,s=api;s['role']='admin';s['cleanup_status']=503
+    r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==200 and r.json()['deleted'] and r.json()['cleanup_pending']
+    assert len(s['receipt']['pending_paths'])==1
+    s['cleanup_status']=200
+    r=c.post(f'/api/v1/worker-documents/card-deletions/{ID}/retry',json={'confirmation':'DELETE'})
+    assert r.status_code==200 and not r.json()['cleanup_pending'] and len(s['deletes'])==2
+
+@pytest.mark.parametrize('path',[f'https://lqnbdemtgkermhaqfboh.supabase.co/storage/v1/object/public/dpr-photos/worker-cards/{W}/front.jpg',f'https://legacy.example/worker-cards/{W}/front.jpg'])
+def test_historical_supabase_and_r2_photos_use_approved_delete_api(api,path):
+    c,s=api;s['role']='admin';s['row']['image_path']=path
+    r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==200 and not r.json()['cleanup_pending']
+    assert len(s['deletes'])==1
+    assert s['deletes'][0][0].startswith('https://test.supabase.co/storage/v1/object/dpr-photos' if 'supabase.co' in path else 'https://r2-delete.example/worker-cards/')
+
+@pytest.mark.parametrize('path',['https://evil.invalid/secret.jpg','https://legacy.example/worker-cards/another-worker/front.jpg',f'https://legacy.example/worker-cards/{W}/%2e%2e/front.jpg','another-worker/00000000-0000-0000-0000-000000000001.png'])
+def test_cleanup_never_deletes_untrusted_or_cross_worker_paths(api,path):
+    c,s=api;s['role']='admin';s['row']['image_path']=path
+    r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
+    assert r.status_code==200 and r.json()['cleanup_pending'] and not s['deletes']

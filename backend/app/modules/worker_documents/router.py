@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import struct
 import json
+import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -30,6 +31,7 @@ class WorkerDocumentsContext:
     audit: Callable
     r2_public_base: str
     r2_presign_get: Callable | None = None
+    r2_presign_delete: Callable | None = None
 
 
 class Details(BaseModel):
@@ -43,6 +45,17 @@ class Details(BaseModel):
     expiry_date: date | None = None
     no_expiry: bool | None = None
     title: str | None = Field(default=None, max_length=200)
+
+
+class DeleteCard(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    updated_at: str
+    confirmation: Literal['DELETE']
+
+
+class ConfirmCleanup(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    confirmation: Literal['DELETE']
 
 
 def image_dimensions(data, mime):
@@ -135,6 +148,85 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
         if not rows:
             raise HTTPException(404, 'Document not found or outside your current site allocations')
         return rows[0]
+
+    def require_delete(user):
+        if user['role'] not in ('admin', 'hr_assistant'):
+            raise HTTPException(403, 'Only Admin and HR can permanently delete cards')
+
+    async def delete_rpc(user, resource, payload):
+        async with ctx.shared_client() as client:
+            r = await client.post(f'{ctx.rest_url}/rpc/{resource}', json=payload,
+                                 headers=ctx.supabase_headers(user['token']))
+        if not r.is_success:
+            try:
+                code = r.json().get('code')
+            except ValueError:
+                code = None
+            status = 409 if code == '40001' else 404 if code == 'P0002' else 403 if r.status_code in (401, 403) else 503
+            message = ('This card changed. Refresh before deleting it.' if status == 409 else
+                       'Card or deletion receipt not found.' if status == 404 else
+                       'Card deletion could not finish. Refresh and try again.')
+            raise HTTPException(status, message)
+        return r.json()
+
+    async def cleanup_card(user, receipt):
+        # The receipt commits atomically with removal; failed files stay queued for retry.
+        for path in list(receipt['pending_paths']):
+            try:
+                worker = receipt['worker_id']
+                if re.fullmatch(re.escape(worker) + r'/[0-9a-f-]{36}\.(jpg|png|pdf)', path):
+                    bucket, key = 'worker-cards', path
+                else:
+                    url = urlsplit(path)
+                    if url.query or url.fragment or '%' in path or '..' in url.path.split('/'):
+                        raise ValueError('Unsafe file location')
+                    if url.scheme == 'https' and url.netloc in ('lqnbdemtgkermhaqfboh.supabase.co', urlsplit(ctx.rest_url).netloc) and url.path.startswith('/storage/v1/object/public/dpr-photos/worker-cards/'+worker+'/'):
+                        bucket, key = 'dpr-photos', url.path.removeprefix('/storage/v1/object/public/dpr-photos/')
+                    elif url.scheme == 'https' and url.netloc == urlsplit(ctx.r2_public_base).netloc and re.fullmatch('/worker-cards/'+re.escape(worker)+r'/[A-Za-z0-9_.-]+',url.path):
+                        if not ctx.r2_presign_delete:
+                            raise ValueError('R2 cleanup is not configured')
+                        async with ctx.shared_client() as client:
+                            removed = await client.delete(ctx.r2_presign_delete(url.path.lstrip('/')), follow_redirects=False)
+                        if not removed.is_success:
+                            raise ValueError('R2 cleanup failed')
+                        bucket = None
+                    else:
+                        raise ValueError('Unsupported historical location')
+                if bucket:
+                    async with ctx.shared_client() as client:
+                        removed = await client.request('DELETE',f'{storage}/object/{bucket}',
+                            headers=ctx.supabase_headers(user['token']),json={'prefixes':[key]})
+                    if not removed.is_success:
+                        raise ValueError('Private storage cleanup failed')
+                receipt = await delete_rpc(user,'worker_card_cleanup_done',{'p_id':receipt['record_id'],'p_path':path})
+            except (httpx.RequestError, ValueError, RuntimeError, HTTPException):
+                # Never return secrets, signed URLs or paths in a failure response.
+                continue
+        return {'deleted':True,'record_id':receipt['record_id'],
+                'cleanup_pending':bool(receipt['pending_paths']),
+                'pending_files':len(receipt['pending_paths']),
+                'retained_shared':receipt['retained_shared']}
+
+    @router.delete('/cards/{record_id}')
+    async def delete_card(record_id: UUID, body: DeleteCard, user: dict = Depends(ctx.get_current_user)):
+        require_delete(user)
+        receipt = await delete_rpc(user,'worker_card_delete',{'p_id':str(record_id),
+            'p_updated_at':body.updated_at,'p_confirmation':body.confirmation})
+        return await cleanup_card(user,receipt)
+
+    @router.get('/card-deletions/pending')
+    async def pending_deletions(worker_id: UUID, user: dict = Depends(ctx.get_current_user)):
+        require_delete(user)
+        return await db(user,'worker_card_deletions',params={'worker_id':f'eq.{worker_id}',
+            'completed_at':'is.null','select':'record_id,title,deleted_at','order':'deleted_at.asc'})
+
+    @router.post('/card-deletions/{record_id}/retry')
+    async def retry_deletion(record_id: UUID, body: ConfirmCleanup, user: dict = Depends(ctx.get_current_user)):
+        require_delete(user)
+        rows = await db(user,'worker_card_deletions',params={'record_id':f'eq.{record_id}','limit':'1'})
+        if not rows:
+            raise HTTPException(404,'Deletion receipt not found')
+        return await cleanup_card(user,rows[0])
 
     async def read_file(request):
         data = bytearray()

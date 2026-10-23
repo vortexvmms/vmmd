@@ -3,17 +3,19 @@ const W='10000000-0000-0000-0000-000000000001',C='30000000-0000-0000-0000-000000
 // A valid PNG is required: Linux WebKit rejects corrupt chunk checksums.
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAGQAAAA8CAIAAAAfXYiZAAAAlUlEQVR4nO3QsQEAIAyAMPX/n+sLZU9mJu7MHHbessOsxqzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCswKzArMCss/cBpwsDdcmiT80AAAAASUVORK5CYII=','base64');
 async function draw(page,x,y,w,h){const b=await page.locator('#mask-canvas').boundingBox();await page.mouse.move(b.x+b.width*x,b.y+b.height*y);await page.mouse.down();await page.mouse.move(b.x+b.width*(x+w),b.y+b.height*(y+h));await page.mouse.up()}
-async function fixture(page,{conflict=false}={}){
+async function fixture(page,{conflict=false,role='site_sup',cleanupFails=false}={}){
  const writes=[],cards=[{id:C,worker_id:W,category:'course',label:'Construction Safety Orientation',institute:'Sample Training Centre',cert_no:'COURSE-001',issued_date:'2025-01-10',expiry_date:'2025-12-31',image_path:W+'/front.jpg',back_image_path:W+'/back.jpg',updated_at:'v1'},{id:'30000000-0000-0000-0000-000000000002',worker_id:W,category:'work_permit',label:'Work permit',expiry_date:'2028-06-30',image_path:W+'/permit.jpg',updated_at:'v1'}],certificates=[];
  await page.addInitScript(()=>localStorage.setItem('vmms_session',JSON.stringify({access_token:'test',expires_at:Date.now()+3600000})));
  await page.route('**/api/v1/**',async route=>{
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
-  if(p.endsWith('/me'))return route.fulfill({json:{role:'site_sup',name:'Test Supervisor',user_id:'u1'}});
+  if(p.endsWith('/me'))return route.fulfill({json:{role,name:'Test Supervisor',user_id:'u1'}});
   if(!p.includes('/worker-documents/'))return route.fulfill({json:[]});
   if(p.endsWith('/workers'))return route.fulfill({json:u.searchParams.get('search')==='nobody'?[]:[{id:W,name:'Sample Worker',worker_code:'EMP-050',status:'active'}]});
   if(p.endsWith('/mask-preview'))return route.fulfill({json:{policy:'fin-dob-wp-v1',sha256:'test-digest',page:Number(u.searchParams.get('page')),pages:req.headers()['content-type']==='application/pdf'?2:1,width:1000,height:600,image:png.toString('base64'),recognition:'suggested',boxes:[{x:.1,y:.1,w:.4,h:.1,field:'FIN',suffix:'567X'}]}});
+  if(p.endsWith('/card-deletions/pending'))return route.fulfill({json:[]});
   if(p.endsWith('/file'))return route.fulfill({status:502,json:{detail:'Original file is unavailable. The saved record is retained; upload a replacement if available.'}});
   const kind=p.includes('/certificates')?'certificates':'cards',rows=kind==='cards'?cards:certificates;
+  if(req.method()==='DELETE'){const body=req.postDataJSON();writes.push({method:'DELETE',body});if(conflict)return route.fulfill({status:409,json:{detail:'This card changed. Refresh before deleting it.'}});const at=cards.findIndex(r=>r.id===p.split('/').pop());cards.splice(at,1);return route.fulfill({json:{deleted:true,cleanup_pending:cleanupFails,retained_shared:0}})}
   if(req.method()==='POST'){
    const manifest=JSON.parse(req.headers()['x-document-masking']);const body=req.postDataBuffer();if(body&&req.headers()['content-type']==='image/png')expect(manifest.sha256).toBe(require('node:crypto').createHash('sha256').update(body).digest('hex'));writes.push({method:'POST',path:p,query:Object.fromEntries(u.searchParams),masking:manifest,body});
    const id=u.searchParams.get('record_id')||'new-'+kind;
@@ -160,4 +162,27 @@ test('local card edge detection suggests a quad and uncertain images fall back t
 
 test('print pack groups four card pairs per A4 page without side captions',async({page})=>{
  const {cards}=await fixture(page);for(let i=2;i<5;i++)cards.push({...cards[0],id:'extra-'+i,label:'Additional course '+i});await page.route('**/worker-documents/cards/*/file?*',r=>r.fulfill({contentType:'image/png',body:png}));await page.getByRole('button',{name:'Sample Worker'}).click();await expect(page.locator('#card-count')).toHaveText('(5)');await page.locator('#print-cards').click();await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet .wc-print-page')).toHaveCount(2);await expect(page.locator('#print-sheet .wc-print-page').first().locator('article')).toHaveCount(4);await expect(page.locator('#print-sheet figcaption')).toHaveCount(0);
+});
+
+test('Admin confirms the exact worker/card and types DELETE before permanent deletion',async({page})=>{
+ const {writes}=await fixture(page,{role:'admin'});await page.getByRole('button',{name:'Edit',exact:true}).first().click();await page.locator('#delete-card').click();await expect(page.locator('#delete-card-target')).toContainText('Sample Worker · EMP-050 · Construction Safety Orientation');await expect(page.locator('#delete-card-go')).toBeDisabled();await page.locator('#delete-card-confirmation').fill('delete');await expect(page.locator('#delete-card-go')).toBeDisabled();await page.locator('#delete-card-cancel').click();expect(writes).toHaveLength(0);await page.locator('#delete-card').click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#delete-card-dialog')).toBeHidden();await expect(page.locator('#edit-dialog')).toBeHidden();await expect(page.locator('#card-count')).toHaveText('(1)');await expect(page.locator('#worker-name')).toHaveText('Sample Worker');expect(writes).toEqual([{method:'DELETE',body:{updated_at:'v1',confirmation:'DELETE'}}]);
+});
+
+test('HR can delete while supervisor and manager controls stay hidden',async({page})=>{
+ await fixture(page,{role:'hr_assistant'});await page.getByRole('button',{name:'Edit',exact:true}).first().click();await expect(page.locator('#delete-card')).toBeVisible();await page.locator('#close-edit').click();await page.locator('#add').click();await expect(page.locator('#delete-card')).toBeHidden();
+});
+
+test('supervisor cannot see permanent delete and stale HR deletion preserves the record',async({page})=>{
+ const {writes}=await fixture(page);await page.getByRole('button',{name:'Edit',exact:true}).first().click();await expect(page.locator('#delete-card')).toBeHidden();expect(writes).toHaveLength(0);
+});
+
+test('a stale card cannot be deleted and cleanup failures are clearly reported',async({page})=>{
+ const {writes}=await fixture(page,{role:'admin',conflict:true});await page.getByRole('button',{name:'Edit',exact:true}).first().click();await page.locator('#delete-card').click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#delete-card-error')).toContainText('Refresh before deleting');await expect(page.locator('#delete-card-dialog')).toBeVisible();expect(writes).toHaveLength(1);await expect(page.locator('#card-count')).toHaveText('(2)');
+});
+
+test('failed photo cleanup remains visible with a typed retry after the card disappears',async({page})=>{
+ const {writes}=await fixture(page,{role:'admin',cleanupFails:true});let retried=false;
+ await page.route('**/card-deletions/pending?*',r=>r.fulfill({json:writes.length&&!retried?[{record_id:C,title:'Construction Safety Orientation'}]:[]}));
+ await page.route('**/card-deletions/*/retry',r=>{retried=true;expect(r.request().postDataJSON()).toEqual({confirmation:'DELETE'});return r.fulfill({json:{deleted:true,cleanup_pending:false,retained_shared:0}})});
+ await page.getByRole('button',{name:'Edit',exact:true}).first().click();await page.locator('#delete-card').click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toContainText('photo removal needs another attempt');await expect(page.locator('#notice')).toContainText('Some photos still need removal');await page.getByRole('button',{name:'Retry photo removal',exact:true}).click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toBeHidden();await expect(page.locator('#notice')).toContainText('permanently deleted');
 });

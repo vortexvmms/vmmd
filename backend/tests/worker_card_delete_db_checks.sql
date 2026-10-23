@@ -1,0 +1,52 @@
+begin;
+set local request.jwt.claim.sub='00000000-0000-0000-0000-000000000001';
+set local role authenticated;
+do $$declare a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); t timestamptz; d public.worker_card_deletions; key text; n integer;
+begin
+ insert into storage.objects(bucket_id,name) select 'worker-cards','10000000-0000-0000-0000-000000000001/'||v||'.png' from unnest(array['00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000012']) v;
+ insert into public.worker_cards(id,worker_id,label,image_path,back_image_path) values(a,'10000000-0000-0000-0000-000000000001','Deletion test','10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000011.png','10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000012.png') returning updated_at into t;
+ insert into public.worker_cards(id,worker_id,image_path) values(b,'10000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000011.png');
+ begin perform public.worker_card_delete(a,t,'delete');raise exception 'Bad confirmation accepted';exception when invalid_parameter_value then null;end;
+ begin perform public.worker_card_delete(a,t-interval '1 second','DELETE');raise exception 'Stale version accepted';exception when serialization_failure then null;end;
+ perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+ begin perform public.worker_card_delete(a,t,'DELETE');raise exception 'Supervisor deleted';exception when insufficient_privilege then null;end;
+ if exists(select 1 from public.worker_card_deletions) then raise exception 'Supervisor read outbox';end if;
+ perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+ d:=public.worker_card_delete(a,t,'DELETE');
+ if exists(select 1 from public.worker_cards where id=a) or not exists(select 1 from public.worker_cards where id=b) then raise exception 'Wrong cards deleted';end if;
+ if cardinality(d.pending_paths)<>1 or d.retained_shared<>1 then raise exception 'Shared photo not protected';end if;
+ if d.deleted_by<>'00000000-0000-0000-0000-000000000001' or d.completed_at is not null then raise exception 'Audit identity/status';end if;
+ if not exists(select 1 from public.workers where id=d.worker_id) then raise exception 'Worker deleted';end if;
+ key:=d.pending_paths[1];
+ begin update public.worker_cards set image_path=key where id=b;raise exception 'Pending photo reattached';exception when check_violation then null;end;
+ delete from storage.objects where name='10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000011.png';get diagnostics n=row_count;
+ if n<>0 then raise exception 'Shared storage object deleted';end if;
+ begin perform public.worker_card_cleanup_done(a,key);raise exception 'Cleanup marked before storage removal';exception when check_violation then null;end;
+ -- The foundation has only mock metadata. Real files are removed through the Storage API.
+ delete from storage.objects where name=key;get diagnostics n=row_count;
+ if n<>1 then raise exception 'Queued storage object not deletable';end if;
+ d:=public.worker_card_cleanup_done(a,key);
+ if cardinality(d.pending_paths)<>0 or d.completed_at is null then raise exception 'Cleanup did not finish';end if;
+ d:=public.worker_card_delete(a,t,'DELETE');
+ if d.record_id<>a then raise exception 'Idempotent retry failed';end if;
+end $$;
+reset role;
+do $$begin if (select count(*) from public.audit_log where action='delete' and entity='worker_cards')<>1 then raise exception 'Transactional audit missing or duplicated';end if;end$$;
+set local role anon;
+do $$begin
+ if has_function_privilege(current_user,'public.worker_card_delete(uuid,timestamptz,text)','execute') then raise exception 'Anonymous RPC privilege';end if;
+ begin perform * from public.worker_card_deletions;raise exception 'Anonymous audit read';exception when insufficient_privilege then null;end;
+end$$;
+reset role;
+update public.users set role='hr_assistant' where id='00000000-0000-0000-0000-000000000001';
+set local request.jwt.claim.sub='00000000-0000-0000-0000-000000000001';
+insert into storage.objects(bucket_id,name) select 'worker-cards','10000000-0000-0000-0000-000000000001/'||v||'.png' from unnest(array['00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000014']) v;
+insert into public.worker_cards(id,worker_id,image_path) values('30000000-0000-0000-0000-000000000099','10000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000013.png');
+insert into public.audit_log(entity,entity_id,old_value) values('worker_cards','30000000-0000-0000-0000-000000000099','{"image_path":"10000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000014.png"}');
+set local role authenticated;
+do $$declare d public.worker_card_deletions; t timestamptz;begin
+ select updated_at into t from public.worker_cards where id='30000000-0000-0000-0000-000000000099';
+ d:=public.worker_card_delete('30000000-0000-0000-0000-000000000099',t,'DELETE');
+ if cardinality(d.pending_paths)<>2 then raise exception 'HR deletion missed known historical photo';end if;
+end$$;
+rollback;

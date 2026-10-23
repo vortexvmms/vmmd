@@ -28,3 +28,6 @@ insert into public.workers values('10000000-0000-0000-0000-000000000001','Alloca
 insert into public.site_supervisors values('20000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002');
 insert into public.allocations values('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',(now() at time zone 'Asia/Singapore')::date),('10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002',(now() at time zone 'Asia/Singapore')::date),('10000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001',(now() at time zone 'Asia/Singapore')::date-1);
 insert into public.worker_cards(worker_id,image_path,label) select id,'https://legacy.invalid/retained.jpg','Original historical card' from public.workers;
+
+
+create table public.audit_log(id bigint generated always as identity primary key,user_id uuid,action text,entity text,entity_id text,old_value jsonb,new_value jsonb,at timestamptz default now());

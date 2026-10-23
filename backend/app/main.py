@@ -126,6 +126,7 @@ app.include_router(build_worker_documents_router(WorkerDocumentsContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
     r2_presign_get=_r2_presign_get if R2_ENABLED else None,
+    r2_presign_delete=_r2_presign_delete if R2_ENABLED else None,
 )))
 
 app.include_router(build_worker_photos_router(WorkerDocumentsContext(
@@ -4521,4 +4522,5 @@ async def storage_upload(request: Request, path: str, content_type: str = "image
     if r.status_code not in (200, 201):
         raise HTTPException(status_code=502, detail="Photo storage upload failed")
     return {"public_url": f"{R2_PUBLIC_BASE}/{key}"}
+
 

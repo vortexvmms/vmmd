@@ -170,3 +170,15 @@ Crop has eight touch/keyboard handles (four corners and four edge midpoints), a 
 **No expiry** is an explicit flag below the expiry date. It clears and disables the date, and displays “No expiry” in the register and print pack. Blank dates without the flag remain “No expiry recorded.” Existing courses are not automatically classified based on title.
 
 Printing uses four card records per A4 portrait page, with each selected front/back pair together. Side captions are removed; the worker and card headings remain. Use A4, 100% scale, and disable browser headers/footers for physical printing.
+
+## Permanent card deletion
+
+Admin and HR Assistant can choose **Edit → Permanently delete card**, check the worker and card title, type **DELETE**, and confirm. New records and Certificates do not show this card-only action. Supervisors and manager roles cannot use the deletion API. A stale `updated_at` returns 409 before any card or photo is removed.
+
+The `worker_card_delete` RPC checks the active database role and exact typed confirmation, then atomically removes the selected card, creates a deletion receipt, and writes a minimal `audit_log` entry with the actor and time. It keeps the worker, other cards, and certificates. There is no raw table DELETE grant. Known front/back versions from the record and its audit history enter a durable cleanup outbox. Files still referenced by another current card/certificate are retained. Database attachment changes serialize with deletion, and a trigger prevents reattaching a pending file.
+
+The backend removes unshared photos using the Supabase Storage API or signed Cloudflare R2 DELETE. It validates the host and worker-scoped key; no arbitrary URL or cross-worker deletion is allowed. Supabase RLS permits only queued worker-scoped objects, and cleanup completion checks that their storage metadata is absent. Do not delete production `storage.objects` rows through SQL.
+
+A storage failure does not roll back a committed card removal: the response explicitly reports `cleanup_pending`, and Admin/HR see **Retry photo removal** on that worker, including after refresh. Each successful file cleanup advances the durable receipt; retries are idempotent. The remaining paths are removed from the receipt once cleanup finishes. Unsupported historical locations remain visibly pending for administrator investigation. Audit metadata remains; exported copies, backups, untracked orphan uploads, and files shared by another document are outside this card deletion operation.
+
+Validation: API role/confirmation/version/path/cleanup-retry tests, PostgreSQL rollback tests for permissions, audit atomicity, shared objects and pending attachment protection, and desktop/iPhone browser flows. Production smoke verification opens the confirmation screen and cancels; it never deletes an actual worker card. Roll back the application commit to remove the UI/API if needed; keep the additive migration and outstanding cleanup receipts. Rolling back code cannot restore deleted cards or files.
