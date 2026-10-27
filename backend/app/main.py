@@ -1334,10 +1334,8 @@ async def mark_attendance(body: AttendanceMark, user: dict = Depends(get_current
         alloc = arows[0]
         att = alloc.get("attendance")
         schedule = attendance_schedule(alloc)
-        safe_shift_start = ((body.shift_type == "night" and body.start_time == "20:00") or
-                            (body.shift_type == "day" and body.start_time == schedule.get("start_time", "08:00")))
-        if body.start_time and user["role"] in SUPERVISOR_ROLES and not safe_shift_start:
-            raise HTTPException(status_code=403, detail="Start time can only be changed by the Main Supervisor or Administrator")
+        # All attendance roles may correct start times. The RLS-scoped
+        # allocation read above still limits supervisors to their assigned sites.
 
         # Submitted days remain correctable by the site's own supervisor until
         # payroll closes the month (decision 22/07/2026). Reason is mandatory

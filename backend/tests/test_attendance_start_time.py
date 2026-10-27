@@ -57,9 +57,10 @@ def user(role='main_sup',token='test'):return dict(role=role,token=token,user_id
 def run(coro):return asyncio.run(coro)
 
 
-def test_individual_persistence_and_date_default(db):
+@pytest.mark.parametrize('role', main.ATTENDANCE_ROLES)
+def test_individual_persistence_and_date_default(db, role):
     records,writes,audits=db
-    result=run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user()))
+    result=run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user(role)))
     assert result['normal_hours']==8 and result['ot_hours']==3
     assert records[0]['attendance']['start_time']=='07:00'
     assert records[0]['attendance']['end_time']=='19:00'
@@ -71,14 +72,15 @@ def test_individual_persistence_and_date_default(db):
     assert audits[0][-1]['start_time']=='07:00'
 
 
-def test_bulk_same_save_path(db):
-    result=run(main.attendance_batch(main.AttendanceBatchIn(changes=[main.AttendanceMark(allocation_id=id,start_time='06:30') for id in ('a1','a2')]),user()))
+@pytest.mark.parametrize('role', main.SUPERVISOR_ROLES)
+def test_bulk_same_save_path(db, role):
+    result=run(main.attendance_batch(main.AttendanceBatchIn(changes=[main.AttendanceMark(allocation_id=id,start_time='06:30') for id in ('a1','a2')]),user(role)))
     assert result['ok']
     assert all(r['ot_hours']==3.5 for r in result['results'])
     assert len(db[1])==2
 
 
-@pytest.mark.parametrize('role',['site_sup','safety_sup','logistics_sup','wshc','payroll'])
+@pytest.mark.parametrize('role',['payroll','unknown'])
 def test_custom_start_permissions(db,role):
     with pytest.raises(HTTPException) as exc:
         run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user(role)))
@@ -86,25 +88,28 @@ def test_custom_start_permissions(db,role):
     assert not db[1]
 
 
-def test_scope_and_payroll_lock(db,monkeypatch):
+@pytest.mark.parametrize('role', main.ATTENDANCE_ROLES)
+def test_scope_and_payroll_lock(db,monkeypatch,role):
     with pytest.raises(HTTPException) as exc:
-        run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user(token='outside')))
+        run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user(role,token='outside')))
     assert exc.value.status_code==404
     async def locked(*args):return True
     monkeypatch.setattr(main,'month_locked',locked)
-    with pytest.raises(HTTPException) as exc:
-        run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user()))
-    assert exc.value.status_code==403
+    if role != 'admin':
+        with pytest.raises(HTTPException) as exc:
+            run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user(role)))
+        assert exc.value.status_code==403
     assert not db[1]
     assert run(main.mark_attendance(main.AttendanceMark(allocation_id='a1',start_time='07:00'),user('admin')))['ok']
 
 
-def test_submitted_reason_and_partial_bulk(db):
+@pytest.mark.parametrize('role', main.SUPERVISOR_ROLES)
+def test_submitted_reason_and_partial_bulk(db, role):
     db[0][1]['attendance']['submitted_at']='2026-09-30T20:00:00Z'
-    result=run(main.attendance_batch(main.AttendanceBatchIn(changes=[main.AttendanceMark(allocation_id=id,start_time='07:00') for id in ('a1','a2')]),user()))
+    result=run(main.attendance_batch(main.AttendanceBatchIn(changes=[main.AttendanceMark(allocation_id=id,start_time='07:00') for id in ('a1','a2')]),user(role)))
     assert result['results'][0]['ok'] and not result['results'][1]['ok']
     assert db[0][1]['attendance']['start_time']=='08:00'
-    assert run(main.mark_attendance(main.AttendanceMark(allocation_id='a2',start_time='07:00',edit_reason='Early work'),user()))['ok']
+    assert run(main.mark_attendance(main.AttendanceMark(allocation_id='a2',start_time='07:00',edit_reason='Early work'),user(role)))['ok']
     assert db[2][-1][-1]['edit_reason']=='Early work'
 
 
