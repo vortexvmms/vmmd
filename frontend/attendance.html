@@ -521,7 +521,7 @@
     // Start edits use the same server authorization, dated allocation and hours engine.
     // Keep them out of the end-time retry queue: permission/lock failures are actionable.
     let START_EDIT = null, START_BUSY = false;
-    function canEditStart(){return !!ME && (isFull(ME.role)||isManager(ME.role));}
+    function canEditStart(){return !!ME && (isFull(ME.role)||isManager(ME.role)||isSupervisor(ME.role));}
     function startEligible(x){return x.present && x.absence_type!=="class" && (x.shift_type||"day")==="day" && !x._saving;}
     function startBulkEligible(x){return startEligible(x)&&!x.partial_leave_type;}
     function startTargets(){return START_EDIT ? (document.getElementById("start-bulk").checked?START_EDIT.selected:[START_EDIT.row]) : [];}

@@ -1,10 +1,10 @@
 const { test, expect } = require('@playwright/test');
 
-async function correctionFixture(page, { pending = false, status = 400, partial = true } = {}) {
+async function correctionFixture(page, { pending = false, status = 400, partial = true, role = 'admin', submitted = true } = {}) {
   const record = {allocation_id:'a1',site_id:'s1',site_name:'SOIL BUILD TUAS',
     worker_name:'Udaiyappan Velusamy',worker_code:'VES002',marked:true,present:true,
     start_time:'08:00',end_time:'19:00',end_next_day:false,normal_hours:8,ot_hours:2,
-    submitted:true,absence_type:'absent',shift_type:'day',
+    submitted,absence_type:'absent',shift_type:'day',
     partial_leave_type:partial?'al':null,leave_portion:partial?'second_half':null,leave_value:partial?0.5:0};
   const calls=[];
   await page.addInitScript(({pending}) => {
@@ -13,7 +13,7 @@ async function correctionFixture(page, { pending = false, status = 400, partial 
   },{pending});
   await page.route('**/api/v1/**',async route=>{
     const path=new URL(route.request().url()).pathname;
-    if(path.endsWith('/me'))return route.fulfill({json:{name:'Test Administrator',role:'admin',user_id:'u1'}});
+    if(path.endsWith('/me'))return route.fulfill({json:{name:'Test Administrator',role,user_id:'u1'}});
     if(path.endsWith('/attendance/batch')){
       const changes=route.request().postDataJSON().changes;calls.push(changes);
       if(pending&&(status!==500||calls.length===1))return route.fulfill({json:{ok:false,results:[{allocation_id:'a1',ok:false,status,detail:status===400?'Partial leave requires a present worker and a half-day period':'Save rejected'}]}});
@@ -72,4 +72,28 @@ test('transient attendance failures retain pending changes and retry normally',a
   expect(calls).toHaveLength(2);
   await expect(page.locator('.present-cb')).not.toBeChecked();
   await expect(page.locator('.worker-card')).not.toHaveClass(/worker-saving/);
+});
+
+for(const role of ['site_sup','safety_sup','logistics_sup','wshc']) {
+  test(`${role} can save and reload an individual start-time correction`, async ({page},testInfo)=>{
+    const {record,calls}=await correctionFixture(page,{role});
+    await openCorrection(page,testInfo);
+    await expect(page.locator('#start-reason')).toHaveAttribute('required','');
+    await page.locator('#start-time').fill('07:00');
+    await page.locator('#start-reason').fill('Early start confirmed by supervisor');
+    await page.locator('#start-save').click();
+    await expect(page.locator('#start-dialog')).not.toBeVisible();
+    expect(calls[0]).toEqual([{allocation_id:'a1',start_time:'07:00',edit_reason:'Early start confirmed by supervisor'}]);
+    expect(record.end_time).toBe('19:00');
+    expect(record.partial_leave_type).toBe('al');
+    await page.reload();
+    await expect(page.getByText('VES002 · start 07:00',{exact:true})).toBeVisible();
+  });
+}
+test('payroll cannot open the start-time editor',async ({page},testInfo)=>{
+  await correctionFixture(page,{role:'payroll'});
+  const card=page.locator('.worker-card');
+  if(testInfo.project.name==='mobile-safari')await card.getByRole('button',{name:'Options',exact:true}).click();
+  await card.getByRole('button',{name:'More',exact:true}).click();
+  await expect(card.getByRole('button',{name:'Edit Work Start Time',exact:true})).toHaveCount(0);
 });

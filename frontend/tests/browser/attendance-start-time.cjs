@@ -7,7 +7,7 @@ const row=(id,date)=>({allocation_id:id,site_id:'s1',site_name:'LOGISTICS',worke
 (async()=>{
 for(const [engine,width] of [[chromium,1440],[chromium,900],[chromium,899],[chromium,640],[chromium,320],[webkit,390]]){
  const browser=await engine.launch({headless:true});const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block'});
- let role='main_sup',mode='ok',calls=[];const records=new Map();
+ let role='site_sup',mode='ok',calls=[];const records=new Map();
  await page.addInitScript(()=>localStorage.setItem('vmms_session',JSON.stringify({access_token:'test-token',refresh_token:'test-refresh',expires_at:Date.now()+3600000})));
  await page.route('**/api/v1/**',async r=>{const url=new URL(r.request().url()),p=url.pathname;
  if(p.endsWith('/me'))return r.fulfill({json:{name:'Test Manager',role,user_id:'u1'}});
@@ -41,7 +41,7 @@ for(const [engine,width] of [[chromium,1440],[chromium,900],[chromium,899],[chro
  await open();mode='offline';await page.locator('#start-save').click();await page.waitForFunction(()=>document.querySelector('#start-error').textContent.includes('before retrying'));assert.equal(await page.evaluate(()=>SAVE_QUEUE.size),0);await page.locator('#start-cancel').click();mode='ok';
  // Submitted corrections require a reason, including when applying to a group.
  records.get(date)[0].submitted=true;await page.reload();await page.waitForSelector('.worker-card');await open();assert(await page.locator('#start-reason-wrap').isVisible());await page.locator('#start-reason').fill('Early work confirmed');await page.locator('#start-save').click();await page.waitForFunction(()=>!document.querySelector('#start-dialog').open);assert.equal(calls.at(-1)[0].edit_reason,'Early work confirmed');
- role='site_sup';await page.evaluate(()=>{localStorage.removeItem('vmms_me_cache_v1');sessionStorage.clear()});await page.reload();await page.waitForSelector('.worker-card');const card=page.locator('.worker-card').first();if(width<900)await card.locator('.card-options').click();await card.locator('.tmore').click();assert.equal(await page.locator('.start-edit').count(),0);
+ role='payroll';await page.evaluate(()=>{localStorage.removeItem('vmms_me_cache_v1');sessionStorage.clear()});await page.reload();await page.waitForSelector('.worker-card');const card=page.locator('.worker-card').first();if(width<900)await card.locator('.card-options').click();await card.locator('.tmore').click();assert.equal(await page.locator('.start-edit').count(),0);
  const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);assert(overflow<=Math.max(0,initialOverflow)+1,'New horizontal overflow');if(overflow>1)console.log(`Existing page overflow at ${width}px: ${overflow}px (dialog bounds checked separately)`);assert.deepEqual(errors,[]);
  console.log(`PASS ${engine===webkit?'WebKit':'Chromium'} ${width}px: individual, bulk, refresh, date isolation, submitted reason, permissions, layout`);await browser.close();
 }
