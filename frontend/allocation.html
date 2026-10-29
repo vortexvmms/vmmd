@@ -547,7 +547,7 @@
                <p class="text-[11px] text-gray-500">requested by: ${esc(w.sites.map(s => s.name).join(", "))}${where}</p>
                ${w.sites.length > 1 ? `<p class="text-[11px] font-bold text-red-700">⚠ Requested by ${w.sites.length} sites — check with site managers before allocating</p>` : ""}
              </div>
-             <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800">${opts}</select>`;
+             <select class="w-44 shrink-0 border border-gray-300 rounded-lg p-2 text-sm bg-white text-gray-800" ${WORKERS.some(x=>x.id===wid&&x.status==='active')?'':'disabled'}>${opts}</select>`;
           row.querySelector("select").addEventListener("change", (e) => {
             ASSIGN[wid] = e.target.value;
             render();   // refresh chips + status + save button
@@ -564,10 +564,11 @@
         const rowsHTML = grp.rows
           .sort((a, b) => a.worker_name.localeCompare(b.worker_name))
           .map(x => {
-            const al = ALLOCMAP[x.worker_id];
+            const assignedSite = ASSIGN[x.worker_id];
+            const al = assignedSite ? {site_id:assignedSite,site_name:siteName(assignedSite)} : null;
             let chip;
             if (al && al.site_id === sid) { got++; chip = `<span class="text-[11px] font-bold text-white bg-green-600 rounded px-2 py-0.5">ALLOCATED</span>`; }
-            else if (al) { pend++; chip = `<span class="text-[11px] font-bold text-white bg-yellow-500 rounded px-2 py-0.5">AT ${al.site_name.toUpperCase()}</span>`; }
+            else if (al) { pend++; chip = `<span class="text-[11px] font-bold text-white bg-yellow-500 rounded px-2 py-0.5">AT ${esc(al.site_name.toUpperCase())}</span>`; }
             else { pend++; chip = `<span class="text-[11px] font-bold text-white bg-red-600 rounded px-2 py-0.5">NOT ALLOCATED</span>`; }
             return `<div class="flex items-center justify-between py-1.5 border-t border-gray-200">
                       <span class="text-sm text-gray-800">${esc(x.worker_code)}_${esc(x.worker_name)}</span>${chip}
