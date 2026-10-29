@@ -41,3 +41,51 @@ test('mobile retains worker cards and existing controls in every mode',async({pa
  }
  await expect(page.locator('#search')).toBeVisible();await expect(page.locator('#f-allochere')).toBeVisible();
 });
+
+test('drafts survive tabs on mobile and desktop, and date cancellation keeps them',async({page})=>{
+ await fixture(page);
+ await page.evaluate(()=>{ASSIGN.w1='s1';render();});
+ for(const mode of ['worker','site','requests']){await page.locator('#tab-'+mode).click();expect(await page.evaluate(()=>ASSIGN.w1)).toBe('s1');}
+ page.once('dialog',d=>d.dismiss());
+ await page.locator('#date').fill('2026-11-02');
+ expect(await page.evaluate(()=>ASSIGN.w1)).toBe('s1');
+ expect(await page.locator('#date').inputValue()).toBe(await page.evaluate(()=>loadedDate));
+ await expect(page.locator('#generate-whatsapp')).toHaveText('Save & Generate WhatsApp');
+});
+
+test('bulk assignment saves before generating; preview scope, summary and edited share text',async({page})=>{
+ const saves=await fixture(page);
+ await page.locator('#bulk-tools summary').click();
+ await page.locator('#bulk-search').fill('Available Worker');
+ await page.getByRole('button',{name:'Select matching',exact:true}).click();
+ await page.locator('#bulk-site').selectOption('s1');
+ await page.getByRole('button',{name:'Apply to selected workers',exact:true}).click();
+ expect(await page.evaluate(()=>ASSIGN.w2)).toBe('s1');expect(saves).toHaveLength(0);
+ await page.locator('#generate-whatsapp').click();
+ await expect(page.locator('#allocation-message')).toBeVisible();expect(saves).toHaveLength(1);
+ await expect(page.locator('#allocation-message-text')).toHaveValue(/QA02_AVAILABLE\ WORKER/);
+ await expect(page.locator('#allocation-message-text')).toHaveValue(/TOTAL\ ALLOCATED:\ 2\ PAX/);
+ await page.locator('#message-site').selectOption('s1');
+ await expect(page.locator('#allocation-message-text')).not.toHaveValue(/QA03/);
+ await page.locator('#message-format').selectOption('summary');
+ await expect(page.locator('#allocation-message-text')).not.toHaveValue(/QA02/);
+ await expect(page.locator('#allocation-message-text')).toHaveValue(/TOTAL\ ALLOCATED:\ 1\ PAX/);
+ await page.locator('#allocation-message-text').fill('Edited message & review');
+ await page.evaluate(()=>{window.open=(...args)=>{window.sharedArgs=args;};});
+ await page.getByRole('button',{name:'Open WhatsApp',exact:true}).click();
+ expect(await page.evaluate(()=>sharedArgs[0])).toBe('https://wa.me/?text=Edited%20message%20%26%20review');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+});
+
+test('failed save never opens a broadcast, and saved incomplete days do not show done',async({page})=>{
+ await fixture(page);
+ await expect(page.locator('#statusbar')).toContainText('Allocation saved');
+ await expect(page.locator('#alloc-kpis')).toContainText('Unmet requests');
+ await page.evaluate(()=>{ASSIGN.w1='s1';render();});
+ await expect(page.locator('#alloc-exceptions')).toContainText('1 site request(s) unmet');
+ await page.route('**/api/v1/allocations/bulk',r=>r.fulfill({status:409,json:{detail:'Attendance already recorded'}}));
+ await page.locator('#generate-whatsapp').click();
+ await expect(page.locator('#allocation-message')).not.toBeVisible();
+ await expect(page.locator('#toast')).toContainText('Attendance already recorded');
+});
+

@@ -68,6 +68,37 @@
       @media(max-width:1499px){.desktop-site-panels{grid-template-columns:1fr}}
       @media(min-width:1200px) and (max-width:1499px){.alloc-workspace{grid-template-columns:minmax(0,1fr) 230px}}
     }
+
+    .alloc-tools{margin:12px 0;padding:12px;background:white;border:1px solid #cbd5e1;border-radius:10px;color:#172033}
+    .alloc-tools summary{font-weight:700;cursor:pointer}
+    .alloc-tools label,#allocation-message label{display:block;margin:8px 0;font-size:14px}
+    .alloc-tools input[type=search],.alloc-tools select,#allocation-message select{display:block;width:100%;padding:10px;border:1px solid #94a3b8;border-radius:6px;min-width:0;background:white;color:#172033}
+    .alloc-tools button,#allocation-message button{padding:10px 12px;background:#253247;color:white;border-radius:6px;margin:4px 0;min-height:42px}
+    .alloc-tool-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .alloc-tool-row label{flex:1;min-width:120px}
+    #bulk-workers{max-height:230px;overflow:auto;margin:8px 0}
+    #bulk-workers label{padding:7px;border-bottom:1px solid #e2e8f0;overflow-wrap:anywhere}
+    #bulk-workers input{width:20px;height:20px;vertical-align:middle}
+    #site-totals p{padding:8px 0;border-bottom:1px solid #e2e8f0;overflow-wrap:anywhere}
+    #allocation-message{width:min(680px,94vw);max-height:90vh;overflow:auto;padding:20px;border:1px solid #cbd5e1;border-radius:12px;color:#172033;background:white;margin:auto}
+    #allocation-message::backdrop{background:rgba(15,23,42,.55)}
+    #allocation-message h2{font-weight:800;font-size:19px}
+    #allocation-message textarea{width:100%;padding:12px;box-sizing:border-box;border:1px solid #94a3b8;border-radius:6px;font-size:16px;color:#172033;background:white}
+    #message-warning{background:#fffbeb;color:#92400e;padding:10px;margin:8px 0}
+    .alloc-tools p,#allocation-message>p:last-child{font-size:12px;margin-top:8px}
+    @media(max-width:899px){
+      .alloc-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+      .alloc-kpi{background:white;border:1px solid #cbd5e1;border-radius:8px;padding:8px}
+      .alloc-kpi b{display:block;font-size:20px}.alloc-kpi span{font-size:11px;color:#475569}
+      .alloc-side{display:block;margin-top:12px;padding:12px;border:1px solid #cbd5e1;background:white;border-radius:8px}
+      .alloc-side h2{font-weight:700}.alloc-ex{font-size:12px;padding:6px 0;overflow-wrap:anywhere}.alloc-ex b{display:block}
+      .vcms-mobile-actions__inner{flex-wrap:wrap!important;gap:6px!important}
+      #selcount{flex-basis:100%;font-size:12px}
+      #generate-whatsapp{flex:1;white-space:normal;font-size:13px;padding:10px 8px}
+      #save{font-size:13px;padding:10px 12px}
+      #alloc-main{padding-bottom:150px}
+      .vcms-page-toolbar{flex-wrap:wrap!important}
+    }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -92,6 +123,8 @@
     </div>
 
     <div class="vcms-page-toolbar max-w-6xl mx-auto w-full mt-2">
+      <button type="button" onclick="quickDate(0)" class="vcms-btn vcms-btn-tertiary">Today</button>
+      <button type="button" onclick="quickDate(1)" class="vcms-btn vcms-btn-tertiary">Tomorrow</button>
       <input id="date" type="date"
              class="vcms-control">
       <select id="site" class="hidden vcms-control"></select>
@@ -131,6 +164,16 @@
               class="filt hidden border border-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-full whitespace-nowrap">Allocated to this site</button>
     </div>
 
+    <details class="alloc-tools" id="bulk-tools">
+      <summary>Bulk assign workers <span id="bulk-count"></span></summary>
+      <label>Find workers <input id="bulk-search" type="search" oninput="renderBulk()" placeholder="Name or worker code"></label>
+      <div class="alloc-tool-row"><button type="button" onclick="selectBulkVisible()">Select matching</button><button type="button" onclick="SELECTED.clear();renderBulk()">Clear selection</button></div>
+      <div id="bulk-workers"></div>
+      <label>Assign selected workers to <select id="bulk-site"></select></label>
+      <button type="button" onclick="applyBulk()">Apply to selected workers</button>
+      <p>Changes remain unsaved until you press Save. Home leave workers cannot be selected.</p>
+    </details>
+    <details class="alloc-tools"><summary>Site manpower summary</summary><div id="site-totals"></div></details>
     <section id="desktop-review-panel" class="desktop-only" hidden aria-label="Unsaved allocation changes"></section>
     <div id="list" class="space-y-2 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-2"></div>
     <p id="empty" class="hidden text-center text-gray-400 mt-10">No workers.</p>
@@ -141,12 +184,25 @@
     <div class="vcms-mobile-actions__inner max-w-md md:max-w-6xl">
       <p class="text-sm text-gray-600 flex-1" id="selcount">0 selected</p>
       <button id="desktop-review" class="desktop-only" type="button" onclick="toggleDesktopReview()" hidden>Review changes</button>
+      <button id="generate-whatsapp" type="button" onclick="openAllocationMessage()" class="vcms-btn vcms-btn-success" disabled>Generate WhatsApp</button>
       <button id="save" onclick="save()" class="vcms-btn vcms-btn-primary">
         Save All
       </button>
     </div>
   </div>
 
+  <dialog id="allocation-message" aria-labelledby="message-title">
+    <h2 id="message-title">Allocation WhatsApp message</h2>
+    <div class="alloc-tool-row">
+      <label>Sites <select id="message-site" onchange="generateAllocationPreview()"></select></label>
+      <label>Format <select id="message-format" onchange="generateAllocationPreview()"><option value="full">Full worker list</option><option value="summary">Summary only</option></select></label>
+    </div>
+    <p id="message-warning" role="status"></p>
+    <label for="allocation-message-text">Message preview — edit before sharing</label>
+    <textarea id="allocation-message-text" rows="15"></textarea>
+    <div class="alloc-tool-row"><button type="button" onclick="copyAllocationMessage()">Copy</button><button type="button" onclick="shareAllocationMessage()">Open WhatsApp</button><button type="button" onclick="document.getElementById('allocation-message').close()">Close</button></div>
+    <p>Uses saved allocations. You choose the WhatsApp group and send.</p>
+  </dialog>
   <div id="toast" class="vcms-toast hidden"></div>
 
   <script>
@@ -180,7 +236,9 @@
       setTimeout(() => t.classList.add("hidden"), long ? 6000 : 2500);
     }
 
-    function fmtDate(d) { return d.toISOString().slice(0, 10); }
+    function fmtDate(d) {
+      return new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Singapore',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    }
     function siteName(id) { const s = SITES.find(x => x.id === id); return s ? s.site_name : "?"; }
 
     async function boot() {
@@ -226,7 +284,7 @@
     function setMode(m) {
       MODE = m;
       applyModeChrome();
-      if (!desktopLayout.matches) snapshotAssign(); // Preserve desktop drafts while changing views.
+      // Keep the shared draft in every viewport when changing views.
       render();
     }
 
@@ -243,7 +301,8 @@
         vmmsApi(`/api/v1/requests?date=${date}`),
         vmmsApi(`/api/v1/site_off?date=${date}`),
       ]);
-      SITE_OFF = new Set(so.ok ? await so.json() : []);
+      if (!r.ok || !rq.ok || !so.ok) throw new Error('Could not load allocation data. Please retry.');
+      SITE_OFF = new Set(await so.json());
       ALLOC = r.ok ? await r.json() : [];
       ALLOCMAP = {};
       ALLOC.forEach(a => { ALLOCMAP[a.worker_id] = { site_id: a.site_id, site_name: a.site_name }; });
@@ -267,6 +326,8 @@
       document.getElementById("copybar").classList.toggle("hidden", ME.role !== "admin");
       document.getElementById("clearbar").classList.toggle("hidden", ALLOC.length === 0);
       fillCopyFrom();
+      loadedDate = date;
+      SELECTED.clear();
       snapshotAssign();
       render();
     }
@@ -278,6 +339,7 @@
       updateStatus();
       updateDesktopSummary();
       if (desktopLayout.matches) renderDesktop();
+      renderProductivity();
     }
 
     function updateDesktopSummary(){
@@ -285,14 +347,14 @@
       const requested=new Set(Object.keys(REQANY));
       const allocated=active.filter(w=>ASSIGN[w.id]).length;
       const conflicts=active.filter(w=>(REQANY[w.id]||[]).length>1);
-      const shortage=active.filter(w=>requested.has(String(w.id)) && !ASSIGN[w.id]);
+      const shortage=REQROWS.filter(r=>ASSIGN[r.worker_id]!==r.site_id);
       const unallocated=active.length-allocated;
       const sitePending=SITES.filter(s=>!SITE_OFF.has(s.id)&&(!REQBYSITE[s.id]||!REQBYSITE[s.id].size));
-      const vals=[[active.length,"Active workers"],[requested.size,"Requested"],[allocated,"Allocated"],[unallocated,"Unallocated"],[conflicts.length,"Conflicts"],[shortage.length,"Shortage"]];
+      const vals=[[active.length,"Active workers"],[requested.size,"Requested"],[allocated,"Allocated"],[unallocated,"Unallocated"],[conflicts.length,"Conflicts"],[shortage.length,"Unmet requests"]];
       const k=document.getElementById("alloc-kpis"); if(k) k.innerHTML=vals.map(x=>`<div class="alloc-kpi"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
       const e=document.getElementById("alloc-exceptions"); if(!e)return;
       const rows=[];
-      if(shortage.length) rows.push(`<div class="alloc-ex"><b>${shortage.length} requested worker(s) unallocated</b>${shortage.slice(0,6).map(w=>esc(w.name)).join(", ")}</div>`);
+      if(shortage.length) rows.push(`<div class="alloc-ex"><b>${shortage.length} site request(s) unmet</b>${shortage.slice(0,6).map(w=>esc(w.worker_name)+" → "+esc(w.site_name)).join(", ")}</div>`);
       if(conflicts.length) rows.push(`<div class="alloc-ex"><b>${conflicts.length} multi-site request(s)</b>${conflicts.slice(0,6).map(w=>esc(w.name)).join(", ")}</div>`);
       if(sitePending.length) rows.push(`<div class="alloc-ex"><b>${sitePending.length} site request(s) pending</b>${sitePending.slice(0,6).map(s=>esc(s.site_name)).join(", ")}</div>`);
       if(!rows.length) rows.push('<div class="alloc-ex"><b style="color:#15803d">✓ No allocation exceptions</b>All requests are covered for this date.</div>');
@@ -307,7 +369,11 @@
 
     /* One place that decides the status banner + Save-button wording/colour */
     function updateStatus() {
-      const done = ALLOC.length > 0;             // any allocation exists for the day
+      const unmet = REQROWS.filter(r => ASSIGN[r.worker_id] !== r.site_id).length;
+      const pending = SITES.filter(s => !SITE_OFF.has(s.id) && !(REQBYSITE[s.id] || new Set()).size).length;
+      const done = ALLOC.length > 0;
+      const offConflict = ALLOC.some(a=>SITE_OFF.has(a.site_id));
+      const complete = done && !unmet && !pending && !offConflict;
       const changes = dayHasChanges();
       const bar = document.getElementById("statusbar");
       const save = document.getElementById("save");
@@ -322,10 +388,11 @@
         save.className = btn("bg-red-700 hover:bg-red-800 text-white");
       } else if (done) {
         bar.className = "rounded-lg shadow-sm p-3 mb-3 text-sm font-bold text-center bg-green-50 border border-green-300 text-green-700";
-        bar.textContent = "✓ Allocation DONE for this day · " + ALLOC.length + " worker(s) allocated.";
+        bar.textContent = `${complete ? '✓ Allocation complete' : 'Allocation saved'} · ${ALLOC.length} worker(s) · ${unmet} unmet request(s) · ${pending} site request(s) pending.${offConflict?' Review workers at sites marked not working.':''}`;
+        if (!complete) bar.className = 'rounded-lg p-3 mb-3 text-sm font-bold bg-yellow-50 border border-yellow-300 text-yellow-800';
         bar.classList.remove("hidden");
         save.disabled = true;
-        save.textContent = "Allocation Done ✓";
+        save.textContent = complete ? 'Allocation Done ✓' : 'Saved';
         save.className = btn("bg-green-600 text-white");
       } else {
         // pending: the amber copybar already shows the message
@@ -445,7 +512,7 @@
       });
       const placeIds = Object.keys(reqW).filter(wid => {
         const reqSites = reqW[wid].sites.map(s => s.id);
-        const cur = ALLOCMAP[wid] ? ALLOCMAP[wid].site_id : "";
+        const cur = ASSIGN[wid] || "";
         const placedRight = cur && reqSites.includes(cur);     // already at a requesting site
         return !placedRight;   // show until placed at a requesting site; clears once allocated
       }).sort((a, b) => reqW[a].name.localeCompare(reqW[b].name));
@@ -672,7 +739,7 @@
     /* ---------------- Saving ---------------- */
     // All edit modes (By Site / By Worker / Requests) now edit ASSIGN, so a single
     // two-pass save handles everything.
-    function save() { saveAll(); }
+    function save() { return persistAllocation(); }
 
     async function callBulk(siteId, workerIds) {
       const r = await vmmsApi("/api/v1/allocations/bulk", {
@@ -712,7 +779,7 @@
             shrink.push(callBulk(id, [...cur].filter(w => nw.has(w))));
           }
         }
-        (await Promise.all(shrink)).forEach(d=>{added+=d.added;removed+=d.removed;});
+        (await settleBulk(shrink)).forEach(d=>{added+=d.added;removed+=d.removed;});
         // pass 2 — grow sites in parallel after movers have been removed.
         const grow=[];
         for (const id of ids) {
@@ -721,14 +788,16 @@
             grow.push(callBulk(id, [...nw]));
           }
         }
-        (await Promise.all(grow)).forEach(d=>{added+=d.added;removed+=d.removed;});
+        (await settleBulk(grow)).forEach(d=>{added+=d.added;removed+=d.removed;});
         toast(`✓ Saved — ${added} added, ${removed} removed across all sites`, true, true);
         await loadDay();
+        return true;
       } catch (ex) {
         toast(ex.message, true);
         await loadDay();   // resync so the screen matches the database after a partial save
+        return false;
       } finally {
-        btn.disabled = false; btn.textContent = "Save All";
+        updateStatus();
       }
     }
 
@@ -742,6 +811,7 @@
     }
 
     async function copyDay() {
+      if(dayHasChanges()){toast('Save your changes before copying another allocation.',true);return;}
       const to = document.getElementById("date").value;
       const from = (document.getElementById("copyfrom") || {}).value ||
                    fmtDate(new Date(new Date(to).getTime() - 24 * 3600 * 1000));
@@ -764,6 +834,7 @@
     }
 
     async function clearDay() {
+      if(dayHasChanges()){toast('Save your changes before clearing this day.',true);return;}
       const to = document.getElementById("date").value;
       if (!confirm(`Clear ALL allocation for ${to}?\n\nThis removes every worker from the day so you can allocate only those actually working (e.g. Sunday).\nAnyone already marked present is kept.`)) return;
       try {
@@ -781,7 +852,9 @@
       }
     }
 
-    document.getElementById("date").addEventListener("change", loadDay);
+    let loadedDate = '';
+    document.getElementById("date").addEventListener("change", () => changeDate(document.getElementById('date').value));
+    window.addEventListener('beforeunload', e => {if(dayHasChanges()){e.preventDefault();e.returnValue='';}});
     document.getElementById("site").addEventListener("change", render);   // re-filter for the new context site
     let searchTimer=null;
     document.getElementById("search").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180);});
@@ -860,9 +933,135 @@
       else if(MODE==='site') document.getElementById('selcount').textContent='No changes yet';
     }
 
-    boot();
+    // All counts and previews use the same selected day and assignment model.
+    let allocationBusy = false;
+    async function settleBulk(calls){
+      const results=await Promise.allSettled(calls);
+      const failed=results.find(r=>r.status==='rejected');
+      if(failed)throw failed.reason;
+      return results.map(r=>r.value);
+    }
+    function setAllocationBusy(busy) {
+      allocationBusy = busy;
+      document.querySelector('header').inert = busy;
+      document.getElementById('alloc-main').inert = busy;
+      document.querySelector('.vcms-mobile-actions').inert = busy;
+    }
+    async function persistAllocation() {
+      if(allocationBusy) return false;
+      setAllocationBusy(true);
+      try { return await saveAll(); }
+      catch(ex){toast(ex.message,true);return false;}
+      finally {setAllocationBusy(false);updateStatus();}
+    }
+    function quickDate(offset) {changeDate(fmtDate(new Date(Date.now()+offset*86400000)));}
+    async function changeDate(next) {
+      if(allocationBusy) return;
+      const input=document.getElementById('date');
+      if(!next || next===loadedDate){input.value=loadedDate;return;}
+      if(dayHasChanges() && !confirm('Discard unsaved allocation changes and change date?')){input.value=loadedDate;return;}
+      input.value=next;
+      setAllocationBusy(true);
+      try{await loadDay();}
+      catch(ex){input.value=loadedDate;toast(ex.message,true);}
+      finally{setAllocationBusy(false);}
+    }
+    function siteStats(site, assignments=ASSIGN) {
+      const requested=REQBYSITE[site.id]||new Set();
+      const assigned=Object.values(assignments).filter(id=>id===site.id).length;
+      const covered=[...requested].filter(id=>assignments[id]===site.id).length;
+      return {requested:requested.size,assigned,unmet:requested.size-covered};
+    }
+    function renderProductivity() {
+      const generating=document.getElementById('generate-whatsapp');
+      generating.disabled=false;
+      generating.textContent=dayHasChanges()?'Save & Generate WhatsApp':'Generate WhatsApp';
+      const changes=changeCount();
+      document.getElementById('selcount').textContent=changes?`${changes} unsaved change${changes===1?'':'s'}`:'No unsaved changes';
+      const totals=document.getElementById('site-totals');totals.replaceChildren();
+      SITES.forEach(s=>{const n=siteStats(s);const p=document.createElement('p');
+        p.textContent=`${s.site_name}: ${n.requested} requested · ${n.assigned} allocated · ${n.unmet} unmet${SITE_OFF.has(s.id)?' · Site not working':''}`;
+        totals.appendChild(p);
+      });
+      const target=document.getElementById('bulk-site'),previous=target.value;
+      target.innerHTML='<option value="">— Not working —</option>'+SITES.filter(s=>!SITE_OFF.has(s.id)).map(s=>`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`).join('');
+      if([...target.options].some(o=>o.value===previous))target.value=previous;
+      renderBulk();
+    }
+    function bulkVisible() {
+      const q=document.getElementById('bulk-search').value.trim().toLowerCase();
+      return WORKERS.filter(w=>w.status==='active'&&(!q||`${w.name} ${w.worker_code}`.toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name));
+    }
+    function selectBulkVisible(){bulkVisible().forEach(w=>SELECTED.add(w.id));renderBulk();}
+    function renderBulk(){
+      document.getElementById('bulk-count').textContent=`(${SELECTED.size} selected)`;
+      const list=document.getElementById('bulk-workers');list.replaceChildren();
+      bulkVisible().forEach(w=>{
+        const label=document.createElement('label');const check=document.createElement('input');
+        check.type='checkbox';check.checked=SELECTED.has(w.id);check.value=w.id;
+        check.addEventListener('change',()=>{if(check.checked)SELECTED.add(w.id);else SELECTED.delete(w.id);document.getElementById('bulk-count').textContent=`(${SELECTED.size} selected)`;});
+        label.append(check,document.createTextNode(` ${w.worker_code} · ${w.name} · ${ASSIGN[w.id]?siteName(ASSIGN[w.id]):'Not working'}`));list.appendChild(label);
+      });
+    }
+    function applyBulk(){
+      if(!SELECTED.size){toast('Select at least one worker.',true);return;}
+      const site=document.getElementById('bulk-site').value;
+      if(site && (!SITES.some(s=>s.id===site)||SITE_OFF.has(site))){toast('Select a working site.',true);return;}
+      let count=0;WORKERS.filter(w=>w.status==='active'&&SELECTED.has(w.id)).forEach(w=>{if(ASSIGN[w.id]!==site){ASSIGN[w.id]=site;count++;}});
+      SELECTED.clear();render();toast(`${count} worker(s) updated — press Save to apply.`,true);
+    }
+    async function openAllocationMessage(){
+      if(allocationBusy)return;
+      // Do not generate a saved-day broadcast after a failed or partial save.
+      if(dayHasChanges() && !(await persistAllocation()))return;
+      const select=document.getElementById('message-site');
+      select.innerHTML='<option value="__all__">All sites</option>'+SITES.map(s=>`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`).join('');
+      select.value=MODE==='site'?document.getElementById('site').value:'__all__';
+      generateAllocationPreview();document.getElementById('allocation-message').showModal();
+    }
+    function generateAllocationPreview(){
+      const scope=document.getElementById('message-site').value;
+      const summary=document.getElementById('message-format').value==='summary';
+      const date=document.getElementById('date').value;
+      const d=new Date(date+'T12:00:00+08:00');
+      const pretty=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Singapore',day:'2-digit',month:'short',year:'numeric',weekday:'long'}).format(d).toUpperCase();
+      const lines=['*MANPOWER DISTRIBUTION*',`*${pretty}*`];
+      const saved={};ALLOC.forEach(a=>saved[a.worker_id]=a.site_id);
+      const sites=scope==='__all__'?SITES:SITES.filter(s=>s.id===scope);
+      let total=0,unmet=0,pending=0;
+      sites.forEach(s=>{
+        const rows=ALLOC.filter(a=>a.site_id===s.id).sort((a,b)=>(a.worker_code||'').localeCompare(b.worker_code||''));
+        const stats=siteStats(s,saved);total+=rows.length;unmet+=stats.unmet;
+        lines.push('',`*${s.site_name.toUpperCase()} — ${rows.length} PAX*`);
+        if(SITE_OFF.has(s.id))lines.push(rows.length?'SITE MARKED NOT WORKING — REVIEW ALLOCATION':'SITE NOT WORKING');
+        else if(!stats.requested){pending++;lines.push('REQUEST PENDING');}
+        if(!rows.length&&!SITE_OFF.has(s.id))lines.push('NO ALLOCATION');
+        if(!summary)rows.forEach((a,i)=>{const w=WORKERS.find(w=>w.id===a.worker_id)||{};lines.push(`${i+1}. ${a.worker_code||w.worker_code||'?'}_${(a.worker_name||w.name||'?').toUpperCase()}`);});
+        if(stats.unmet)lines.push(`Unmet worker requests: ${stats.unmet}`);
+      });
+      lines.push('',`*TOTAL ALLOCATED: ${total} PAX*`);
+      if(scope==='__all__'){
+        const leave=WORKERS.filter(w=>w.status==='on_leave').sort((a,b)=>a.name.localeCompare(b.name));
+        if(leave.length){lines.push('',`*HOME LEAVE (CURRENT STATUS): ${leave.length} PAX*`);if(!summary)leave.forEach((w,i)=>lines.push(`${i+1}. ${w.worker_code}_${w.name.toUpperCase()}`));}
+      }
+      const offConflict=sites.some(s=>SITE_OFF.has(s.id)&&ALLOC.some(a=>a.site_id===s.id));
+      document.getElementById('message-warning').textContent=`${unmet} unmet request(s) · ${pending} site request(s) pending${offConflict?' · Allocation exists at a site marked not working':''}. Review before sharing.`;
+      document.getElementById('allocation-message-text').value=lines.join('\n');
+    }
+    async function copyAllocationMessage(){
+      const textarea=document.getElementById('allocation-message-text');
+      try{await navigator.clipboard.writeText(textarea.value);toast('Copied — paste into WhatsApp');}
+      catch{textarea.focus();textarea.select();if(document.execCommand('copy'))toast('Copied — paste into WhatsApp');else toast('Select and copy the message manually.',true);}
+    }
+    function shareAllocationMessage(){
+      const message=document.getElementById('allocation-message-text').value;
+      window.open('https://wa.me/?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');
+    }
+
+    boot().catch(ex=>{document.getElementById('summary').textContent='Could not load allocation — reload to retry';toast(ex.message,true);});
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
 </html>
+
 
