@@ -46,7 +46,6 @@ def test_denied_without_db(api,key):
 
 @pytest.mark.parametrize('setting,value',[
  ('VCMS_INTEGRATION_KEY_HASHES',''),('VCMS_INTEGRATION_KEY_HASHES','bad'),
- ('VCMS_INTEGRATION_SITE_CODES',''),('VCMS_INTEGRATION_SITE_CODES','*'),
  ('VCMS_INTEGRATION_EXPIRES_AT',''),('VCMS_INTEGRATION_EXPIRES_AT','2000-01-01T00:00:00Z'),
  ('VCMS_INTEGRATION_EXPIRES_AT','2099-01-01')])
 def test_fail_closed(api,monkeypatch,setting,value):
@@ -55,11 +54,9 @@ def test_fail_closed(api,monkeypatch,setting,value):
 
 def test_scope_and_field_allowlist(api):
     get,calls,_=api
-    assert get('/attendance?from=2026-10-01&to=2026-10-01&site_code=OTHER').status_code==403
-    assert not calls
     r=get(); assert r.status_code==200
     assert r.headers['cache-control']=='no-store'
-    assert calls[0]['p_sites']==['PCS']
+    assert calls[0]['p_sites'] is None
     assert 'fin' not in r.text and r.json()['records'][0]['end_next_day'] is True
 
 def test_worker_day(api):
@@ -96,9 +93,9 @@ def test_no_write_route_and_limit(api):
     assert get(method='POST').status_code==405 and not calls
     assert get('/attendance?from=2026-10-01&to=2026-10-01&limit=501').status_code==422
 
-def test_database_scope_violation(api):
+def test_database_filter_violation(api):
     get,_,rows=api;rows[0]['site_code']='OTHER'
-    assert get().status_code==503
+    assert get('/attendance?from=2026-10-01&to=2026-10-01&site_code=PCS').status_code==503
 
 def test_rate_limit(api):
     get,_,_=api
@@ -117,3 +114,20 @@ def test_existing_user_endpoint_rejects_machine_key(monkeypatch):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app),base_url='https://test') as c:
             return await c.get('/api/v1/attendance?date=2026-10-01',headers={'Authorization':'Bearer '+KEY})
     assert asyncio.run(run()).status_code==401
+
+
+def test_all_sites_including_future_sites(api, monkeypatch):
+    get, calls, rows = api
+    monkeypatch.delenv('VCMS_INTEGRATION_SITE_CODES', raising=False)
+    rows.append({**rows[0], 'site_code': 'FUTURE-SITE'})
+    result = get()
+    assert result.status_code == 200
+    assert {r['site_code'] for r in result.json()['records']} == {'PCS', 'FUTURE-SITE'}
+    assert calls[-1]['p_sites'] is None
+
+
+def test_optional_site_filter(api):
+    get, calls, _ = api
+    assert get('/attendance?from=2026-10-01&to=2026-10-01&site_code=PCS').status_code == 200
+    assert calls[-1]['p_sites'] == ['PCS']
+    assert get('/attendance?from=2026-10-01&to=2026-10-01&site_code=*').status_code == 400
