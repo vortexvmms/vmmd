@@ -27,19 +27,17 @@ FIELDS = ('record_id', 'work_date', 'worker_code', 'worker_name', 'site_code',
 
 
 def build_integration_router():
-    router = APIRouter(prefix='/api/integration/v1', tags=['integration'])
     windows = {}
 
     async def authenticate(request: Request):
         hashes = [s.strip() for s in os.getenv('VCMS_INTEGRATION_KEY_HASHES', '').split(',') if s.strip()]
-        sites = sorted(set(s.strip() for s in os.getenv('VCMS_INTEGRATION_SITE_CODES', '').split(',') if s.strip()))
         expiry = os.getenv('VCMS_INTEGRATION_EXPIRES_AT', '')
         try:
             expires = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
             valid = expires.tzinfo is not None and expires > datetime.now(timezone.utc)
         except ValueError:
             valid = False
-        if not hashes or any(not re.fullmatch('[0-9a-f]{64}', s) for s in hashes) or not sites or any(not CODE.fullmatch(s) for s in sites) or not valid:
+        if not hashes or any(not re.fullmatch('[0-9a-f]{64}', s) for s in hashes) or not valid:
             raise HTTPException(503, 'Integration is not configured or has expired')
         header = request.headers.get('authorization', '')
         if not header.startswith('Bearer ') or len(header) > 512:
@@ -59,16 +57,15 @@ def build_integration_router():
         if len(window) >= 60:
             raise HTTPException(429, 'Integration rate limit exceeded', headers={'Retry-After': '60'})
         window.append(now)
-        return sites
 
-    async def export(request, response, sites, start, end, site_code, worker_code, cursor, limit):
+    async def export(request, response, start, end, site_code, worker_code, cursor, limit):
         if end < start or (end - start).days >= 62:
             raise HTTPException(400, 'Use an inclusive range of 1 to 62 days')
-        if site_code is not None and site_code not in sites:
-            raise HTTPException(403, 'Site is outside integration scope')
+        if site_code is not None and not CODE.fullmatch(site_code):
+            raise HTTPException(400, 'Invalid site code')
         if worker_code is not None and not CODE.fullmatch(worker_code):
             raise HTTPException(400, 'Invalid worker code')
-        scope = [str(start), str(end), site_code, worker_code, sites]
+        scope = ["all-sites-v2", str(start), str(end), site_code, worker_code]
         after_date = after_id = None
         if cursor:
             try:
@@ -82,7 +79,7 @@ def build_integration_router():
             except (ValueError, KeyError, TypeError):
                 raise HTTPException(400, 'Invalid cursor or changed filters')
         require_service()
-        payload = dict(p_from=str(start), p_to=str(end), p_sites=[site_code] if site_code else sites,
+        payload = dict(p_from=str(start), p_to=str(end), p_sites=[site_code] if site_code is not None else None,
                        p_worker=worker_code, p_after_date=after_date, p_after_id=after_id, p_limit=limit + 1)
         started = time.monotonic()
         try:
@@ -95,7 +92,7 @@ def build_integration_router():
             if not isinstance(rows, list) or len(rows) > limit + 1 or any(not isinstance(row, dict) for row in rows):
                 raise ValueError()
             # Defence in depth against accidental widening in the database function.
-            if any(row.get('site_code') not in payload['p_sites'] for row in rows):
+            if site_code is not None and any(row.get('site_code') != site_code for row in rows):
                 raise ValueError()
             records = [{field: row.get(field) for field in FIELDS} for row in rows[:limit]]
         except (httpx.HTTPError, ValueError):
@@ -112,17 +109,18 @@ def build_integration_router():
         return dict(records=records, next_cursor=next_cursor, has_more=next_cursor is not None,
                     server_time=datetime.now(timezone.utc).isoformat())
 
+    router = APIRouter(prefix='/api/integration/v1', tags=['integration'],
+                       dependencies=[Depends(authenticate)])
+
     @router.get('/attendance')
     async def attendance(request: Request, response: Response, from_: date = Query(alias='from'),
                          to: date = Query(), site_code: str | None = None,
-                         cursor: str | None = None, limit: int = Query(200, ge=1, le=500),
-                         sites: list = Depends(authenticate)):
-        return await export(request, response, sites, from_, to, site_code, None, cursor, limit)
+                         cursor: str | None = None, limit: int = Query(200, ge=1, le=500)):
+        return await export(request, response, from_, to, site_code, None, cursor, limit)
 
     @router.get('/worker-day')
     async def worker_day(request: Request, response: Response, worker_code: str, date: date,
-                         cursor: str | None = None, limit: int = Query(200, ge=1, le=500),
-                         sites: list = Depends(authenticate)):
-        return await export(request, response, sites, date, date, None, worker_code, cursor, limit)
+                         cursor: str | None = None, limit: int = Query(200, ge=1, le=500)):
+        return await export(request, response, date, date, None, worker_code, cursor, limit)
 
     return router
