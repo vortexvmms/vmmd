@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from ...db import require_service, service_headers, shared_client
 from ...settings import REST
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 CODE = re.compile(r"^[A-Za-z0-9_. -]{1,100}$")
 FIELDS = ('record_id', 'work_date', 'worker_code', 'worker_name', 'site_code',
           'site_name', 'status', 'start_time', 'end_time', 'end_next_day',
