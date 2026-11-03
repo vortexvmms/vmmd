@@ -4,7 +4,10 @@
   "scripts": {
     "build:core": "python3 scripts/build_frontend_core.py",
     "test:browser": "playwright test",
-    "test:attendance-start": "node frontend/tests/browser/attendance-start-time.cjs"
+    "test:attendance-start": "node frontend/tests/browser/attendance-start-time.cjs",
+    "ui:install": "npm ci --prefix ui-toolkit",
+    "ui:build": "npm run build --prefix ui-toolkit",
+    "ui:dev": "npm run dev --prefix ui-toolkit"
   },
   "devDependencies": {
     "@playwright/test": "1.54.2"

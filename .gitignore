@@ -4,3 +4,6 @@ playwright-report/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Built UI development preview
+frontend/ui-preview/
