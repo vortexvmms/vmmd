@@ -1,0 +1,26 @@
+name: UI toolkit
+on:
+  pull_request:
+    paths: ['ui-toolkit/**', '.github/workflows/ui-toolkit.yml']
+  push:
+    branches: [main]
+    paths: ['ui-toolkit/**', '.github/workflows/ui-toolkit.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui-toolkit/package-lock.json
+      - run: npm ci --prefix ui-toolkit
+      - run: npm run ui:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vcms-ui-preview
+          path: frontend/ui-preview/
+          retention-days: 7

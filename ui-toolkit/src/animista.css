@@ -1,0 +1,4 @@
+/* Animista fade-in, adapted duration. Copyright 2017 Ana Travas. FreeBSD licence in resources/animista.LICENSE. */
+.vcms-fade-in{animation:vcms-fade-in .18s ease-out both;}
+@keyframes vcms-fade-in{0%{opacity:0;}100%{opacity:1;}}
+@media(prefers-reduced-motion:reduce){.vcms-fade-in{animation:none;}}
