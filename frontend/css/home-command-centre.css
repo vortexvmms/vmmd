@@ -1,7 +1,7 @@
 /* Command Centre: scoped to the home page; the company theme remains available elsewhere. */
 body.shell.command-centre {
   --home-accent:#b91c1c; --home-soft:#fff1f1; --home-page:#f4f5f7;
-  --home-surface:#fff; --home-ink:#1d2736; --home-muted:#657185;
+  --home-surface:#fff; --home-ink:#1d2736; --home-muted:#344054;
   --home-line:#e5e9ef; --home-nav:#172231;
   background:var(--home-page)!important;color:var(--home-ink)!important;
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -162,3 +162,50 @@ body.command-centre .supervisor-steps a{border:1px solid var(--home-line);color:
 }
 @media(min-width:900px) and (max-width:1100px){body.command-centre .vcms-app-title{display:none}body.command-centre .vcms-app-brand{margin-right:auto}body.command-centre .vcms-user-card span{display:none}}
 @media(max-width:600px){body.command-centre .home-task-rail{gap:14px}}
+
+/* Readability correction: one heading, one status summary, stronger text contrast. */
+body.command-centre .brand-center,body.command-centre .vcms-app-title{display:none!important}
+body.command-centre.home-admin #vcms-role-chip,body.command-centre.home-admin .gcard .chip,body.command-centre.home-admin #mchip{display:none!important}
+body.command-centre .vcms-app-brand{margin-right:auto}
+body.command-centre .vcms-user-card small,body.command-centre .gcard .g2{color:#344054;font-weight:500;max-width:230px}
+body.command-centre .home-heading .SECT{color:#344054;font-weight:650;font-size:11px;letter-spacing:.07em}
+body.command-centre .home-heading h1{font-size:26px;color:#182230}
+body.command-centre .command-status{margin-bottom:0}
+body.command-centre .command-status .cs-title{font-size:14px;color:#182230}
+body.command-centre .command-status .cs-copy{font-size:13px;color:#344054}
+body.command-centre .home-status-details{background:#fff;border:1px solid var(--home-line);border-top:0;border-radius:0 0 10px 10px;margin:-3px 0 16px;color:#1d2736}
+body.command-centre .home-status-details summary{padding:10px 18px;font-size:12px;font-weight:600;color:#344054;cursor:pointer}
+body.command-centre .home-status-details summary:focus-visible{outline:2px solid #b91c1c;outline-offset:2px}
+body.command-centre .home-status-details[open] summary{border-bottom:1px solid var(--home-line)}
+body.command-centre .home-status-details-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:0}
+body.command-centre .home-status-details-grid .mini-card{border:0!important;border-radius:0!important;box-shadow:none!important}
+body.command-centre .home-status-details-grid .mini-head{font-size:12px;padding:12px 16px;background:#f3f5f7;color:#182230}
+body.command-centre .home-status-details-grid .mini-body{font-size:12px}
+body.command-centre .home-status-details-grid #exceptions{background:#fff}
+body.command-centre .home-kpi-group>h2{font-size:12px;font-weight:650;color:#273445}
+body.command-centre .kpi .l{font-size:13px!important;color:#344054!important;font-weight:550}
+body.command-centre .kpi .d{display:none!important}
+body.command-centre .kpi:nth-child(n){min-height:105px;padding:14px 16px}
+body.command-centre .kpi .n{margin:9px 0 0;color:#182230}
+body.command-centre .home-leave-kpis .kpi:nth-child(n),body.command-centre .home-hour-kpis .kpi:nth-child(n){min-height:80px}
+body.command-centre .tasks .th{background:#172231!important;color:#fff;font-size:15px;font-weight:650}
+body.command-centre .tasks .th a{color:#fff!important;opacity:1!important}
+body.command-centre .tasks .tb,body.command-centre .tasks .tb p{color:#344054!important;font-size:13px;line-height:1.6}
+body.command-centre .tasks .tcopy{color:#182230}
+body.command-centre .tasks .tdue,body.command-centre .tsec{color:#344054}
+body.command-centre .home-panel-heading{background:#f3f5f7;border-bottom:1px solid var(--home-line)}
+body.command-centre .home-panel-heading h2{color:#182230;font-weight:650}
+body.command-centre .home-panel-heading p{color:#344054;font-size:12px}
+body.command-centre .home-table-tools{padding-top:14px}
+body.command-centre table.dt thead th{background:#172231!important;color:#fff!important;font-size:12px;font-weight:600}
+body.command-centre table.dt tbody td,body.command-centre table.dt tbody th{color:#182230!important}
+body.command-centre table.dt tbody td span,body.command-centre .home-historical,body.command-centre .home-table-foot,body.command-centre .leave-summary-foot{color:#475467!important}
+body.command-centre .site-status.ok{color:#147d50!important}
+body.command-centre .site-status.wait{color:#854d0e!important}
+body.command-centre .site-status.historical{color:#344054!important}
+body.command-centre .home-site-search input::placeholder{color:#475467;opacity:1}
+body.command-centre .date-control,body.command-centre .home-site-filter,body.command-centre .home-period{color:#344054;font-weight:600}
+body.command-centre .home-task-rail{padding-top:75px}
+@media(min-width:900px){body.command-centre #vcms-view-role{font-size:12px;font-weight:600;color:#182230;border-color:#c9d0da}body.command-centre .vcms-app-logout{color:#344054;font-weight:600;border-color:#c9d0da}body.command-centre #vcms-app-nav a{font-size:13px;color:#e1e7ef}body.command-centre .vcms-group-toggle{color:#c1cbd9;font-size:11px;font-weight:600}body.command-centre .vcms-user-card{max-width:400px}body.command-centre .vcms-user-card small{max-width:230px}}
+@media(max-width:1200px){body.command-centre .home-task-rail{padding-top:0}}
+@media(max-width:600px){body.command-centre .home-status-details-grid{grid-template-columns:1fr}body.command-centre .kpi .l{font-size:12px!important}body.command-centre .kpi:nth-child(n){padding:13px}body.command-centre .home-leave-kpis .kpi:nth-child(n),body.command-centre .home-hour-kpis .kpi:nth-child(n){padding:11px 8px}}
