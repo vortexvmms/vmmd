@@ -48,3 +48,16 @@ results. Faint white borders and touching/overlapping cards may need manual crop
 
 The desktop worker name, tabs and actions occupy one row; the worker directory
 fills the remaining viewport with its list scrolling inside the panel.
+
+## Print sheet update
+
+Print headers show the worker name, masked FIN ending (for example FIN: ***567X)
+and employee code. The backend obtains FIN only for IDs already returned by the
+scoped worker-directory RPC and returns only fin_last4 to this page. Missing FIN
+is omitted, not guessed from another document. No database migration is required.
+
+Card images have no added border in the preview or printed PDF. Existing image
+contents, including physical card edges, remain intact. Preview preparation uses
+at most four concurrent image requests, retains already decoded images while the
+selection is open, and cancels outstanding requests on close. Changing order or
+selection reuses ready images; unavailable sides still require explicit handling.
