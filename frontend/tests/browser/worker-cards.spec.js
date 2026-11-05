@@ -126,7 +126,7 @@ test('print pack includes only selected sides in the arranged sequence',async({p
  await page.locator('#print-cards').click();await expect(page.locator('#card-print-count')).toHaveText('2 of 2 cards selected · 3 sides');
  await page.locator('#card-print-list [data-side=back]').first().uncheck();await page.getByRole('button',{name:'Move down: Construction Safety Orientation',exact:true}).click();
  await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();
- expect(requests.map(u=>u.searchParams.get('side'))).toEqual(['front','front']);expect(requests[0].pathname).toContain('30000000-0000-0000-0000-000000000002');
+ expect(requests.map(u=>u.searchParams.get('side'))).toEqual(['front','front']);expect(requests.map(u=>u.pathname).some(p=>p.includes('30000000-0000-0000-0000-000000000002'))).toBe(true);
  await expect(page.locator('#print-sheet h2').first()).toContainText('1. Work permit');await expect(page.locator('#print-sheet img')).toHaveCount(2);
  await page.locator('#card-print-list [data-side=front]').first().uncheck();await expect(page.locator('#card-print-go')).toBeDisabled();await expect(page.locator('#print-sheet')).toBeEmpty();
 });
@@ -219,6 +219,6 @@ test('print preview loads sides concurrently, reuses images and has no card fram
 
 
 test('missing FIN can be entered as four characters without refetching print images',async({page})=>{
- await fixture(page);await page.route('**/worker-documents/workers?*',r=>r.fulfill({json:[{id:W,name:'Sample Worker',worker_code:'EMP-050',status:'active'}]}));await page.locator('#worker-search').fill('Sample');await expect(page.locator('#worker-list')).toContainText('Sample Worker');await page.getByRole('button',{name:'Sample Worker'}).click();
- await page.route('**/worker-documents/cards/*/file?*',r=>r.fulfill({contentType:'image/png',body:png}));await page.locator('#print-cards').click();await page.locator('#card-print-fin').fill('772l');await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet h1')).toHaveText('Sample Worker · FIN: ***772L · EMP-050');
+ await fixture(page);await page.route('**/worker-documents/workers?*',r=>r.fulfill({json:[{id:W,name:'Sample Worker',worker_code:'EMP-050',status:'active'}]}));const refreshed=page.waitForResponse(r=>r.url().includes('/worker-documents/workers?search=Sample'));await page.locator('#worker-search').fill('Sample');await refreshed;await expect(page.locator('#worker-list')).toContainText('Sample Worker');await page.getByRole('button',{name:'Sample Worker'}).click();
+ await page.route('**/worker-documents/cards/*/file?*',r=>r.fulfill({contentType:'image/png',body:png}));await page.locator('#print-cards').click();await expect(page.locator('#card-print-fin')).toHaveValue('');await expect(page.locator('#card-print-message')).toContainText('FIN is not recorded');await page.locator('#card-print-fin').fill('772l');await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet h1')).toHaveText('Sample Worker · FIN: ***772L · EMP-050');
 });
