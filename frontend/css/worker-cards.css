@@ -44,3 +44,5 @@
 
 /* Card images print without an added frame; original image contents stay intact. */
 #print-sheet img,.wc-print-preview-sheet img{border:0!important;box-shadow:none!important;outline:0!important}
+
+#card-print-dialog .wc-print-fin-field{display:inline-flex;vertical-align:middle;max-width:210px;margin:4px 12px 8px 0}#card-print-fin{max-width:150px;font-family:inherit}

@@ -216,3 +216,9 @@ test('print preview loads sides concurrently, reuses images and has no card fram
  await page.locator('#card-print-fronts').click();await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();expect(calls).toBe(3);
  await page.emulateMedia({media:'print'});expect(await page.locator('#print-sheet img').first().evaluate(img=>getComputedStyle(img).borderTopStyle)).toBe('none');
 });
+
+
+test('missing FIN can be entered as four characters without refetching print images',async({page})=>{
+ await fixture(page);await page.route('**/worker-documents/workers?*',r=>r.fulfill({json:[{id:W,name:'Sample Worker',worker_code:'EMP-050',status:'active'}]}));await page.locator('#worker-search').fill('Sample');await expect(page.locator('#worker-list')).toContainText('Sample Worker');await page.getByRole('button',{name:'Sample Worker'}).click();
+ await page.route('**/worker-documents/cards/*/file?*',r=>r.fulfill({contentType:'image/png',body:png}));await page.locator('#print-cards').click();await page.locator('#card-print-fin').fill('772l');await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet h1')).toHaveText('Sample Worker · FIN: ***772L · EMP-050');
+});
