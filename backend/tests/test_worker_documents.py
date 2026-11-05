@@ -35,6 +35,11 @@ def api():
             assert req.headers['Authorization'] == 'Bearer test'
         if path.endswith('/rpc/worker_documents_can_access'):
             return httpx.Response(200, json=state['access'])
+        if path.endswith('/workers'):
+            assert req.url.params['select'] == 'id,fin'
+            assert req.url.params['id'] == f'in.({W})'
+            state.setdefault('identity_reads', []).append(str(req.url))
+            return httpx.Response(200, json=[{'id': W, 'fin': state.get('worker_fin', 'G1234567X')}])
         if path.endswith('/rpc/worker_documents_workers'):
             return httpx.Response(200, json=[{'id': W, 'name': 'Sample Worker', 'worker_code': 'EMP-1', 'status': 'active'}] if state['access'] else [])
         if path.endswith('/rpc/worker_card_delete'):
@@ -343,3 +348,16 @@ def test_deletion_accepts_postgrest_single_row_composite_arrays(api):
     c,s=api;s['role']='admin';s['composite_array']=True
     r=c.request('DELETE',f'/api/v1/worker-documents/cards/{ID}',json={'updated_at':'version1','confirmation':'DELETE'})
     assert r.status_code==200 and r.json()['deleted'] and not r.json()['cleanup_pending']
+
+
+@pytest.mark.parametrize('fin,suffix', [('G1234567X','567X'), (' g1234567x ','567X'), (None,None), ('12',None)])
+def test_directory_returns_only_fin_suffix_for_scoped_workers(api,fin,suffix):
+    c,s=api;s['worker_fin']=fin
+    r=c.get('/api/v1/worker-documents/workers')
+    assert r.status_code==200
+    assert r.json()[0]['fin_last4']==suffix
+    assert 'fin' not in r.json()[0]
+    assert len(s['identity_reads'])==1
+    s['access']=False;s['identity_reads']=[]
+    assert c.get('/api/v1/worker-documents/workers').json()==[]
+    assert not s['identity_reads']

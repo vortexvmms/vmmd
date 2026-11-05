@@ -253,10 +253,21 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
 
     @router.get('/workers')
     async def workers(search: str = '', offset: int = 0, user: dict = Depends(ctx.get_current_user)):
+        """Return scoped workers with a masked FIN suffix for card printing."""
         require(user)
         if len(search) > 200 or not 0 <= offset <= 100000:
             raise HTTPException(400, 'Invalid worker search')
-        return await db(user, 'rpc/worker_documents_workers', 'POST', payload={'p_search': search, 'p_offset': offset})
+        rows = await db(user, 'rpc/worker_documents_workers', 'POST', payload={'p_search': search, 'p_offset': offset})
+        if not rows:
+            return []
+        # Query only workers already authorised by the scoped directory RPC.
+        ids = ','.join(str(UUID(r['id'])) for r in rows)
+        identities = await db(user, 'workers', params={'select': 'id,fin', 'id': f'in.({ids})'})
+        suffixes = {}
+        for identity in identities:
+            value = re.sub(r'[^A-Z0-9]', '', str(identity.get('fin') or '').upper())
+            suffixes[identity['id']] = value[-4:] if len(value) >= 4 else None
+        return [{**r, 'fin_last4': suffixes.get(r['id'])} for r in rows]
 
     @router.get('/{kind}')
     async def listing(kind: str, worker_id: UUID, user: dict = Depends(ctx.get_current_user)):
