@@ -186,3 +186,12 @@ test('failed photo cleanup remains visible with a typed retry after the card dis
  await page.route('**/card-deletions/*/retry',r=>{retried=true;expect(r.request().postDataJSON()).toEqual({confirmation:'DELETE'});return r.fulfill({json:{deleted:true,cleanup_pending:false,retained_shared:0}})});
  await page.getByRole('button',{name:'Edit',exact:true}).first().click();await page.locator('#delete-card').click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toContainText('photo removal needs another attempt');await expect(page.locator('#notice')).toContainText('Some photos still need removal');await page.getByRole('button',{name:'Retry photo removal',exact:true}).click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toBeHidden();await expect(page.locator('#notice')).toContainText('permanently deleted');
 });
+
+test('paired scan crops can be removed, restored and edited through masking',async({page})=>{
+ await fixture(page);await page.locator('#import-scans').click();
+ await page.evaluate(async()=>{const d=document.querySelector('#scan-import');const c=document.createElement('canvas');c.width=600;c.height=800;c.getContext('2d').fillRect(0,0,600,800);window.WorkerCardImporter.prototype.page=async()=>c;window.WorkerCardImporter.prototype.load=async function(){this.pdf={numPages:2};await this.showPages()};});
+ await page.locator('.scan-file').setInputFiles({name:'scan.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4')});
+ await page.locator('[data-action=full]').click();await page.locator('[data-action=create]').click();await expect(page.locator('.scan-list label')).toHaveCount(1);
+ await page.locator('[data-action=delete]').click();await expect(page.locator('.scan-list label')).toHaveCount(0);await page.locator('[data-action=undo]').click();await expect(page.locator('.scan-list label')).toHaveCount(1);
+ await page.locator('[data-action=edit]').click();await expect(page.locator('#edit-dialog')).toBeVisible();await expect(page.locator('#review-front')).toBeEnabled();await expect(page.locator('#review-back')).toBeEnabled();await page.locator('#review-front').click();await checkPages(page);await page.locator('#review-back').click();await checkPages(page);await page.locator('#save').click();await expect(page.locator('#scan-import')).toBeVisible();await expect(page.locator('.scan-list')).toContainText('Saved');
+});
