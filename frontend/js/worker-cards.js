@@ -8,6 +8,12 @@ async function response(path,options={}){const r=await vmmsApi(BASE+path,options
 const api=async(path,options)=> (await response(path,options)).json();
 const masker=new WorkerDocumentMasker(api,()=>worker?.id);
 const photoInput=new WorkerCardInput();
+const heading=$('worker-panel').querySelector('.wc-worker-heading');
+heading.insertBefore($('cards-tab').closest('nav'),$('refresh'));
+function fitDirectory(){const panel=document.querySelector('.wc-directory');panel.style.setProperty('--wc-directory-top',Math.max(16,panel.getBoundingClientRect().top)+'px');}
+new ResizeObserver(()=>requestAnimationFrame(fitDirectory)).observe(document.querySelector('.wc-main'));
+window.addEventListener('resize',fitDirectory);window.addEventListener('scroll',fitDirectory,{passive:true});requestAnimationFrame(fitDirectory);
+
 const importer=new WorkerCardImporter(async item=>{kind='cards';edit(null);for(const side of ['front','back'])if(item[side]){const dt=new DataTransfer();dt.items.add(item[side]);$(side+'-file').files=dt.files;}for(const key of ['label','institute','expiry_date'])$('edit-form').elements[key].value=item[key]||'';for(const side of ['front','back'])masker.status(side);photoInput.refresh(kind);$('edit-error').textContent='Verify course details and review masking on both sides before saving. OCR text: '+(item.text||'Not read yet.');});
 $('import-scans').onclick=()=>{if(worker)importer.open(worker);};
 async function run(fn){try{await fn()}catch(e){notice(e.message)}}

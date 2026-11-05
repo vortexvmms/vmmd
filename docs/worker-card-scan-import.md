@@ -28,3 +28,23 @@ OCR/PDF libraries require internet access; manual details remain available.
 
 Rollback: revert the scan-import commit and deploy the preceding frontend.
 No database migration or backend rollout is required.
+
+## Automatic all-page review (November 2026 update)
+
+Uploads now process every page (up to 30) sequentially in the browser. Local
+segmentation detects each side independently; the previous coordinate-copy
+assumption is removed. Adjacent pages are initially paired (1/2, 3/4, ...),
+with cards sorted by approximate position. The pairs are suggestions, never
+identity matches. An odd final page has no back; unmatched sides remain visible.
+
+All pages appear in the left strip, including pages with no detected card. Add
+missed card opens an original-page crop. Each pair provides independent source
+selectors, original-page re-cropping, full-page crop, editable OCR fields, and an
+explicit pairing check. Assigning an already-used side exchanges it with the
+other unsaved pair. Saved sides cannot be reassigned. Masking, tilt, rotation and
+perspective correction still use the existing reviewed editor before upload.
+Automatic straightening is attempted when card edges are reliable; inspect all
+results. Faint white borders and touching/overlapping cards may need manual crops.
+
+The desktop worker name, tabs and actions occupy one row; the worker directory
+fills the remaining viewport with its list scrolling inside the panel.
