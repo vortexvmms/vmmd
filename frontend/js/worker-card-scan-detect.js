@@ -3,7 +3,7 @@
 function detect(source){
  const scale=Math.min(1,720/Math.max(source.width,source.height)),c=document.createElement('canvas');c.width=Math.round(source.width*scale);c.height=Math.round(source.height*scale);
  const w=c.width,h=c.height,x=c.getContext('2d');x.drawImage(source,0,0,w,h);const d=x.getImageData(0,0,w,h).data,ink=new Uint8Array(w*h),mask=new Uint8Array(w*h),seen=new Uint8Array(w*h);
- for(let i=0;i<ink.length;i++){const a=i*4,r=d[a],g=d[a+1],b=d[a+2];ink[i]=Math.min(r,g,b)<165||Math.max(r,g,b)-Math.min(r,g,b)>45?1:0;}
+ for(let i=0;i<ink.length;i++){const a=i*4,r=d[a],g=d[a+1],b=d[a+2];ink[i]=Math.min(r,g,b)<225||Math.max(r,g,b)-Math.min(r,g,b)>35?1:0;}
  // Join text and borders within a card without relying on front/back coordinates.
  const radius=4,integral=new Int32Array((w+1)*(h+1));
  for(let y=0;y<h;y++){let sum=0;for(let xx=0;xx<w;xx++){sum+=ink[y*w+xx];integral[(y+1)*(w+1)+xx+1]=integral[y*(w+1)+xx+1]+sum;}}
