@@ -51,6 +51,10 @@
         text-align:left!important;
       }
       body:not(.shell)>header>div:first-child>div{min-width:0!important}
+      /* Explicit shared-header contrast wins over legacy page-wide typography. */
+      body:not(.shell)>header.vcms-page-header .vcms-page-header__title h1{
+        color:#fff!important;
+      }
       body:not(.shell)>header:not(.vcms-page-header) h1{
         color:inherit!important;
         margin:0!important;
