@@ -10,7 +10,7 @@
     if (document.getElementById("vmms-home-fab")) return;
     /* Do not cover a page's own mobile save/add controls. The header back
        arrow remains the route back to Home on these workflow pages. */
-    if (document.querySelector("body > div.fixed.bottom-0, #actionbar, #dprbar, #fab, #fab-bulk")) return;
+    if (document.querySelector("body > div.fixed.bottom-0, .vcms-mobile-actions, #att-actions, #actionbar, #dprbar, #fab, #fab-bulk")) return;
     var a = document.createElement("a");
     a.id = "vmms-home-fab";
     a.href = "home.html";
@@ -23,7 +23,7 @@
       '<path d="M9.5 21v-6h5v6"/></svg>';
     a.style.cssText =
       "position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));" +
-      "z-index:9999;width:52px;height:52px;border-radius:9999px;" +
+      "z-index:25;width:52px;height:52px;border-radius:9999px;" +
       "background:#C00000;color:#fff;display:flex;align-items:center;" +
       "justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.28);" +
       "text-decoration:none;-webkit-tap-highlight-color:transparent;";

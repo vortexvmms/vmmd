@@ -15,6 +15,24 @@
     .print-only { display: none; }
     @media(max-width:1100px){.verify-export-actions{width:100%}header>div:first-child{flex-wrap:wrap}.verify-export-actions button{flex:1;white-space:nowrap}}
     @media(max-width:899px){.sheet{overflow-x:auto!important;-webkit-overflow-scrolling:touch}.sheet table{min-width:760px}.sheet th:first-child,.sheet td:first-child{position:sticky;left:0;z-index:2;background:#fff}.sheet thead th:first-child{background:#E5E7EB;z-index:3}.sheet input[type=checkbox]{width:22px;height:22px}}
+    /* Mobile verification workspace: actions wrap, filters remain usable and table scrolls independently. */
+    @media screen and (max-width:899px){
+      header.no-print{padding:12px!important}
+      header.no-print>div:first-child{display:grid!important;grid-template-columns:44px minmax(0,1fr);gap:8px!important;align-items:center}
+      header.no-print>div:first-child>a{display:grid;place-items:center;min-width:44px;min-height:44px;color:#fff!important}
+      header.no-print>div:first-child>div:nth-child(2){min-width:0}
+      header.no-print h1{color:#fff!important;font-size:18px;line-height:1.25}
+      header.no-print #summary{color:#fff!important;opacity:.9;overflow-wrap:anywhere}
+      header.no-print .verify-export-actions{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:8px}
+      header.no-print .verify-export-actions button{min-width:0;min-height:44px;white-space:normal!important;line-height:1.2;padding:8px!important}
+      header.no-print>div:nth-child(2){display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+      header.no-print #date,header.no-print #site,header.no-print #search{min-width:0;width:100%;max-width:100%;min-height:44px}
+      header.no-print #search{grid-column:1/-1}
+      header.no-print>div:nth-child(3){gap:8px!important}
+      header.no-print>div:nth-child(3) label{min-height:36px}
+      main{min-width:0;padding:10px!important}
+      main .sheet{max-width:100%;overscroll-behavior-x:contain}
+    }
     @media print {
       @page { size: A4 landscape; margin: 9mm; }
       html, body {
