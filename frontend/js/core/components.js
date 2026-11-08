@@ -31,13 +31,13 @@
     .vcms-control{height:var(--vcms-control-h);min-height:var(--vcms-control-h);width:100%;padding:0 12px;border:1px solid var(--vcms-line);border-radius:10px;background:var(--vcms-surface);color:var(--vcms-ink);font-size:14px}
     textarea.vcms-control{height:auto;min-height:96px;padding-top:10px;padding-bottom:10px}.vcms-label{display:block;margin:0 0 6px;color:var(--vcms-muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
     .vcms-page-header{background:var(--vcms-brand-dark);color:var(--vcms-on-brand);box-shadow:0 2px 8px rgba(15,23,42,.18);position:sticky;top:0;z-index:20}
-    .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:28px;min-height:40px;display:grid;place-items:center;font-size:25px;font-weight:800}
+    .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:44px;min-height:44px;display:grid;place-items:center;font-size:25px;font-weight:800}
     .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--vcms-on-brand,#fff)}.vcms-page-header__title h1,.vcms-page-header__row>h1,.vcms-page-header__back{color:var(--vcms-on-brand,#fff)!important}.vcms-page-header__title h1{overflow-wrap:anywhere}.vcms-page-header button,.vcms-page-header a{touch-action:manipulation}
     /* Responsive VCMS workspace: scoped to shared components to preserve legacy workflows. */
     .vcms-page-header__row{max-width:100%;min-width:0}
     .vcms-page-header__title{min-width:0}
     .vcms-page-header__back{flex:0 0 44px;min-width:44px;min-height:44px;text-decoration:none}
-    .vcms-page-header__title h1{margin:0;color:var(--vcms-on-brand,#fff)!important}
+    .vcms-page-header__title h1{margin:0;color:var(--vcms-on-brand,#fff)!important}.vcms-page-header .vcms-page-header__title h1{color:#fff!important}
     .vcms-page-header__title p{margin:3px 0 0;color:var(--vcms-on-brand,#fff)!important}
     .vcms-page-toolbar>*{max-width:100%;min-width:0}
     .vcms-section-card,.vcms-supervisor-main{min-width:0}
@@ -77,7 +77,7 @@
     :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
     :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
-    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
+    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:44px;min-width:44px;min-height:44px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
     @media(prefers-reduced-motion:reduce){body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:none!important}}
   }
