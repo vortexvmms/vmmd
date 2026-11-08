@@ -183,14 +183,25 @@ async function vmmsApi(path, options = {}) {
   const doFetch = async () => {
     const s = getSession();
     if (!s) throw new Error("NOT_SIGNED_IN");
-    return fetch(`${VMMS_CONFIG.BACKEND_URL}${path}`, {
+    const requestOptions = {
       ...options,
       headers: {
         "Content-Type": "application/json",
         ...(options.headers || {}),
         "Authorization": `Bearer ${s.access_token}`,
       },
-    });
+    };
+    // Limit only startup reads. Keep longer uploads and writes unchanged.
+    if (method === "GET" && /^\\/api\\/v1\\/(me|dashboard)(?:\\?|$)/.test(path)) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 75000);
+      try {
+        return await fetch(`${VMMS_CONFIG.BACKEND_URL}${path}`, {
+          ...requestOptions, signal: controller.signal,
+        });
+      } finally { clearTimeout(timer); }
+    }
+    return fetch(`${VMMS_CONFIG.BACKEND_URL}${path}`, requestOptions);
   };
   _wakePending++;
   // Only show the "waking up" banner on a genuine cold start (~40s), not on a
