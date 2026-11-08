@@ -52,6 +52,7 @@
       }
       body:not(.shell)>header>div:first-child>div{min-width:0!important}
       body:not(.shell)>header h1{
+        color:inherit!important;
         margin:0!important;
         font-size:18px!important;
         line-height:1.2!important;
@@ -154,7 +155,7 @@
       body.vmms-page-request #copyfrom{flex:1 1 auto!important;min-width:0!important}
       body.vmms-page-request #copylast{flex:0 0 auto!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
-      #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
+      #vmms-home-fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
       body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
       body.vmms-page-workers #list>*{content-visibility:auto;contain-intrinsic-size:auto 96px}
       body.vmms-page-users input[type=checkbox]{width:22px!important;height:22px!important}
