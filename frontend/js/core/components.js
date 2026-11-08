@@ -33,6 +33,32 @@
     .vcms-page-header{background:var(--vcms-brand-dark);color:var(--vcms-on-brand);box-shadow:0 2px 8px rgba(15,23,42,.18);position:sticky;top:0;z-index:20}
     .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:28px;min-height:40px;display:grid;place-items:center;font-size:25px;font-weight:800}
     .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--vcms-on-brand,#fff)}.vcms-page-header__title h1,.vcms-page-header__row>h1,.vcms-page-header__back{color:var(--vcms-on-brand,#fff)!important}.vcms-page-header__title h1{overflow-wrap:anywhere}.vcms-page-header button,.vcms-page-header a{touch-action:manipulation}
+    /* Responsive VCMS workspace: scoped to shared components to preserve legacy workflows. */
+    .vcms-page-header__row{max-width:100%;min-width:0}
+    .vcms-page-header__title{min-width:0}
+    .vcms-page-header__back{flex:0 0 44px;min-width:44px;min-height:44px;text-decoration:none}
+    .vcms-page-header__title h1{margin:0;color:var(--vcms-on-brand,#fff)!important}
+    .vcms-page-header__title p{margin:3px 0 0;color:var(--vcms-on-brand,#fff)!important}
+    .vcms-page-toolbar>*{max-width:100%;min-width:0}
+    .vcms-section-card,.vcms-supervisor-main{min-width:0}
+    .vcms-section-card img{max-width:100%;height:auto}
+    .vcms-mobile-actions__inner>*{min-width:0}
+    .vcms-mobile-actions .vcms-btn{white-space:normal;text-align:center}
+    @media(max-width:899px){
+      .vcms-page-header__row{gap:8px;padding:10px 12px}
+      .vcms-page-header__title h1{font-size:clamp(17px,4.8vw,21px);line-height:1.25}
+      .vcms-page-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .vcms-mobile-actions{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+      .vcms-mobile-actions__inner{gap:8px}
+      .vcms-mobile-actions__inner>.vcms-btn{flex:1 1 0}
+      .vcms-filter-row{overscroll-behavior-x:contain}
+    }
+    @media(min-width:900px){
+      .vcms-page-header__row{gap:14px}
+      .vcms-page-header__title h1{font-size:20px}
+      .vcms-page-header__back{flex-basis:44px}
+      .vcms-section-card{border-radius:14px}
+    }
     .vcms-page-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 12px}.vcms-page-toolbar>*{min-width:0}
     .vcms-segmented{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:rgba(15,23,42,.18);border-radius:12px}.vcms-segmented button{min-height:42px;border-radius:9px;padding:0 10px;font-size:13px;font-weight:800;color:var(--vcms-on-brand)}.vcms-segmented button[aria-selected="true"],.vcms-segmented .is-active{background:var(--vcms-surface);color:var(--vcms-brand-dark);box-shadow:0 1px 4px rgba(15,23,42,.16)}
     .vcms-section-card{background:var(--vcms-surface);border:1px solid var(--vcms-line);border-radius:14px;padding:14px;box-shadow:0 4px 14px rgba(15,23,42,.06)}
