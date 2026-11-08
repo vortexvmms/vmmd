@@ -51,7 +51,7 @@
         text-align:left!important;
       }
       body:not(.shell)>header>div:first-child>div{min-width:0!important}
-      body:not(.shell)>header h1{
+      body:not(.shell)>header:not(.vcms-page-header) h1{
         color:inherit!important;
         margin:0!important;
         font-size:18px!important;
