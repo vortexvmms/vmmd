@@ -192,7 +192,7 @@ async function vmmsApi(path, options = {}) {
       },
     };
     // Limit only startup reads. Keep longer uploads and writes unchanged.
-    if (method === "GET" && /^\\/api\\/v1\\/(me|dashboard)(?:\\?|$)/.test(path)) {
+    if (method === "GET" && /^\/api\/v1\/(me|dashboard)(?:\?|$)/.test(path)) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 75000);
       try {
