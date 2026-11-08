@@ -7,7 +7,7 @@ async function signedIn(page) {
     access_token: 'test-token', refresh_token: 'test-refresh', expires_at: Date.now() + 3600000
   })));
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/me', r => r.fulfill({ json: {
-    name: 'Test Supervisor', role: 'site_sup', user_id: 'u1', menu: null
+    name: 'Test Supervisor', role: 'admin', user_id: 'u1', menu: null
   }}));
 }
 
