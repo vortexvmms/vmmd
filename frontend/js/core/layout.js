@@ -1,6 +1,6 @@
 // ---- Shared desktop shell and workspace design system ----
-// Phone markup is intentionally untouched; supervisors keep the lightweight
-// page-native mobile workflow. Desktop pages share Home's visual language.
+// Preserve page-native mobile workflows while sharing contrast and spacing rules.
+// Desktop pages share Home's visual language.
 (function () {
   "use strict";
   var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"").replace(/[^a-z0-9-]/gi,"");
