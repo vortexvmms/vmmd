@@ -48,3 +48,26 @@ test('desktop shared header keeps title and page actions inside viewport', async
   expect(bounds.left).toBeGreaterThanOrEqual(0);
   expect(bounds.right).toBeLessThanOrEqual(bounds.width+1);
 });
+
+test('end-time verification exports and filters fit mobile viewport', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-safari', 'Mobile viewport only');
+  await signedIn(page);
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [] }));
+  await page.route('https://vmms-backend-sg.onrender.com/api/v1/attendance*', r => r.fulfill({ json: [] }));
+  await page.goto('/verify.html');
+  const layout = await page.evaluate(() => {
+    const header = document.querySelector('header.no-print');
+    const actions = [...header.querySelectorAll('.verify-export-actions button')];
+    const inputs = [...header.querySelectorAll('#date,#site,#search')];
+    return { viewport: innerWidth, headerRight: header.getBoundingClientRect().right,
+      controls: [...actions,...inputs].map(e => ({left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,height:e.getBoundingClientRect().height})),
+      tableScroll: getComputedStyle(document.querySelector('main .sheet')).overflowX };
+  });
+  expect(layout.headerRight).toBeLessThanOrEqual(layout.viewport+1);
+  for (const c of layout.controls) {
+    expect(c.left).toBeGreaterThanOrEqual(-1);
+    expect(c.right).toBeLessThanOrEqual(layout.viewport+1);
+    expect(c.height).toBeGreaterThanOrEqual(40);
+  }
+  expect(layout.tableScroll).toBe('auto');
+});
