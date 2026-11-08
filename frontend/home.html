@@ -11,7 +11,7 @@
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
   <script src="js/attendance-completion.js?v=20261002-1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+  <script src="js/auth.js?v=20261108-mobile1"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};window.VMMS_TIER=window.VMMS_TIER||{full:["admin","general_manager","operation_manager","hr_assistant"],manager:["main_sup","wshc_lead"],supervisor:["site_sup","safety_sup","wshc","logistics_sup"]};window.isFull=window.isFull||function(r){return VMMS_TIER.full.indexOf(r)!==-1};window.isCoordinator=window.isCoordinator||function(r){return isFull(r)||["main_sup","wshc_lead"].indexOf(r)!==-1};</script>
   <style>
     :root{ --brand:#C00000; --brand2:#A50E0E; --ink:#1F2328; --muted:#6B7280; --line:#E5E7EB; --bg:#E4E7EC; }
@@ -515,7 +515,18 @@ body.legacy-blue-home .tasks .tb{overflow:visible;max-height:none}
       }catch(e){box.innerHTML=`<p style="color:#B45309;font-size:13px">Tasks could not be loaded.</p><button class="tbtn" type="button" onclick="loadTasks()">Retry</button><a class="tbtn" href="todo.html">Open to-do board</a>`;}
     }
     async function completeHomeTask(id,box){const row=document.getElementById("home-task-"+id);if(row)row.classList.add("saving");const r=await vmmsApi("/api/v1/todos/"+id,{method:"PATCH",body:JSON.stringify({done:true})});if(!r.ok){box.checked=false;if(row)row.classList.remove("saving");return;}if(row){row.style.transition="opacity .2s,transform .2s";row.style.opacity="0";row.style.transform="translateX(12px)";}setTimeout(loadTasks,220);}
-    boot();
+    boot().catch(function(error){
+      if(error && error.message==="NOT_SIGNED_IN"){
+        window.location.replace("login.html");
+        return;
+      }
+      console.error("VCMS home startup error",error);
+      var panel=document.createElement("div");
+      panel.setAttribute("role","alert");
+      panel.style.cssText="position:fixed;bottom:16px;left:12px;right:12px;max-width:440px;margin:auto;z-index:100001;background:white;color:#172033;border:1px solid #ccc;border-left:5px solid #c00000;border-radius:10px;padding:16px;box-shadow:0 6px 30px #0003;font:14px Arial";
+      panel.innerHTML='<strong>VCMS could not finish loading</strong><p>Check your connection and try again. You will remain signed in.</p>';
+      var btn=document.createElement("button");btn.textContent="Retry";btn.style.cssText="padding:10px 20px;background:#1e3a5f;color:white;border:0;border-radius:8px";btn.onclick=function(){location.reload()};panel.appendChild(btn);document.body.appendChild(panel);
+    });
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   </script>
 </body>
