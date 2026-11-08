@@ -155,8 +155,34 @@ window.esc = function (v) {
     .vcms-control{height:var(--vcms-control-h);min-height:var(--vcms-control-h);width:100%;padding:0 12px;border:1px solid var(--vcms-line);border-radius:10px;background:var(--vcms-surface);color:var(--vcms-ink);font-size:14px}
     textarea.vcms-control{height:auto;min-height:96px;padding-top:10px;padding-bottom:10px}.vcms-label{display:block;margin:0 0 6px;color:var(--vcms-muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
     .vcms-page-header{background:var(--vcms-brand-dark);color:var(--vcms-on-brand);box-shadow:0 2px 8px rgba(15,23,42,.18);position:sticky;top:0;z-index:20}
-    .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:28px;min-height:40px;display:grid;place-items:center;font-size:25px;font-weight:800}
-    .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vcms-page-header__row{min-height:60px;display:flex;align-items:center;gap:10px;padding:10px 16px}.vcms-page-header__back{width:44px;min-height:44px;display:grid;place-items:center;font-size:25px;font-weight:800}
+    .vcms-page-header__title{min-width:0;flex:1}.vcms-page-header__title h1{font-size:18px;font-weight:800;line-height:1.2}.vcms-page-header__title p{font-size:12px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--vcms-on-brand,#fff)}.vcms-page-header__title h1,.vcms-page-header__row>h1,.vcms-page-header__back{color:var(--vcms-on-brand,#fff)!important}.vcms-page-header__title h1{overflow-wrap:anywhere}.vcms-page-header button,.vcms-page-header a{touch-action:manipulation}
+    /* Responsive VCMS workspace: scoped to shared components to preserve legacy workflows. */
+    .vcms-page-header__row{max-width:100%;min-width:0}
+    .vcms-page-header__title{min-width:0}
+    .vcms-page-header__back{flex:0 0 44px;min-width:44px;min-height:44px;text-decoration:none}
+    .vcms-page-header__title h1{margin:0;color:var(--vcms-on-brand,#fff)!important}.vcms-page-header .vcms-page-header__title h1{color:#fff!important}
+    .vcms-page-header__title p{margin:3px 0 0;color:var(--vcms-on-brand,#fff)!important}
+    .vcms-page-toolbar>*{max-width:100%;min-width:0}
+    .vcms-section-card,.vcms-supervisor-main{min-width:0}
+    .vcms-section-card img{max-width:100%;height:auto}
+    .vcms-mobile-actions__inner>*{min-width:0}
+    .vcms-mobile-actions .vcms-btn{white-space:normal;text-align:center}
+    @media(max-width:899px){
+      .vcms-page-header__row{gap:8px;padding:10px 12px}
+      .vcms-page-header__title h1{font-size:clamp(17px,4.8vw,21px);line-height:1.25}
+      .vcms-page-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .vcms-mobile-actions{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+      .vcms-mobile-actions__inner{gap:8px}
+      .vcms-mobile-actions__inner>.vcms-btn{flex:1 1 0}
+      .vcms-filter-row{overscroll-behavior-x:contain}
+    }
+    @media(min-width:900px){
+      .vcms-page-header__row{gap:14px}
+      .vcms-page-header__title h1{font-size:20px}
+      .vcms-page-header__back{flex-basis:44px}
+      .vcms-section-card{border-radius:14px}
+    }
     .vcms-page-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 16px 12px}.vcms-page-toolbar>*{min-width:0}
     .vcms-segmented{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:rgba(15,23,42,.18);border-radius:12px}.vcms-segmented button{min-height:42px;border-radius:9px;padding:0 10px;font-size:13px;font-weight:800;color:var(--vcms-on-brand)}.vcms-segmented button[aria-selected="true"],.vcms-segmented .is-active{background:var(--vcms-surface);color:var(--vcms-brand-dark);box-shadow:0 1px 4px rgba(15,23,42,.16)}
     .vcms-section-card{background:var(--vcms-surface);border:1px solid var(--vcms-line);border-radius:14px;padding:14px;box-shadow:0 4px 14px rgba(15,23,42,.06)}
@@ -175,7 +201,7 @@ window.esc = function (v) {
     :root[data-theme="contrast"] body,:root[data-theme="contrast"] .bg-gray-100,:root[data-theme="contrast"] .bg-gray-50{background:#fff!important;color:#000!important}
     :root[data-theme="contrast"] .bg-white,:root[data-theme="contrast"] .panel{background:#fff!important;color:#000!important;border:2px solid #111!important;box-shadow:none!important}
     :root[data-theme="contrast"] input,:root[data-theme="contrast"] select,:root[data-theme="contrast"] textarea{background:#fff!important;color:#000!important;border:2px solid #111!important}
-    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:24px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
+    @media(max-width:899px){.vcms-page-header__row{min-height:58px;padding:8px 12px}.vcms-page-header__back{width:44px;min-width:44px;min-height:44px}.vcms-page-toolbar{padding:0 12px 10px}.vcms-supervisor-main{padding:12px 12px 112px}.vcms-mobile-actions__inner{max-width:560px}.vcms-btn{min-height:46px}.vcms-standard-page .vcms-control{min-height:46px}.vcms-standard-page button,.vcms-standard-page a[role="button"]{min-height:44px}}
     @media(min-width:900px){.vcms-page-header__row{padding-left:24px;padding-right:24px}.vcms-page-toolbar{display:flex;padding:0 24px 12px}.vcms-page-toolbar>*{max-width:320px}.vcms-mobile-actions{padding-left:24px;padding-right:24px}}
     @media(prefers-reduced-motion:reduce){body,.vcms-page-header,.vcms-legacy-header,.vcms-btn,.vcms-control,.panel,.settings-card{transition:none!important}}
   }
@@ -250,8 +276,8 @@ window.esc = function (v) {
 
 // source: js/core/layout.js
 // ---- Shared desktop shell and workspace design system ----
-// Phone markup is intentionally untouched; supervisors keep the lightweight
-// page-native mobile workflow. Desktop pages share Home's visual language.
+// Preserve page-native mobile workflows while sharing contrast and spacing rules.
+// Desktop pages share Home's visual language.
 (function () {
   "use strict";
   var slug=(location.pathname.split("/").pop()||"home.html").replace(/\.html$/i,"").replace(/[^a-z0-9-]/gi,"");
@@ -424,6 +450,7 @@ if (window.tailwind) {
       }
       body:not(.shell)>header>div:first-child>div{min-width:0!important}
       body:not(.shell)>header h1{
+        color:inherit!important;
         margin:0!important;
         font-size:18px!important;
         line-height:1.2!important;
@@ -526,7 +553,7 @@ if (window.tailwind) {
       body.vmms-page-request #copyfrom{flex:1 1 auto!important;min-width:0!important}
       body.vmms-page-request #copylast{flex:0 0 auto!important}
       body>div.fixed.bottom-0,#actionbar,#dprbar{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important}
-      #vmms-home-fab{bottom:calc(18px + env(safe-area-inset-bottom,0px))!important}
+      #vmms-home-fab{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
       body.vmms-page-attendance #vmms-home-fab,body.vmms-page-dpr #vmms-home-fab,body.vmms-page-workers #vmms-home-fab{display:none!important}
       body.vmms-page-workers #list>*{content-visibility:auto;contain-intrinsic-size:auto 96px}
       body.vmms-page-users input[type=checkbox]{width:22px!important;height:22px!important}
@@ -792,7 +819,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
     if (document.getElementById("vmms-home-fab")) return;
     /* Do not cover a page's own mobile save/add controls. The header back
        arrow remains the route back to Home on these workflow pages. */
-    if (document.querySelector("body > div.fixed.bottom-0, #actionbar, #dprbar, #fab, #fab-bulk")) return;
+    if (document.querySelector("body > div.fixed.bottom-0, .vcms-mobile-actions, #att-actions, #actionbar, #dprbar, #fab, #fab-bulk")) return;
     var a = document.createElement("a");
     a.id = "vmms-home-fab";
     a.href = "home.html";
@@ -805,7 +832,7 @@ window.vmmsDownloadPdf = function (elementId, filename, opts) {
       '<path d="M9.5 21v-6h5v6"/></svg>';
     a.style.cssText =
       "position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));" +
-      "z-index:9999;width:52px;height:52px;border-radius:9999px;" +
+      "z-index:25;width:52px;height:52px;border-radius:9999px;" +
       "background:#C00000;color:#fff;display:flex;align-items:center;" +
       "justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.28);" +
       "text-decoration:none;-webkit-tap-highlight-color:transparent;";
