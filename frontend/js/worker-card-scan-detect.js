@@ -13,8 +13,12 @@ function detect(source){
  while(read<n){const i=queue[read++],xx=i%w,y=Math.floor(i/w);l=Math.min(l,xx);r=Math.max(r,xx);t=Math.min(t,y);b=Math.max(b,y);for(const j of [xx?i-1:-1,xx+1<w?i+1:-1,y?i-w:-1,y+1<h?i+w:-1])if(j>=0&&mask[j]&&!seen[j]){seen[j]=1;queue[n++]=j;}}
  const bw=r-l+1,bh=b-t+1;if(bw<w*.085||bh<h*.045||bw*bh<w*h*.006||bw*bh>w*h*.85||n/(bw*bh)<.06)continue;
  const pad=6;boxes.push({x:Math.max(0,l-pad)/w,y:Math.max(0,t-pad)/h,w:(Math.min(w,r+pad+1)-Math.max(0,l-pad))/w,h:(Math.min(h,b+pad+1)-Math.max(0,t-pad))/h});}
- // Absorb fragments which are enclosed by another detected card boundary.
- return boxes.filter((a,i)=>!boxes.some((b,j)=>j!==i&&a.x>=b.x&&a.y>=b.y&&a.x+a.w<=b.x+b.w&&a.y+a.h<=b.y+b.h)).sort((a,b)=>Math.abs(a.y-b.y)>.055?a.y-b.y:a.x-b.x);
+ // Discard smaller text/logo crops that sit almost entirely inside a larger card.
+ const area=box=>box.w*box.h;
+ const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x))*
+  Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));
+ return boxes.filter(a=>!boxes.some(b=>area(b)>area(a)*1.35&&overlap(a,b)>=area(a)*.85))
+  .sort((a,b)=>Math.abs(a.y-b.y)>.055?a.y-b.y:a.x-b.x);
 }
 root.WorkerCardScanDetect={detect};
 })(window);
