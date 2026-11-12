@@ -46,3 +46,14 @@
 #print-sheet img,.wc-print-preview-sheet img{border:0!important;box-shadow:none!important;outline:0!important}
 
 #card-print-dialog .wc-print-fin-field{display:inline-flex;vertical-align:middle;max-width:210px;margin:4px 12px 8px 0}#card-print-fin{max-width:150px;font-family:inherit}
+
+#scan-import .scan-page-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin-top:12px}
+#scan-import .scan-page-controls label{display:grid;gap:4px;min-width:115px}
+#scan-import .scan-layout{grid-template-columns:minmax(180px,24%) minmax(0,1fr);height:calc(96dvh - 310px)}
+#scan-import .scan-pages{display:block}
+#scan-import .scan-pages canvas{display:block;margin-top:8px}
+#scan-import .scan-actions{margin-top:10px}
+@media(max-width:700px){
+ #scan-import .scan-layout{grid-template-columns:1fr;grid-template-rows:145px minmax(0,1fr);height:54dvh}
+ #scan-import .scan-pages canvas{width:auto;height:110px}
+}

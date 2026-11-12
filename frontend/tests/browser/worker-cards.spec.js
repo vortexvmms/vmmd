@@ -187,17 +187,33 @@ test('failed photo cleanup remains visible with a typed retry after the card dis
  await page.getByRole('button',{name:'Edit',exact:true}).first().click();await page.locator('#delete-card').click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toContainText('photo removal needs another attempt');await expect(page.locator('#notice')).toContainText('Some photos still need removal');await page.getByRole('button',{name:'Retry photo removal',exact:true}).click();await page.locator('#delete-card-confirmation').fill('DELETE');await page.locator('#delete-card-go').click();await expect(page.locator('#card-cleanup')).toBeHidden();await expect(page.locator('#notice')).toContainText('permanently deleted');
 });
 
-test('all scanned pages detect independently, allow crop adjustment and save reviewed pairs',async({page})=>{
+test('selected PDF pages detect independently and save reviewed cards',async({page})=>{
  await fixture(page);await page.locator('#import-scans').click();
- await page.evaluate(()=>{WorkerCardImporter.prototype.load=async function(){window.scanUnderTest=this;this.pdf={numPages:4};this.busy=true;for(let n=1;n<=4;n++){const c=document.createElement('canvas');c.width=600;c.height=800;const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,600,800);const shift=n%2===0?-30:0;x.fillStyle=n===2?'#dfe9db':'#4866bb';if(n===4){x.strokeStyle='#c5c5c5';x.lineWidth=2;x.strokeRect(60,100+shift,180,110)}else x.fillRect(60,100+shift,180,110);if(n<3){x.fillStyle='#b05252';x.fillRect(320,110+shift,120,180)}this.pages.set(n,c);}await this.detectAll();this.busy=false;}});
+ await page.evaluate(()=>{WorkerCardImporter.prototype.load=async function(){window.scanUnderTest=this;this.pdf={numPages:4};this.busy=true;for(let n=1;n<=4;n++){const c=document.createElement('canvas');c.width=600;c.height=800;const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,600,800);const shift=n%2===0?-30:0;x.fillStyle=n===2?'#dfe9db':'#4866bb';if(n===4){x.strokeStyle='#c5c5c5';x.lineWidth=2;x.strokeRect(60,100+shift,180,110)}else x.fillRect(60,100+shift,180,110);if(n<3){x.fillStyle='#b05252';x.fillRect(320,110+shift,120,180)}this.pages.set(n,c);}this.setPages(4);await this.showSelectedPage();this.busy=false;}});
  await page.locator('.scan-file').setInputFiles({name:'four-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4')});
- await expect(page.locator('.scan-pages section')).toHaveCount(4);await expect(page.locator('.scan-pair')).toHaveCount(3);
- const positions=await page.evaluate(()=>({front:scanUnderTest.pageCards[1][0].rect.y,back:scanUnderTest.pageCards[2][0].rect.y}));expect(positions.front).toBeGreaterThan(positions.back);
- page.on('dialog',d=>d.accept());await page.getByLabel('back source for card 1',{exact:true}).selectOption('p2c1');await expect(page.getByLabel('back source for card 2',{exact:true})).toHaveValue('p2c0');
- await page.locator('[data-action=delete]').click();await expect(page.locator('.scan-pair')).toHaveCount(0);await page.locator('[data-action=undo]').click();await expect(page.locator('.scan-pair')).toHaveCount(3);
+ const pages=page.getByLabel('PDF page',{exact:true});
+ const detect=page.getByRole('button',{name:'Detect selected page',exact:true});
+ await expect(pages.locator('option')).toHaveCount(4);
+ await expect(page.locator('.scan-pair')).toHaveCount(0);
+ await pages.selectOption('3');await detect.click();
+ await expect(page.locator('.scan-pair')).toHaveCount(1);
+ await expect(page.getByLabel('back source for card 1',{exact:true})).toHaveValue('');
+ expect(await page.evaluate(()=>Object.keys(scanUnderTest.pageCards))).toEqual(['3']);
+ await pages.selectOption('2');await page.getByLabel('Detect as',{exact:true}).selectOption('back');await detect.click();
+ await expect(page.locator('.scan-pair')).toHaveCount(1);
+ const positions=await page.evaluate(()=>({front:scanUnderTest.pageCards[3][0].rect.y,back:scanUnderTest.pageCards[2][0].rect.y}));
+ expect(positions.front).toBeGreaterThan(positions.back);
+ await page.getByLabel('back source for card 1',{exact:true}).selectOption('p2c0');
+ await page.locator('.scan-pair').first().getByRole('checkbox').first().check();
+ await page.locator('[data-action=delete]').click();await expect(page.locator('.scan-pair')).toHaveCount(0);
+ await page.locator('[data-action=undo]').click();await expect(page.locator('.scan-pair')).toHaveCount(1);
  const row=page.locator('.scan-pair').first();await row.getByRole('button',{name:'Adjust front crop'}).click();await page.locator('[data-coord=x]').fill('9');await page.locator('[data-coord=y]').fill('11');await page.locator('[data-coord=w]').fill('33');await page.locator('[data-coord=h]').fill('16');await page.getByRole('button',{name:'Apply independent crop'}).click();await expect(page.locator('#scan-crop-dialog')).toBeHidden();
- await page.evaluate(()=>SICCardReader.read=async()=>[{text:'Course name: Safety Orientation\nInstitute: Sample Academy\nExpiry date: 31/12/2028'}]);await page.locator('[data-action=read]').click();await expect(row.getByLabel('Course / card name')).toHaveValue('Safety Orientation');await expect(row.getByLabel('Institute',{exact:true})).toHaveValue('Sample Academy');await expect(row.getByLabel('Expiry date',{exact:true})).toHaveValue('2028-12-31');
- await page.locator('[data-action=edit]').click();await expect(page.locator('.scan-status')).toContainText('Check the front/back pairing');await row.getByText('Front/back pairing checked').click();await page.locator('[data-action=edit]').click();await expect(page.locator('#edit-dialog')).toBeVisible();await page.locator('#review-front').click();await checkPages(page);await page.locator('#review-back').click();await checkPages(page);await page.locator('#save').click();await expect(page.locator('#scan-import')).toBeVisible();await expect(page.locator('.scan-pair').first()).toContainText('Saved');
+ await page.evaluate(()=>SICCardReader.read=async()=>[{text:'ADVARIO\nSAFETY INDUCTION COURSE\nIssue Date: 31/12/2026\nValid until\n31 Dec 2028'}]);
+ await row.getByRole('button',{name:'Read card details'}).click();
+ await expect(row.getByLabel('Course / card name')).toHaveValue('SAFETY INDUCTION COURSE');
+ await expect(row.getByLabel('Institute',{exact:true})).toHaveValue('ADVARIO');
+ await expect(row.getByLabel('Expiry date',{exact:true})).toHaveValue('2028-12-31');
+ await page.locator('[data-action=edit]').click();await expect(page.locator('.scan-status')).toContainText('Confirm the front and optional back');await row.getByText('Front/back pairing checked').click();await page.locator('[data-action=edit]').click();await expect(page.locator('#edit-dialog')).toBeVisible();await page.locator('#review-front').click();await checkPages(page);await page.locator('#review-back').click();await checkPages(page);await page.locator('#save').click();await expect(page.locator('#scan-import')).toBeVisible();await expect(page.locator('.scan-pair').first()).toContainText('Saved');
 });
 test('desktop worker actions share the name row and directory fills remaining viewport',async({page,isMobile})=>{
  await fixture(page);if(isMobile)return;
