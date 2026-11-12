@@ -9,7 +9,7 @@ window.WorkerCardImporter=class extends Base {
  toolbar.classList.add('scan-controls');
  const controls=document.createElement('div');
  controls.className='scan-page-controls';
- controls.innerHTML='<label>PDF page<select class="scan-page" disabled></select></label><label>Detect as<select class="scan-role"><option value="front">Card fronts</option><option value="back">Card backs</option></select></label><button class="primary" data-action="detect" disabled>Detect selected page</button><button data-action="add-crop" disabled>Draw card crop</button>';
+ controls.innerHTML='<label>PDF page<select class="scan-page" aria-label="PDF page" disabled></select></label><label>Detect as<select class="scan-role" aria-label="Detect as"><option value="front">Card fronts</option><option value="back">Card backs</option></select></label><button class="primary" data-action="detect" disabled>Detect selected page</button><button data-action="add-crop" disabled>Draw card crop</button>';
  toolbar.after(controls);
  this.$('.scan-page').onchange=()=>this.action('preview-page').catch(e=>this.status(e.message));
  this.dialog.lastElementChild.classList.add('scan-actions');
