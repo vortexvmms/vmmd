@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b5cab">
+  <title>VCMS · Import Worker Cards</title>
+  
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><h1>VCMS · Import Worker Cards</h1><button id="install" hidden>Install App</button></header>
+<main>
+  <section class="panel">
+    <h2>Load worker scan</h2>
+    <div class="grid">
+      <label>PDF file<input id="pdfInput" type="file" accept="application/pdf,.pdf"></label>
+      <label>Worker full name<input id="workerName" placeholder="Suggested from PDF filename"></label>
+      <label>FIN last 4 characters<input id="fin" maxlength="4" autocomplete="off" placeholder="e.g. 372L"></label>
+      <label>Safety margin<select id="margin"><option value="59">Loose · 5 mm</option><option value="47" selected>Normal · 4 mm</option><option value="24">Tight · 2 mm</option></select></label>
+      <label>JPEG quality<select id="quality"><option value="0.94">94%</option><option value="0.96" selected>96%</option><option value="0.98">98%</option></select></label>
+    </div>
+    <p class="privacy">PDFs and crops are processed on this device.</p>
+  </section>
+  <section class="panel" id="editor">
+    <h2>PDF viewer</h2>
+    <div class="actions">
+      <button id="autoAll" disabled>Auto Crop All Pages</button><button id="autoPage" disabled>Auto Crop This Page</button>
+      <button id="cancel" class="secondary" disabled>Cancel Processing</button><button id="undo" class="secondary" disabled>Undo Auto Crop</button>
+    </div>
+    <div id="status" role="status" aria-live="polite">Load a PDF to begin.</div>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <div class="actions tools">
+      <button id="previous" disabled aria-label="Previous page">Previous</button>
+      <label class="page-label">Page <select id="page" aria-label="Source page" disabled></select></label>
+      <button id="next" disabled aria-label="Next page">Next</button>
+      <button id="fit" disabled>Fit Page</button><button id="zoomOut" disabled>Zoom Out</button><button id="zoomIn" disabled>Zoom In</button>
+      <button id="boxes" disabled aria-pressed="true">Hide Detection Boxes</button><button id="manual" disabled aria-pressed="false">Add Card Manually</button>
+      <label class="inline"><input id="straighten" type="checkbox" checked> Straighten detected cards</label>
+    </div>
+    <div id="viewer" class="viewer" hidden><div id="sheet" class="sheet"><canvas id="pageCanvas" aria-label="Scanned PDF page"></canvas><div id="overlay" class="overlay"></div></div></div>
+    <div id="selection" class="actions tools" hidden>
+      <span id="selectedInfo"></span><button id="duplicate" class="secondary">Duplicate Box</button><button id="deleteSelected" class="danger">Delete Box</button>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="head"><h2>Check every crop</h2><span id="count" class="stats">0 crops</span></div>
+    <p>Every preview must show exactly one card, all four physical card edges and corners, and no part of an adjacent card.</p>
+    <div class="reviewbar">
+      <label>Filter<select id="filter"><option>All</option><option>Crop OK</option><option>Check Required</option><option>Failed</option><option>Front</option><option>Back</option><option>Unpaired</option></select></label>
+      <label>Set sides by page<select id="pairMode"><option value="pairs" selected>Pages 1/2, 3/4… · Match by position</option><option value="allfront">All pages Front</option><option value="split">First half Front, second half Back</option></select></label>
+      <button id="applySides" disabled>Apply Front/Back</button>
+    </div>
+    <div id="gallery" class="gallery"></div>
+  </section>
+  <section class="panel export">
+    <h2>Arrange and export</h2>
+    <p>A4 portrait · four sets per page · front on the left, back on the right. Use the arrows to change the order.</p>
+    <ol id="pdfOrder" class="pdf-order" aria-label="PDF card set order"></ol>
+    <label class="check"><input id="qa" type="checkbox"> I reviewed the selected crops and confirmed their titles, sides and edges.</label>
+    <div class="actions"><button id="saveWorker" disabled>Save reviewed cards to worker</button><button id="download" disabled>Download worker ZIP</button><button id="previewPdf" class="secondary" disabled>Preview A4 PDF</button><button id="downloadPdf" disabled>Download A4 PDF</button><button id="clearBtn" class="secondary">Clear Project</button></div>
+    <iframe id="pdfPreview" title="A4 card arrangement preview" hidden></iframe>
+    <p id="exportStatus" class="note" role="status"></p>
+  </section>
+</main>
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

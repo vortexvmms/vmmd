@@ -8,6 +8,23 @@ async function response(path,options={}){const r=await vmmsApi(BASE+path,options
 const api=async(path,options)=> (await response(path,options)).json();
 const masker=new WorkerDocumentMasker(api,()=>worker?.id);
 const photoInput=new WorkerCardInput();
+const importDialog=document.createElement('dialog');importDialog.id='worker-import-dialog';
+importDialog.style.cssText='width:98vw;max-width:none;height:96vh;max-height:96vh;padding:10px;overflow:hidden';
+const importClose=document.createElement('button');importClose.textContent='Close import';
+const importFrame=document.createElement('iframe');importFrame.title='Worker card PDF import and review';importFrame.style.cssText='width:100%;height:calc(100% - 48px);border:0';
+importDialog.append(importClose,importFrame);document.body.append(importDialog);
+const importButton=document.createElement('button');importButton.textContent='Import scanned PDF';importButton.className='primary';
+$('print-cards').insertAdjacentElement('beforebegin',importButton);
+let importSaving=false;
+importButton.onclick=()=>{if(!worker)return;const target={...worker};
+window.workerImportBridge={identity:target,
+upload:async(side,bytes,plan,record)=>{const q=new URLSearchParams({worker_id:target.id,side});if(record){q.set('record_id',record.id);q.set('updated_at',record.updated_at);}return api('/cards/upload?'+q,{method:'POST',headers:{'Content-Type':'image/jpeg','X-Document-Masking':plan},body:bytes});},
+details:async(record,fields)=>api('/cards/'+record.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...fields,updated_at:record.updated_at})}),
+setSaving:value=>{importSaving=value;importClose.disabled=value;}};
+importFrame.src='card-import/index.html?v=20261113-v7';importDialog.showModal();};
+async function closeImport(){if(importSaving)return;if(!confirm('Close import? Unsaved crops will be discarded. Saved cards remain available.'))return;importDialog.close();importFrame.src='about:blank';delete window.workerImportBridge;if(worker)await run(load);}
+importClose.onclick=closeImport;importDialog.addEventListener('cancel',e=>{e.preventDefault();closeImport();});
+
 const heading=$('worker-panel').querySelector('.wc-worker-heading');
 heading.insertBefore($('cards-tab').closest('nav'),$('refresh'));
 function fitDirectory(){const panel=document.querySelector('.wc-directory');panel.style.setProperty('--wc-directory-top',Math.max(16,panel.getBoundingClientRect().top)+'px');}
@@ -42,4 +59,5 @@ $('worker-search').oninput=()=>{clearTimeout(timer);offset=0;timer=setTimeout(()
 for(const tab of ['cards','certificates'])$(tab+'-tab').onclick=()=>{kind=tab;render()};document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.worker)run(()=>select(workers.find(w=>w.id===b.dataset.worker)));if(b.dataset.edit)edit((kind==='cards'?cards:certificates).find(r=>r.id===b.dataset.edit));if(b.dataset.view)run(()=>view(b.dataset.view,b.dataset.side))});
 try{const r=await vmmsApi('/api/v1/me');if(!r.ok)throw Error('Please sign in again.');const me=await r.json();canDelete=['admin','hr_assistant'].includes(me.role);if(![...GLOBAL,'site_sup','safety_sup','wshc','logistics_sup'].includes(me.role))throw Error('Worker cards are not available for this role.');$('scope').textContent=GLOBAL.includes(me.role)?'All workers · upload and edit':'Workers allocated to your sites today · upload and edit';await search();notice('Select a worker to view or update documents.')}catch(e){notice(e.message)}
 })();
+
 
