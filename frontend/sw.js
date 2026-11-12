@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-v105-card-paste';
+const CACHE = 'vcms-v106-card-import-v7';
 const APP_SHELL = [
   'css/attendance-views.css?v=20261022-1','css/worker-photos.css?v=20261022-1','js/worker-photos.js?v=20261022-1','js/worker-photo-editor.js?v=20261022-1',
   'js/worker-card-input.js?v=20261112-paste1','js/worker-card-print.js?v=20261023-delete1','js/worker-card-geometry.js?v=20261023-delete1','js/worker-card-tools.js?v=20261023-delete1','worker-cards.html','css/worker-cards.css?v=20261023-delete1','js/worker-cards.js?v=20261112-paste1','js/document-masking.js?v=20261023-delete1',
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
   const isAppFile =
-    req.mode === 'navigate' || /\.(html|js|css|json)$/i.test(url.pathname);
+    req.mode === 'navigate' || /\.(html|js|mjs|css|json)$/i.test(url.pathname);
 
   if (isAppFile) {
     // Network-first, bypassing the browser HTTP cache so deploys are instant.
@@ -90,6 +90,7 @@ self.addEventListener('fetch', (e) => {
     return res;
   })());
 });
+
 
 
 

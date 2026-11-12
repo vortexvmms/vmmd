@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {maskSuggestions} from './frontend/card-import/masking.mjs';
+import {uploadSets} from './frontend/card-import/save.mjs';
+const line=(text,y=.1)=>({text,x:.1,y,width:.5,height:.03});
+assert.equal(maskSuggestions([line('FIN G1234567X')])[0].suffix,'567X');
+assert.equal(maskSuggestions([line('DOB 12/03/1990')])[0].suffix,'');
+assert.equal(maskSuggestions([line('Work Permit No: 012345678')])[0].suffix,'5678');
+assert.equal(maskSuggestions([line('Course name')]).length,0);
+const card={title:'Course',jpeg:'data:image/jpeg;base64,YWJj',maskReviewed:true};
+let uploads=0,patches=0;
+const bridge={upload:async(side,bytes,plan,record)=>{uploads++;assert.equal(JSON.parse(plan).pages[0].reviewed,true);return{id:'id',updated_at:'v'+uploads};},details:async(r,f)=>{patches++;return r;}};
+await assert.rejects(()=>uploadSets([{front:{...card,maskReviewed:false}}],bridge,()=>{}),/masking/);
+await uploadSets([{front:card}],bridge,()=>{});assert.equal(uploads,1);assert.equal(patches,1);
+await uploadSets([{front:card}],bridge,()=>{});assert.equal(uploads,1);
+const failed={...card,savedRecord:null,savedImages:null};await assert.rejects(()=>uploadSets([{front:failed}],{...bridge,upload:async()=>{throw Error('lost')}},()=>{}),/uncertain/);
+await assert.rejects(()=>uploadSets([{front:failed}],bridge,()=>{}),/previous save/);
+await assert.rejects(()=>uploadSets([{back:card}],bridge,()=>{}),/front/);
+console.log('PASS: mask selection, suffixes, review gating, repeat saves, ambiguous response protection and back-only rejection');
