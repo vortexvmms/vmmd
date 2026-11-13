@@ -19,6 +19,14 @@ assert.equal(moveMask(boxes[0],'nw',-2,-2).x,0);
 
 const front=['CERTIFICATE OF COMPLETION','Course Title: WORKPLACE SAFETY','AND HEALTH FOR SUPERVISORS','Training Provider: Vortex Training Centre','Employer: Another Company','Date of Issue: 29 Feb 2024'];
 const back=['Valid for 2 years from','the date of issue'];
+const headingFields=readCourseFields(['EVERSAFE ACADEMY','Course Title: WORK AT HEIGHT','Issued Dawe: 14/04/2023']);
+assert.equal(headingFields.institute.value,'EVERSAFE ACADEMY');
+assert.equal(headingFields.institute.review,true);
+assert.equal(headingFields.issued_date.value,'2023-04-14');
+const provider=readCourseFields(['EFG TRAINING','MWSHCS-04-EFG17','Si','SERVICES PRIVATE LTD','COURSE TITLE: MANAGE WORKPLACE SAFETY AND HEALTH IN','CONSTRUCTION SITES','CS CODE','ISSUED DATE.','13-Sep-2026']);
+assert.equal(provider.institute.value,'EFG TRAINING SERVICES PRIVATE LTD');
+assert.equal(provider.title.value,'MANAGE WORKPLACE SAFETY AND HEALTH IN\nCONSTRUCTION SITES');
+assert.equal(provider.issued_date.value,'2026-09-13');
 const card={};
 applyCourseFields(card,readCourseFields(front,back));
 assert.equal(card.title,'WORKPLACE SAFETY\nAND HEALTH FOR SUPERVISORS');

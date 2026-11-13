@@ -22,10 +22,12 @@ export function calculatedExpiry(issue,period) {
 const labels={
   title:/^\s*(?:course\s+(?:title|name)|training\s+(?:course|programme|program)|name of course)\s*[:–-]?\s*(.*)$/i,
   institute:/^\s*(?:institute(?:\s+name)?|training\s+(?:provider|institute|cent(?:re|er))|conducted by|issued by|awarded by)\s*[:–-]?\s*(.*)$/i,
-  issued_date:/^\s*(?:date of issue|issue date|issued (?:on|date)|date issued)\s*[:–-]?\s*(.*)$/i,
+  issued_date:/^\s*(?:date of issue|issue date|issued (?:on|date|dawe)|date issued)\s*[:–-]?\s*(.*)$/i,
   expiry_date:/^\s*(?:date of expiry|expir(?:y|ation)(?: date)?|expires(?: on)?|valid until)\s*[:–-]?\s*(.*)$/i
 };
-const boundary=/^(?:name|worker|employer|company|cert(?:ificate)?\s*(?:no|number)|fin|nric|id|training date|assessment|completion|validity|valid for|signature|date of birth)\b/i;
+const boundary=/^(?:name|worker|employer|company|cert(?:ificate)?\s*(?:no|number)|fin|nric|id|training date|assessment|completion|serial number|cs code|validity|valid for|signature|date of birth)\b/i;
+const providerHeading=/^[A-Z0-9 &.,'()-]{2,65}\b(?:ACADEMY|INSTITUTE|TRAINING(?: SERVICES)?|TRAINING CENT(?:RE|ER)|POLYTECHNIC)(?:\s+(?:PTE|PRIVATE|LTD|LIMITED)\.?){0,3}$/i;
+const providerContinuation=/^(?:SERVICES\s+)?(?:PTE|PRIVATE|LTD|LIMITED)(?:\s+(?:PTE|PRIVATE|LTD|LIMITED))*\.?$/i;
 const generic=/^(?:certificate(?: of (?:completion|attendance|achievement|training|competency))?|course card|training card|statement of attainment|certificate number|work permit)$/i;
 const duration=/\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(years?|months?|days?)\s*(?:validity\s*)?(?:from|after)\s*(?:the\s+)?(?:date of issue|issue date|issuance)\b/i;
 const words=['zero','one','two','three','four','five','six','seven','eight','nine','ten'];
@@ -34,8 +36,15 @@ export function readCourseFields(front,back=[]) {
   const candidates={title:[],institute:[],issued_date:[],expiry_date:[],period:[]};
   for(const [side,input] of [['Front',front],['Back',back]]){
     const lines=input.map(line=>typeof line==='string'?{text:line}:line).map(line=>({...line,text:line.text.trim()})).filter(line=>line.text);
+    const explicitProvider=lines.some(line=>labels.institute.test(line.text));
     for(const [index,line] of lines.entries()){
       const text=line.text;
+      if(!explicitProvider&&!boundary.test(text)&&providerHeading.test(text)&&(line.y==null||line.y<.55)){
+        const suffix=lines.slice(index+1,index+4).find(next=>providerContinuation.test(next.text)&&
+          (line.y==null||next.y==null||next.y-line.y<(line.height||.05)*5));
+        const value=[text,suffix?.text].filter(Boolean).join(' ');
+        candidates.institute.push({value,side,text:value,suggested:true});
+      }
       const validity=text.match(duration)||lines.slice(index,index+2).map(r=>r.text).join(' ').match(duration);
       if(validity){
         const amount=Number(validity[1])||words.indexOf(validity[1].toLowerCase());
@@ -44,7 +53,7 @@ export function readCourseFields(front,back=[]) {
       for(const [key,pattern] of Object.entries(labels)){
         const match=text.match(pattern);
         if(!match)continue;
-        let value=match[1].trim();
+        let value=match[1].replace(/^[.:=\s]+/u,'').trim();
         const sources=[text];
         for(const next of lines.slice(index+1,index+(key==='title'?4:2))){
           if(boundary.test(next.text)||Object.values(labels).some(re=>re.test(next.text))||duration.test(next.text)||generic.test(next.text))break;
@@ -64,7 +73,7 @@ export function readCourseFields(front,back=[]) {
   for(const [key,items] of Object.entries(candidates)){
     const unique=new Set(items.filter(x=>x.value).map(x=>typeof x.value==='string'?x.value.toLowerCase().replace(/\s+/g,' '):JSON.stringify(x.value)));
     fields[key]={value:unique.size===1?items.find(x=>x.value).value:'',sources:items,
-      review:unique.size!==1||items.some(x=>!x.value)};
+      review:unique.size!==1||items.some(x=>!x.value||x.suggested)};
   }
   return fields;
 }

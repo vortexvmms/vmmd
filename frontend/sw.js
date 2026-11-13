@@ -5,7 +5,7 @@
 // offline. Images/icons are cache-first for speed. API calls to the backend
 // and Supabase (cross-origin) are never touched — they go straight to network.
 
-const CACHE = 'vcms-20261113-card-review';
+const CACHE = 'vcms-v20261113-card-review';
 const APP_SHELL = [
   'css/attendance-views.css?v=20261022-1','css/worker-photos.css?v=20261022-1','js/worker-photos.js?v=20261022-1','js/worker-photo-editor.js?v=20261022-1',
   'js/worker-card-input.js?v=20261112-paste1','js/worker-card-print.js?v=20261113-review','js/worker-card-geometry.js?v=20261023-delete1','js/worker-card-tools.js?v=20261023-delete1','worker-cards.html','css/worker-cards.css?v=20261023-delete1','js/worker-cards.js?v=20261113-review','js/document-masking.js?v=20261023-delete1',
