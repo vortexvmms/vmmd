@@ -30,6 +30,7 @@ jobs:
       - run: node --check frontend/js/shell.js
       - run: node --check frontend/js/worker-photos.js
       - run: node --check frontend/js/worker-photo-editor.js
+      - run: node test-import.mjs
       - run: node --check frontend/js/worker-cards.js
       - run: node --check frontend/js/document-masking.js
       - run: node --check frontend/js/worker-card-tools.js

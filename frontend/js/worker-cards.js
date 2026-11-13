@@ -18,10 +18,11 @@ $('print-cards').insertAdjacentElement('beforebegin',importButton);
 let importSaving=false;
 importButton.onclick=()=>{if(!worker)return;const target={...worker};
 window.workerImportBridge={identity:target,
-upload:async(side,bytes,plan,record)=>{const q=new URLSearchParams({worker_id:target.id,side});if(record){q.set('record_id',record.id);q.set('updated_at',record.updated_at);}return api('/cards/upload?'+q,{method:'POST',headers:{'Content-Type':'image/jpeg','X-Document-Masking':plan},body:bytes});},
+check:async()=>{try{if((await api('/card-import/capabilities')).retry_safe===true)return;}catch{}throw Error('The card save service is unavailable. Try again in a moment.');},
+upload:async(side,bytes,plan,record,importId)=>{const q=new URLSearchParams({worker_id:target.id,side,import_id:importId});if(record){q.set('record_id',record.id);q.set('updated_at',record.updated_at);}return api('/cards/upload?'+q,{method:'POST',headers:{'Content-Type':'image/jpeg','X-Document-Masking':plan},body:bytes});},
 details:async(record,fields)=>api('/cards/'+record.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({...fields,updated_at:record.updated_at})}),
 setSaving:value=>{importSaving=value;importClose.disabled=value;}};
-importFrame.src='card-import/index.html?v=20261113-v7';importDialog.showModal();};
+importFrame.src='card-import/index.html?v=20261113-review';importDialog.showModal();};
 async function closeImport(){if(importSaving)return;if(!confirm('Close import? Unsaved crops will be discarded. Saved cards remain available.'))return;importDialog.close();importFrame.src='about:blank';delete window.workerImportBridge;if(worker)await run(load);}
 importClose.onclick=closeImport;importDialog.addEventListener('cancel',e=>{e.preventDefault();closeImport();});
 

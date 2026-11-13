@@ -71,7 +71,7 @@ def api():
             return httpx.Response(state['media_status'], content=state['png'])
         assert path.endswith(('/worker_cards', '/worker_certificates'))
         if req.method == 'GET':
-            return httpx.Response(200, json=[deepcopy(state['row'])] if state['access'] else [])
+            return httpx.Response(200, json=[deepcopy(state['row'])] if state['access'] and req.url.params.get('id', 'eq.'+state['row']['id']) == 'eq.'+state['row']['id'] else [])
         payload = json.loads(req.content)
         if req.method == 'PATCH' and req.url.params['updated_at'] != 'eq.'+state['row']['updated_at']:
             return httpx.Response(200, json=[])
@@ -361,3 +361,20 @@ def test_directory_returns_only_fin_suffix_for_scoped_workers(api,fin,suffix):
     s['access']=False;s['identity_reads']=[]
     assert c.get('/api/v1/worker-documents/workers').json()==[]
     assert not s['identity_reads']
+
+
+def test_import_retry_reuses_same_front_and_back(api):
+    c, s = api
+    imported = '40000000-0000-4000-8000-000000000003'
+    upload = f'/api/v1/worker-documents/cards/upload?worker_id={W}&import_id={imported}'
+    front = c.post(upload, content=s['png'], headers=review(s['png']))
+    assert front.status_code == 201
+    assert front.json()['id'] == imported
+    assert c.post(upload, content=s['png'], headers=review(s['png'])).json() == front.json()
+    back_url = upload + f'&side=back&record_id={imported}&updated_at=' + front.json()['updated_at']
+    back = c.post(back_url, content=s['png'], headers=review(s['png']))
+    assert back.status_code == 201
+    assert c.post(back_url, content=s['png'], headers=review(s['png'])).json() == back.json()
+    assert len(s['writes']) == len(s['uploads']) == 2
+    assert front.json()['image_path'] != back.json()['back_image_path']
+

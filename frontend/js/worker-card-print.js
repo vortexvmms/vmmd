@@ -50,12 +50,15 @@ window.WorkerCardPrinter=class {
  async downloadV7(){
   if(!this.ready||this.loading||this.v7Building)return;
   const version=this.version;
-  const identity=this.worker.name+(this.el('card-print-fin').value?' · FIN '+this.el('card-print-fin').value:'');
+  const workerName=this.worker.name;
+  const identity=workerName+(this.el('card-print-fin').value?' · FIN '+this.el('card-print-fin').value:'');
   const selection=this.rows.map(row=>Object.entries(row.sides).filter(([,state])=>state.selected).map(([side,state])=>[side,state.url])).filter(sides=>sides.length);
   this.v7Building=true;
   this.summary();
   try{
-   const {makeCardPdf}=await import('../card-import/arrange.mjs');
+   const [{makeCardPdf},{workerPdfName}]=await Promise.all([
+    import('../card-import/arrange.mjs'),import('../card-import/fields.mjs')
+   ]);
    const sets=[];
    for(const sides of selection){
     const set={};
@@ -89,7 +92,7 @@ window.WorkerCardPrinter=class {
    const url=URL.createObjectURL(pdf);
    const link=document.createElement('a');
    link.href=url;
-   link.download='Worker_Cards_A4.pdf';
+   link.download=workerPdfName(workerName);
    link.click();
    setTimeout(()=>URL.revokeObjectURL(url),30000);
   }catch(error){
@@ -101,3 +104,4 @@ window.WorkerCardPrinter=class {
  }
  print(){if(!this.ready||this.loading)return;document.body.classList.add('wc-print-ready');try{window.print();this.notice('Selected card sheet ready.')}catch(e){this.el('card-print-message').textContent='Printing could not open. Try your browser’s Print / Save as PDF option.'}}
 };
+

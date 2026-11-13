@@ -7,7 +7,7 @@
   <title>VCMS · Import Worker Cards</title>
   
   
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261113-review">
 </head>
 <body>
 <header><h1>VCMS · Import Worker Cards</h1><button id="install" hidden>Install App</button></header>
@@ -52,19 +52,21 @@
       <label>Set sides by page<select id="pairMode"><option value="pairs" selected>Pages 1/2, 3/4… · Match by position</option><option value="allfront">All pages Front</option><option value="split">First half Front, second half Back</option></select></label>
       <button id="applySides" disabled>Apply Front/Back</button>
     </div>
+    <button id="readBatch" disabled>Read card details &amp; suggest FIN masks</button>
+    <p>Check the required sides together below. Review course fronts and both sides of work permits when present. Open a crop only if you need to adjust its mask.</p>
     <div id="gallery" class="gallery"></div>
   </section>
   <section class="panel export">
     <h2>Arrange and export</h2>
     <p>A4 portrait · four sets per page · front on the left, back on the right. Use the arrows to change the order.</p>
     <ol id="pdfOrder" class="pdf-order" aria-label="PDF card set order"></ol>
-    <label class="check"><input id="qa" type="checkbox"> I reviewed the selected crops and confirmed their titles, sides and edges.</label>
+    <label class="check"><input id="qa" type="checkbox"> I checked the selected card details, crops and required masking sides.</label>
     <div class="actions"><button id="saveWorker" disabled>Save reviewed cards to worker</button><button id="download" disabled>Download worker ZIP</button><button id="previewPdf" class="secondary" disabled>Preview A4 PDF</button><button id="downloadPdf" disabled>Download A4 PDF</button><button id="clearBtn" class="secondary">Clear Project</button></div>
     <iframe id="pdfPreview" title="A4 card arrangement preview" hidden></iframe>
     <p id="exportStatus" class="note" role="status"></p>
   </section>
 </main>
 <script src="vendor/jszip.min.js"></script>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=20261113-review"></script>
 </body>
 </html>

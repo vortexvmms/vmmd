@@ -1,6 +1,7 @@
 import {uploadSets} from './save.mjs';
-import {reviewMask} from './masking.mjs';
-import {readCardLines} from './ocr.mjs';
+import {reviewMask, maskSuggestions, applyMasks} from './masking.mjs';
+import {readCrop} from './ocr.mjs';
+import {readCourseFields, applyCourseFields, updateCalculatedExpiry, cardCategory, reviewSides, workerPdfName} from './fields.mjs';
 import * as pdfjsLib from './vendor/pdf.mjs';
 import {makeCardPdf, matchScannedSides, scanIdentity, selectedSets} from './arrange.mjs';
 import {recognizedFin, suggestedTitle} from './titles.mjs';
@@ -21,7 +22,6 @@ const cards = [];
 const pages = new Map();
 let pdfOrder=[];
 let previewUrl;
-let ocrUnavailable=false;
 let pdf, loadTask, currentPage=1, pageData, zoom=1, selected, showBoxes=true, manual=false;
 let loading=false, busy=null, lastAuto=[], nextNumber=1, drag, displayVersion=0, exporting=false;
 
@@ -47,6 +47,8 @@ function updateControls() {
   $('clearBtn').disabled=locked;
   $('margin').disabled=$('quality').disabled=$('straighten').disabled=locked;
   $('applySides').disabled=locked || !cards.length;
+  $('readBatch').disabled=locked || !cards.some(canExport);
+  $('qa').disabled=locked;
   $('download').disabled=locked || !$('qa').checked || !clean($('workerName').value) || !cards.some(canExport);
   const pdfDisabled=$('download').disabled || !/^[A-Z0-9]{4}$/i.test($('fin').value.trim());
   $('downloadPdf').disabled=$('previewPdf').disabled=pdfDisabled;
@@ -108,7 +110,7 @@ async function readPageInfo(image) {
   return {words,estimatedDpi};
 }
 
-async function titleFor(card,info,job) {
+function embeddedTitle(card,info) {
   if (card.side!=='Front' || hardBlock.has(card.status) || card.status==='Mostly Blank') return '';
   const box=card.box;
   const lines=info.words.filter(word=>word.x>=box.x && word.x<=box.x+box.w &&
@@ -118,66 +120,55 @@ async function titleFor(card,info,job) {
     const row=rows.find(r=>Math.abs(r[0].y-word.y)<Math.max(4,word.size*.4));
     if (row) row.push(word); else rows.push([word]);
   }
-  const embedded=suggestedTitle(rows.map(row=>row.sort((a,b)=>a.x-b.x).map(word=>word.text).join(' ')));
-  if (embedded) return embedded;
-  try {
-    if (typeof fetch==='function') {
-      const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),22000);
-      job.interrupt=()=>controller.abort();
-      try {
-        const readImage=async jpeg=>{
-          const lines=await readCardLines(jpeg,controller.signal);
-          ocrUnavailable=false;
-          return lines;
-        };
-        const lines=await readImage(card.jpeg);
-        if (lines) {
-          const fin=recognizedFin(lines);
-          if (fin && !$('fin').value) $('fin').value=fin;
-          const title=suggestedTitle(lines);
-          if (title || typeof Image!=='function') return title;
-          const enhanced=await headingImage(card.jpeg);
-          return suggestedTitle(await readImage(enhanced) || []);
-        }
-      } finally { clearTimeout(timeout); job.interrupt=null; }
-    }
-    if (typeof window.TextDetector==='function') {
-      const image=new Image(); image.src=card.jpeg; await image.decode();
-      const lines=await new window.TextDetector().detect(image);
-      return suggestedTitle(lines.map(line=>({text:line.rawValue,x:line.boundingBox.x/image.width,
-        y:line.boundingBox.y/image.height,height:line.boundingBox.height/image.height})));
-    }
-  } catch (error) {
-    if (!job.cancelled) { ocrUnavailable=true; console.info('On-device text recognition unavailable:',error.message); }
-  }
-  return '';
+  return suggestedTitle(rows.map(row=>row.sort((a,b)=>a.x-b.x).map(word=>word.text).join(' ')));
 }
 
-async function headingImage(jpeg) {
-  const image=new Image();
-  image.src=jpeg; await image.decode();
-  const sourceHeight=Math.round(image.height*.48);
-  const canvas=makeCanvas(1600,1600*sourceHeight/image.width);
-  const ctx=canvas.getContext('2d');
-  ctx.drawImage(image,0,0,image.width,sourceHeight,0,0,canvas.width,canvas.height);
-  const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
-  const histogram=new Uint32Array(256),data=pixels.data;
-  for (let i=0;i<data.length;i+=4) {
-    const gray=Math.round(data[i]*.299+data[i+1]*.587+data[i+2]*.114);
-    data[i]=gray; histogram[gray]++;
-  }
-  const cutoff=data.length/4*.02;
-  let lo=0,hi=255,sum=histogram[0];
-  while (sum<cutoff && lo<254) sum+=histogram[++lo];
-  sum=histogram[255];
-  while (sum<cutoff && hi>lo+1) sum+=histogram[--hi];
-  for (let i=0;i<data.length;i+=4) {
-    const gray=(data[i]-lo)*255/Math.max(1,hi-lo);
-    data[i]=gray; data[i+1]=gray; data[i+2]=gray;
-  }
-  ctx.putImageData(pixels,0,0);
-  return canvas.toDataURL('image/jpeg',.96);
+async function reviewBatch(sets) {
+  const job={cancelled:false,interrupt:null};
+  busy=job;invalidateReview();render();
+  let failed=0;
+  const read=async card=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),30000);
+    job.interrupt=()=>controller.abort();
+    try{return await readCrop(card,controller.signal);}
+    catch{failed++;return [];}
+    finally{clearTimeout(timeout);job.interrupt=null;}
+  };
+  try{
+    for(const [index,set] of sets.entries()){
+      if(job.cancelled)break;
+      if(!set.front)continue;
+      const front=set.front;
+      status(`Reading card set ${index+1} of ${sets.length}…`);
+      const lines=await read(front);
+      if(job.cancelled)break;
+      const backLines=set.back?await read(set.back):[];
+      if(job.cancelled)break;
+      const heading=suggestedTitle(lines);
+      const fields=readCourseFields(lines,backLines);
+      if(!front.category&&heading==='Work Permit')front.category='work_permit';
+      if(!front.titleEdited&&!fields.title.value&&!fields.title.sources.length&&heading){
+        front.title=heading;
+        fields.title.value=heading;
+        fields.title.sources.push({side:'Front',text:heading});
+      }
+      if(cardCategory(front)==='course'&&(lines.length||backLines.length)){
+        applyCourseFields(front,fields);
+      }else if(cardCategory(front)==='work_permit'&&!front.titleEdited&&heading){
+        front.title=heading;
+      }
+      if(!$('fin').value)$('fin').value=recognizedFin(lines)||recognizedFin(backLines);
+      for(const card of reviewSides(set)){
+        if(card.maskBoxes?.length)continue;
+        const suggested=maskSuggestions(card===front?lines:backLines);
+        card.maskNeedsAttention=suggested.uncertain||!suggested.boxes.length;
+        if(suggested.boxes.length)await applyMasks(card,suggested.boxes);
+      }
+    }
+    status(job.cancelled?'Card reading cancelled.':`Check the crop previews and fields below.${failed?' OCR unavailable on '+failed+' side(s). Enter those details manually.':''}`);
+  }catch(error){status('Could not finish card review: '+error.message);}
+  finally{busy=null;render();}
 }
 
 function sampleCrop(canvas) {
@@ -243,6 +234,7 @@ function validate(card, info, width, height, cropBox, sample) {
 }
 
 function makePreview(card,image,info) {
+  const started=performance.now();
   const {canvas,marginScale}=image;
   const w=canvas.width,h=canvas.height;
   const margin=Math.round(Number($('margin').value)*marginScale);
@@ -259,10 +251,11 @@ function makePreview(card,image,info) {
   card.status=validate(card,info,w,h,cropBox,sample);
   const angle=card.boundary?.angle || 0;
   if ($('straighten').checked && card.status===OK && Math.abs(angle)>.012 && Math.abs(angle)<=.26) crop=rotateCrop(crop,angle);
-  card.maskReviewed=false;card.maskBoxes=[];card.sourceJpeg=null;
+  card.maskReviewed=false;card.maskNeedsAttention=false;card.maskBoxes=[];card.sourceJpeg=null;
   card.jpeg=crop.toDataURL('image/jpeg',Number($('quality').value));
   card.size=`${crop.width} × ${crop.height}`;
   card.include=card.status===OK;
+  console.debug('Worker card crop preparation duration (ms)',Math.round(performance.now()-started));
 }
 
 async function preparePage(number,image,job) {
@@ -310,8 +303,7 @@ async function runAuto(all) {
         const card=newCard(number,box,box,defaultSide(number));
         makePreview(card,image,info);
         updatePosition(card,image.canvas);
-        if (card.side==='Front') status(`Page ${number} of ${pdf.numPages} · Reading card ${i+1} of ${info.boxes.length}`);
-        card.title=await titleFor(card,info,job) || card.title;
+        card.title=embeddedTitle(card,info) || card.title;
         cards.push(card); added.push(card.id);
       }
       autoPair();
@@ -319,7 +311,7 @@ async function runAuto(all) {
       render();
     }
     const accepted=cards.filter(card=>added.includes(card.id) && card.status===OK).length;
-    status(`${job.cancelled?'Processing cancelled. ':''}${added.length} new candidates · ${accepted} Crop OK · ${added.length-accepted} to review.${!job.cancelled && !added.length ? ' Add a missed card manually or review existing crops.' : ''}${ocrUnavailable?' Text recognition unavailable. Retry with an internet connection or enter the title manually.':''}`);
+    status(`${job.cancelled?'Processing cancelled. ':''}${added.length} new candidates · ${accepted} Crop OK · ${added.length-accepted} to review.${!job.cancelled && !added.length ? ' Add a missed card manually or review existing crops.' : ''}`);
   } catch (error) {
     status(job.cancelled ? `Processing cancelled. ${added.length} completed crops kept.` : `Auto crop stopped: ${error.message}`);
   } finally {
@@ -473,7 +465,7 @@ async function saveBox(card,box) {
     result.box=box; result.boundary=boundary;
     makePreview(result,image,info);
     updatePosition(result,image.canvas);
-    if (!card) { result.title=await titleFor(result,info,job) || result.title; cards.push(result); }
+    if (!card) { result.title=embeddedTitle(result,info) || result.title; cards.push(result); }
     if (card && !card.pairOverride) unpair(card);
     autoPair();
     selected=result.id; manual=false; showBoxes=true; $('filter').value='All';
@@ -533,11 +525,11 @@ function renderGallery() {
     meta.textContent=`Card ${card.number} · Page ${card.page} · ${confidence} · ${card.size} px`;
     const badge=document.createElement('div'); badge.className=`badge ${card.status===OK?'ok':failures.has(card.status)?'fail':''}`;
     badge.textContent=`${icons(card.status)} ${card.status}`;
-    const title=document.createElement('input'); title.value=displayTitle(card); title.disabled=locked;
+    const title=document.createElement('textarea'); title.rows=2; title.value=displayTitle(card); title.disabled=locked;
     title.oninput=()=>{ card.title=title.value; card.titleEdited=true; invalidateReview(); updateControls();
       const back=cards.find(item=>item.id===card.partner && item.side==='Back' && !item.titleEdited);
       if (back) {
-        const input=$(`review-${back.id}`)?.querySelector('input[type="text"], input:not([type])');
+        const input=$(`review-${back.id}`)?.querySelector('textarea');
         if (input) input.value=displayTitle(back);
       }
       renderPdfOrder(); };
@@ -562,17 +554,10 @@ function renderGallery() {
     const includeLabel=labelField(card.status===OK?'Include in export':'Approve for export',include);
     includeLabel.className='inline'; includeLabel.prepend(include);
     const actions=document.createElement('div'); actions.className='tileActions';
-    if (card.side==='Front' && !hardBlock.has(card.status)) actions.append(button('Read title',async()=>{
-      const job={cancelled:false,interrupt:null}; busy=job; render();
-      status(`Reading card ${card.number} title…`);
-      try {
-        const title=await titleFor(card,pages.get(card.page),job);
-        if (title && !job.cancelled) { card.title=title; card.titleEdited=false; invalidateReview(); }
-        status(job.cancelled?'Title recognition cancelled.':title?`Title read for card ${card.number}.`:
-          ocrUnavailable?'Text recognition unavailable. Retry with an internet connection or enter the title manually.':'Could not read a reliable title. Enter it manually.');
-      } finally { busy=null; render(); }
+    if(card.side==='Front'&&!hardBlock.has(card.status))actions.append(button('Read card details',()=>reviewBatch([{front:card,back:cards.find(item=>item.id===card.partner)}]),'secondary',locked));
+    actions.append(button(card.maskBoxes?.length?'Edit masks':'Review / Auto Mask',async()=>{
+      if(await reviewMask(card)){card.maskNeedsAttention=false;invalidateReview();render();}
     },'secondary',locked));
-    actions.append(button(card.maskReviewed?'Masking reviewed':'Review / Auto Mask',async()=>{if(await reviewMask(card)){invalidateReview();render();}},'secondary',locked));
     actions.append(button('Edit / Re-crop',async()=>{
       selected=card.id; showBoxes=true; manual=false;
       if (currentPage!==card.page || !pageData) await showPage(card.page);
@@ -583,7 +568,51 @@ function renderGallery() {
     },'secondary',locked),button('Delete',()=>removeCard(card),'danger',locked));
     tile.append(preview,meta,badge,labelField('Course / card title',title),labelField('Side',side),
       labelField('Pair Front / Back',pair),actions,includeLabel);
-    if(card.side==='Front'){for(const [key,label,type] of [['institute','Institute','text'],['cert_no','Certificate number','text'],['issued_date','Issue date','date'],['expiry_date','Expiry date','date']]){const field=document.createElement('input');field.type=type;field.value=card[key]||'';field.disabled=locked;field.onchange=()=>{card[key]=field.value;invalidateReview();};tile.append(labelField(label,field));}const no=document.createElement('input');no.type='checkbox';no.checked=!!card.no_expiry;no.disabled=locked;no.onchange=()=>{card.no_expiry=no.checked;if(no.checked)card.expiry_date='';invalidateReview();render();};tile.append(labelField('No expiry',no));}
+    const front=card.side==='Front'?card:cards.find(item=>item.id===card.partner&&item.side==='Front');
+    if(front&&reviewSides({front,back:card.side==='Back'?card:null}).includes(card)){
+      const badge=document.createElement('small');badge.className='field-source';
+      badge.textContent=card.maskBoxes?.length?'Check suggested or edited mask':'Check this side for FIN';
+      tile.append(badge);
+    }
+    if(card.saveError){const error=document.createElement('p');error.className='field-source';error.textContent='Save failed: '+card.saveError;tile.append(error);}
+    if(card.maskNeedsAttention){
+      const warning=document.createElement('p');warning.className='field-source';
+      warning.textContent='Check this side for FIN and adjust masking if needed.';tile.append(warning);
+    }
+    if(card.side==='Front'){
+      const category=document.createElement('select');
+      for(const [value,label] of [['course','Course card'],['work_permit','Work permit'],['visit_pass','Visit pass'],['other','Other']])category.append(option(label,value));
+      category.value=cardCategory(card);category.disabled=locked;
+      category.onchange=()=>{card.category=category.value;invalidateReview();render();};
+      tile.append(labelField('Card type',category));
+      const fieldSource=key=>{
+        const field=card.ocrFields?.[key];
+        const calculated=key==='expiry_date'&&card.expiry_date&&!card.editedFields?.expiry_date&&!field?.sources.length&&card.ocrFields?.period.value;
+        const info=calculated?card.ocrFields.period:field;
+        if(!info||card.editedFields?.[key]||key==='title'&&card.titleEdited)return;
+        const note=document.createElement('small');note.className='field-source';
+        note.textContent=(calculated?'Calculated from validity':info.review?'Check this field':'Read from card')+
+          (info.sources.length?' · '+info.sources.map(source=>source.side+': '+source.text).join(' | '):' · no reliable value found');
+        tile.append(note);
+      };
+      fieldSource('title');
+      for(const [key,label,type] of [['institute','Institute','text'],['cert_no','Certificate number','text'],['issued_date','Issue date','date'],['expiry_date','Expiry date','date']]){
+        if(type==='date'&&cardCategory(card)==='work_permit')continue;
+        const field=document.createElement('input');field.type=type;field.value=card[key]||'';field.disabled=locked;
+        field.onchange=()=>{
+          card[key]=field.value;(card.editedFields??={})[key]=true;
+          if(key==='issued_date')updateCalculatedExpiry(card);
+          if(key==='expiry_date'&&field.value)card.no_expiry=false;
+          invalidateReview();render();
+        };
+        tile.append(labelField(label,field));fieldSource(key);
+      }
+      if(cardCategory(card)!=='work_permit'){
+        const no=document.createElement('input');no.type='checkbox';no.checked=!!card.no_expiry;no.disabled=locked;
+        no.onchange=()=>{card.no_expiry=no.checked;if(no.checked)card.expiry_date='';else updateCalculatedExpiry(card);invalidateReview();render();};
+        tile.append(labelField('No expiry',no));
+      }
+    }
     if (hardBlock.has(card.status)) {
       const message=document.createElement('p'); message.textContent='Correct or delete this crop before export.'; tile.append(message);
     }
@@ -778,7 +807,7 @@ function exportPdf(preview) {
       previewUrl=url; $('pdfPreview').src=url; $('pdfPreview').hidden=false;
       return;
     }
-    const link=document.createElement('a'); link.href=url; link.download=`${workerName()}_A4_Cards.pdf`;
+    const link=document.createElement('a'); link.href=url; link.download=workerPdfName(bridge?.identity.name||$('workerName').value);
     document.body.append(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),30000);
     $('exportStatus').textContent='A4 PDF ready.';
   } catch (error) { $('exportStatus').textContent=`Could not create PDF: ${error.message}`; }
@@ -797,6 +826,7 @@ $('install').onclick=async()=>{
 window.addEventListener('appinstalled',()=>{ $('install').hidden=true; });
 // The VCMS service worker owns this application.
 render();
+$('readBatch').onclick=()=>reviewBatch(arrangedSets());
 
-$('saveWorker').onclick=async()=>{if(!bridge||exporting||busy)return;exporting=true;bridge.setSaving(true);render();try{await uploadSets(arrangedSets(),bridge,message=>$('exportStatus').textContent=message);}catch(e){$('exportStatus').textContent=e.message;}finally{exporting=false;bridge.setSaving(false);render();}};
+$('saveWorker').onclick=async()=>{if(!bridge||exporting||busy)return;const reviewed=$('qa').checked;exporting=true;bridge.setSaving(true);render();try{await uploadSets(arrangedSets(),bridge,message=>$('exportStatus').textContent=message,{reviewed});}catch(e){$('exportStatus').textContent=e.message;}finally{exporting=false;bridge.setSaving(false);render();}};
 if(bridge){$('workerName').value=bridge.identity.name;$('workerName').readOnly=true;$('fin').value=bridge.identity.fin_last4||'';updateControls();}

@@ -6,6 +6,7 @@ from typing import Callable, Literal
 from urllib.parse import quote, unquote, urlsplit
 from uuid import UUID, uuid4
 
+import hashlib
 import struct
 import json
 import re
@@ -296,6 +297,8 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
                     payload['expiry_date'] = None
             elif body.expiry_date is not None:
                 payload['no_expiry'] = False
+        if kind == 'cards' and all(old.get(key) == value for key, value in payload.items()):
+            return old
         rows = await db(user, table(kind), 'PATCH', params={'id': f'eq.{record_id}', 'updated_at': f'eq.{body.updated_at}'}, payload=payload)
         if not rows:
             raise HTTPException(409, 'This document changed. Refresh before editing again.')
@@ -303,30 +306,56 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             await ctx.audit(client, user, 'update', table(kind), str(record_id), old, rows[0])
         return rows[0]
 
+    @router.get('/card-import/capabilities')
+    async def card_import_capabilities(user: dict = Depends(ctx.get_current_user)):
+        require(user)
+        return {'retry_safe': True}
+
     @router.post('/{kind}/upload', status_code=201)
     async def upload(kind: str, worker_id: UUID, request: Request, record_id: UUID | None = None,
                      side: Literal['front', 'back'] = 'front', updated_at: str | None = None,
+                     import_id: UUID | None = None,
                      user: dict = Depends(ctx.get_current_user)):
         require(user); table(kind); await accessible(user, worker_id)
+        if import_id and (kind != 'cards' or (record_id and record_id != import_id)):
+            raise HTTPException(422, 'Invalid card import reference')
         old = await row(user, kind, record_id) if record_id else None
+        if import_id and not record_id:
+            records = await db(user, 'worker_cards', params={'id': f'eq.{import_id}', 'limit': '1'})
+            old = records[0] if records else None
         if old and old['worker_id'] != str(worker_id):
             raise HTTPException(409, 'Document belongs to a different worker')
-        if old and not updated_at:
-            raise HTTPException(422, 'Refresh the document before replacing a file')
         if side == 'back' and (not old or kind != 'cards'):
             raise HTTPException(422, 'Save the front of a card before adding its back')
         data, mime = await read_file(request)
         if kind == 'cards' and mime == 'application/pdf':
             raise HTTPException(415, 'Card sides must be JPG or PNG. Upload PDFs under Certificates.')
-        data, mime = await run_in_threadpool(masking.process, masking.apply, data, mime,
-                                             request.headers.get('X-Document-Masking'), MAX_FILE)
-        extension = {'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf'}[mime]
-        key = f'{worker_id}/{uuid4()}.{extension}'
+        plan = request.headers.get('X-Document-Masking')
+        field = 'file_path' if kind == 'certificates' else 'back_image_path' if side == 'back' else 'image_path'
+        if import_id:
+            digest = hashlib.sha256(import_id.bytes + side.encode() + b'\0' + data)
+            digest.update(b'\0')
+            digest.update((plan or '').encode())
+            object_id = UUID(bytes=digest.digest()[:16], version=4)
+            key = f'{worker_id}/{object_id}.png'
+            if old and old.get(field) == key:
+                return old
+        if old and not updated_at:
+            raise HTTPException(409 if import_id else 422, 'Refresh the document before replacing a file')
+        data, mime = await run_in_threadpool(masking.process, masking.apply, data, mime, plan, MAX_FILE)
+        if not import_id:
+            extension = {'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf'}[mime]
+            key = f'{worker_id}/{uuid4()}.{extension}'
         async with ctx.shared_client() as client:
             r = await client.post(f'{storage}/object/worker-cards/{key}', headers={**ctx.supabase_headers(user['token']), 'Content-Type': mime, 'x-upsert': 'false'}, content=bytes(data))
             if not r.is_success:
-                raise HTTPException(503, 'Private storage upload failed. Please try again.')
-        field = 'file_path' if kind == 'certificates' else 'back_image_path' if side == 'back' else 'image_path'
+                try:
+                    error = r.json()
+                except ValueError:
+                    error = {}
+                duplicate = r.status_code in (400, 409) and isinstance(error, dict) and error.get('error') in ('Duplicate', 'AlreadyExists')
+                if not (import_id and duplicate):
+                    raise HTTPException(503, 'Private storage upload failed. Please try again.')
         payload = {field: key}
         if kind == 'certificates':
             payload['file_type'] = 'pdf' if mime == 'application/pdf' else 'image'
@@ -334,6 +363,8 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             rows = await db(user, table(kind), 'PATCH', params={'id': f'eq.{record_id}', 'updated_at': f'eq.{updated_at}'}, payload=payload)
         else:
             payload.update(worker_id=str(worker_id), uploaded_by=user['user_id'])
+            if import_id:
+                payload['id'] = str(import_id)
             rows = await db(user, table(kind), 'POST', payload=payload)
         # Keep immutable originals on any ambiguous save; never auto-delete a potentially referenced upload.
         if not rows:
@@ -381,4 +412,5 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             raise HTTPException(502, 'Original file is temporarily unavailable. The saved record is retained.')
         return Response(bytes(data), media_type=file_type(bytes(data)), headers={'Cache-Control': 'no-store', 'Content-Disposition': 'inline'})
     return router
+
 
