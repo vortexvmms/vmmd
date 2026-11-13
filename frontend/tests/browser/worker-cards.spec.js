@@ -232,3 +232,51 @@ test('missing FIN can be entered as four characters without refetching print ima
  await fixture(page);await page.route('**/worker-documents/workers?*',r=>r.fulfill({json:[{id:W,name:'Missing FIN Worker',worker_code:'EMP-050',status:'active'}]}));const refreshed=page.waitForResponse(r=>r.url().includes('/worker-documents/workers?search=Sample'));await page.locator('#worker-search').fill('Sample');await refreshed;await expect(page.locator('#worker-list')).toContainText('Missing FIN Worker');await page.getByRole('button',{name:'Missing FIN Worker'}).click();
  await page.route('**/worker-documents/cards/*/file?*',r=>r.fulfill({contentType:'image/png',body:png}));await page.locator('#print-cards').click();await expect(page.locator('#card-print-fin')).toHaveValue('');await expect(page.locator('#card-print-message')).toContainText('FIN is not recorded');await page.locator('#card-print-fin').fill('772l');await page.locator('#card-print-prepare').click();await expect(page.locator('#card-print-go')).toBeEnabled();await expect(page.locator('#print-sheet h1')).toHaveText('Missing FIN Worker · FIN: ***772L · EMP-050');
 });
+
+
+test('saved cards export a worker-named v7 PDF',async({page})=>{
+ await fixture(page);
+ await page.route('**/worker-documents/cards/*/file?*',route=>route.fulfill({contentType:'image/png',body:png}));
+ await page.locator('#print-cards').click();
+ await page.locator('#card-print-prepare').click();
+ const pending=page.waitForEvent('download');
+ await page.getByRole('button',{name:'Download v7 A4 PDF'}).click();
+ expect((await pending).suggestedFilename()).toBe('SAMPLE_WORKER_Worker_Cards.pdf');
+});
+
+test('import mask editor draws, moves, resizes and undoes a mask',async({page})=>{
+ await page.goto('/card-import/index.html');
+ await page.evaluate(async()=>{
+  const {reviewMask}=await import('/card-import/masking.mjs');
+  const canvas=document.createElement('canvas');
+  canvas.width=300;canvas.height=150;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='white';ctx.fillRect(0,0,300,150);
+  window.maskTestCard={jpeg:canvas.toDataURL('image/jpeg')};
+  void reviewMask(window.maskTestCard);
+ });
+ const editor=page.locator('.mask-editor');
+ await expect(editor).toBeVisible();
+ const rect=await editor.boundingBox();
+ const drag=async(x,y,u,v)=>{
+  await page.mouse.move(rect.x+x*rect.width,rect.y+y*rect.height);
+  await page.mouse.down();
+  await page.mouse.move(rect.x+u*rect.width,rect.y+v*rect.height);
+  await page.mouse.up();
+ };
+ await drag(.12,.15,.42,.52);
+ const shape=editor.locator('.mask-shape');
+ await expect(shape).toHaveCount(1);
+ const position=()=>shape.evaluate(el=>[parseFloat(el.style.left),parseFloat(el.style.width)]);
+ const original=await position();
+ await drag(.27,.33,.42,.43);
+ expect((await position())[0]).toBeGreaterThan(original[0]+10);
+ await drag(.57,.62,.69,.72);
+ expect((await position())[1]).toBeGreaterThan(original[1]+5);
+ await page.getByRole('button',{name:'Undo',exact:true}).click();
+ expect((await position())[1]).toBeCloseTo(original[1],0);
+ await page.getByRole('button',{name:'Apply masks',exact:true}).click();
+ await expect(editor).toHaveCount(0);
+ expect(await page.evaluate(()=>window.maskTestCard.maskBoxes.length)).toBe(1);
+});
+
