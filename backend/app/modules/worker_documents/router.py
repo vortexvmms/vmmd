@@ -33,6 +33,7 @@ class WorkerDocumentsContext:
     r2_public_base: str
     r2_presign_get: Callable | None = None
     r2_presign_delete: Callable | None = None
+    private_image_url: Callable | None = None
 
 
 class Details(BaseModel):
@@ -110,13 +111,13 @@ def file_type(data):
     return mime
 
 
-def legacy_url(path, r2_base):
+def legacy_url(path, r2_base, supabase_host=None):
     """Only historical card hosts/paths; no redirects or user credentials forwarded."""
     url = urlsplit(path)
     r2 = urlsplit(r2_base)
     return (url.scheme == 'https' and not url.username and not url.password and not url.query and not url.fragment and
             ((url.netloc == r2.netloc and bool(r2.netloc) and url.path.startswith(('/worker-cards/', '/worker-certificates/'))) or
-             (url.netloc == 'lqnbdemtgkermhaqfboh.supabase.co' and url.path.startswith('/storage/v1/object/public/dpr-photos/worker-cards/'))))
+             (url.netloc in ('lqnbdemtgkermhaqfboh.supabase.co', supabase_host) and url.path.startswith('/storage/v1/object/public/dpr-photos/worker-cards/'))))
 
 
 def build_worker_documents_router(ctx: WorkerDocumentsContext):
@@ -201,6 +202,10 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
                         raise ValueError('Unsupported historical location')
                 if bucket:
                     async with ctx.shared_client() as client:
+                        if ctx.private_image_url and not key.lower().endswith('.pdf'):
+                            deleted = await client.delete(ctx.private_image_url(bucket, key, 'DELETE'), follow_redirects=False)
+                            if not deleted.is_success and deleted.status_code != 404:
+                                raise ValueError('Private R2 cleanup failed')
                         removed = await client.request('DELETE',f'{storage}/object/{bucket}',
                             headers=ctx.supabase_headers(user['token']),json={'prefixes':[key]})
                     if not removed.is_success:
@@ -379,18 +384,22 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
         path = record.get('file_path' if kind == 'certificates' else 'back_image_path' if side == 'back' else 'image_path')
         if not path:
             raise HTTPException(404, 'No file attached on this side')
+        private_object = None
         if path.startswith(record['worker_id'] + '/') and '..' not in path:
+            if re.fullmatch(r'[^/]+/[A-Za-z0-9_.-]+\.(?:jpg|jpeg|png|webp)', path, re.IGNORECASE):
+                private_object = ('worker-cards', path)
             url = f'{storage}/object/authenticated/worker-cards/{quote(path, safe="/")}'
             headers = ctx.supabase_headers(user['token'])
-        elif legacy_url(path, ctx.r2_public_base):
+        elif legacy_url(path, ctx.r2_public_base, urlsplit(ctx.rest_url).netloc):
             url, headers = path, {}
-            if urlsplit(path).netloc == 'lqnbdemtgkermhaqfboh.supabase.co':
+            if urlsplit(path).netloc in ('lqnbdemtgkermhaqfboh.supabase.co', urlsplit(ctx.rest_url).netloc):
                 # Storage was migrated with its original bucket/object keys.
                 # Resolve old links against the active project, after row scope.
                 key = unquote(urlsplit(path).path.removeprefix('/storage/v1/object/public/dpr-photos/'))
                 if not key.startswith('worker-cards/' + record['worker_id'] + '/') or '..' in key.split('/'):
                     raise HTTPException(422, 'Invalid historical file location')
                 url = f'{storage}/object/public/dpr-photos/{quote(key, safe="/")}'
+                private_object = ('dpr-photos', key)
             if urlsplit(path).netloc == urlsplit(ctx.r2_public_base).netloc and ctx.r2_presign_get:
                 key = unquote(urlsplit(path).path).lstrip('/')
                 if '..' in key.split('/'):
@@ -398,16 +407,27 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
                 url = ctx.r2_presign_get(key)
         else:
             raise HTTPException(422, 'This historical file location is not supported. Upload a replacement original.')
-        data = bytearray()
+
+        async def read_original(client, source, source_headers):
+            data = bytearray()
+            async with client.stream('GET', source, headers=source_headers, follow_redirects=False) as r:
+                if r.status_code != 200:
+                    return None
+                async for chunk in r.aiter_bytes():
+                    if len(data) + len(chunk) > MAX_FILE:
+                        raise HTTPException(413, 'Original file exceeds 20 MB')
+                    data.extend(chunk)
+            return bytes(data)
+
         try:
             async with ctx.shared_client() as client:
-                async with client.stream('GET', url, headers=headers, follow_redirects=False) as r:
-                    if r.status_code != 200:
-                        raise HTTPException(502, 'Original file is unavailable. The saved record is retained; upload a replacement if available.')
-                    async for chunk in r.aiter_bytes():
-                        if len(data) + len(chunk) > MAX_FILE:
-                            raise HTTPException(413, 'Original file exceeds 20 MB')
-                        data.extend(chunk)
+                data = None
+                if private_object and ctx.private_image_url:
+                    data = await read_original(client, ctx.private_image_url(*private_object, 'GET'), {})
+                if data is None:
+                    data = await read_original(client, url, headers)
+                if data is None:
+                    raise HTTPException(502, 'Original file is unavailable. The saved record is retained; upload a replacement if available.')
         except httpx.RequestError:
             raise HTTPException(502, 'Original file is temporarily unavailable. The saved record is retained.')
         return Response(bytes(data), media_type=file_type(bytes(data)), headers={'Cache-Control': 'no-store', 'Content-Disposition': 'inline'})

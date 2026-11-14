@@ -37,9 +37,10 @@ from .db import (
 )
 from .errors import install_error_handlers
 from .settings import (
-    PR_R2_ENABLED, R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
+    PRIVATE_IMAGES_R2_ENABLED, PR_R2_ENABLED, R2_ENABLED, R2_PUBLIC_BASE, REST, SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_KEY, SUPABASE_URL,
 )
+from .storage import private_image_url
 from .storage import r2_presign_get as _r2_presign_get
 from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
@@ -129,11 +130,13 @@ app.include_router(build_worker_documents_router(WorkerDocumentsContext(
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
     r2_presign_get=_r2_presign_get if R2_ENABLED else None,
     r2_presign_delete=_r2_presign_delete if R2_ENABLED else None,
+    private_image_url=private_image_url if PRIVATE_IMAGES_R2_ENABLED else None,
 )))
 
 app.include_router(build_worker_photos_router(WorkerDocumentsContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
+    private_image_url=private_image_url if PRIVATE_IMAGES_R2_ENABLED else None,
 )))
 
 @app.get("/api/v1/audit-log")

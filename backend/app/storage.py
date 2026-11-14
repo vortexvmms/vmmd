@@ -7,6 +7,8 @@ import hmac
 import urllib.parse
 
 from .settings import (
+    PRIVATE_IMAGES_R2_ACCESS_KEY_ID, PRIVATE_IMAGES_R2_ACCOUNT_ID,
+    PRIVATE_IMAGES_R2_BUCKET, PRIVATE_IMAGES_R2_SECRET,
     PR_R2_ACCESS_KEY_ID, PR_R2_ACCOUNT_ID, PR_R2_BUCKET, PR_R2_SECRET,
     R2_ACCESS_KEY_ID, R2_ACCOUNT_ID, R2_BUCKET, R2_SECRET,
 )
@@ -79,3 +81,14 @@ def pr_r2_presign_delete(key: str, expires: int = 600) -> str:
     return _presign(key, "DELETE", expires, account_id=PR_R2_ACCOUNT_ID,
                     access_key_id=PR_R2_ACCESS_KEY_ID, secret=PR_R2_SECRET,
                     bucket=PR_R2_BUCKET)
+
+
+def private_image_url(bucket: str, key: str, method: str) -> str:
+    if bucket not in {"dpr-photos", "sic-cards", "worker-cards", "worker-photos"}:
+        raise ValueError("Unsupported VCMS image bucket")
+    return _presign(
+        f"supabase-images/{bucket}/{key}", method, 60,
+        account_id=PRIVATE_IMAGES_R2_ACCOUNT_ID,
+        access_key_id=PRIVATE_IMAGES_R2_ACCESS_KEY_ID,
+        secret=PRIVATE_IMAGES_R2_SECRET, bucket=PRIVATE_IMAGES_R2_BUCKET,
+    )
