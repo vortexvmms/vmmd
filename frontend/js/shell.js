@@ -38,7 +38,7 @@
         shield:'<path d="M12 3.5l7 2.8v5.2c0 4.2-3 7-7 8.5-4-1.5-7-4.3-7-8.5V6.3z"/>',gear:'<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20"/>',
         help:'<circle cx="12" cy="12" r="8.5"/><path d="M9.7 9.2a2.4 2.4 0 114.3 1.5c-.8.9-1.8 1.1-1.8 2.5"/><path d="M12 16.4h.01"/>'
       };
-      function navFor(viewRole) {
+      function roleNav(viewRole) {
         var tier = TIER[viewRole] || "full";
         if (tier === "supervisor") {
           var supervisorSections = [
@@ -73,6 +73,22 @@
         }
         return sections;
       }
+
+    function navFor(viewRole){
+      const permitted=new Set(roleNav(viewRole).flatMap(section=>section.items.map(item=>item[1])));
+      return [
+        {items:[["Home","home.html","home"],["My Tasks","todo.html","check"]]},
+        {group:"Daily Site Work",items:[["Request Manpower","request.html","calendar"],["Mark Attendance","attendance.html","check"],["End-Time Verification","verify.html","clock"],["Submit Daily Report","dpr.html","document"],["WhatsApp Messages","whatsapp.html","chat"]]},
+        {group:"Manpower & Sites",items:[["Worker Directory","workers.html","user"],["Site Directory","sites.html","building"],["Worker Allocation","allocation.html","calendar"]]},
+        {group:"Safety & Training",items:[["Training Records","worker-cards.html","document"],["Site Induction Register (SIC)","sic-register.html","shield"]]},
+        {group:"Equipment & Logistics",items:[["Lifting Register (LM/LG)","lifting.html","document"],["Tipper Truck Supply","tipper-trucks.html","truck"]]},
+        {group:"Projects & Planning",items:[["Project Directory","dpr-projects.html","building"],["Work Programme","planning.html","calendar"],["Site Camera","camera.html","chart"],["Daily Report History","dprlist.html","list"]]},
+        {group:"Procurement",items:[["Create Purchase Request","pr-new.html","cart"],["Purchase Request Register","pr-directory.html","list"],["Import Purchase Requests","pr-import.html","upload"],["Purchase Request Status","pr-dashboard.html","chart"]]},
+        {group:"Reports & Dashboards",items:[["Operations Dashboard","dashboard.html","chart"],["Worker Timesheets","timesheet.html","grid"],["Resource Summary","resource-summary.html","grid"],["Site Dashboard","site-dashboard.html","chart"]]},
+        {group:"Administration & Help",items:[["User Management","users.html","shield"],["Audit Log","audit-log.html","list"],["Settings","settings.html","gear"],["User Guide","help.html","help"]]}
+      ].map(section=>({...section,items:section.items.filter(item=>permitted.has(item[1]))}))
+        .filter(section=>section.items.length);
+    }
       var appHeader = document.createElement("header");
       appHeader.id = "vcms-app-header";
       appHeader.innerHTML = '<a class="vcms-app-brand" href="home.html" aria-label="VCMS Home"><img src="https://www.vortex.sg/images/Vortex-Logo_Type.png" alt="Vortex" onerror="this.style.display=\'none\'"><strong>VCMS</strong></a><div class="vcms-app-title">Vortex Construction Management System</div><div class="vcms-user-card"><div><strong id="vcms-greeting"></strong><small id="vcms-user-name"></small></div><span id="vcms-role-chip"></span></div>' + (role === "admin" ? '<select id="vcms-view-role" aria-label="Acting role"></select>' : "") + '<button class="vcms-app-logout" type="button">Log Out</button>';
@@ -96,7 +112,7 @@
           if (!section.group) return links;
           var key = section.group.toLowerCase().replace(/[^a-z0-9]+/g,"-");
           var activeGroup = section.items.some(function (item) { return item[1] === file; });
-          var open = activeGroup || saved[key] === true;
+          var open = activeGroup || (saved[key] ?? (TIER[viewRole] === 'supervisor' && key === 'daily-site-work'));
           return '<button type="button" class="vcms-group-toggle" data-group="'+key+'" aria-expanded="'+open+'"><span>'+safeText(section.group)+'</span><span class="vcms-chevron">⌄</span></button><div class="vcms-group-items'+(open?"":" is-closed")+'" data-items="'+key+'">'+links+'</div>';
         }).join("");
       }

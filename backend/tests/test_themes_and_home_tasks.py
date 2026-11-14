@@ -70,8 +70,8 @@ def test_connected_workflow_navigation_is_available():
     shell = read("frontend/js/shell.js")
     workflow = read("frontend/js/workflow.js")
     home = read("frontend/home.html")
-    assert "Reports & Analytics" in shell
-    assert "Reports & Analytics" in home
+    assert "Reports & Dashboards" in shell
+    assert "Reports & Dashboards" in home
     assert "vcms_work_context" in workflow
     for page in ("request.html", "allocation.html", "attendance.html", "verify.html", "timesheet.html"):
         assert page in workflow
