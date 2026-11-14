@@ -196,6 +196,13 @@ test('PCS DPR keeps the established report structure inside each location', asyn
 
 test('DPR History opens an archived site without falling back to an active site', async ({ page }) => {
   await signedIn(page, 'admin');
+  const imageRef = 'vcms-report-image:sample.png';
+  const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aH5sAAAAASUVORK5CYII=', 'base64');
+  await page.route('**/api/v1/report-images?ref=*', route => {
+    expect(new URL(route.request().url()).searchParams.get('ref')).toBe(imageRef);
+    expect(route.request().headers().authorization).toBe('Bearer test-token');
+    return route.fulfill({contentType:'image/png', body:image});
+  });
   await page.route('https://vmms-backend-sg.onrender.com/api/v1/sites*', r => r.fulfill({ json: [
     { id:'active-site', site_name:'LOGISTICS', status:'active', supervisors:[] },
     { id:'old-pokb', site_name:'POKB - P2 DRAIN', status:'archived', supervisors:[] }
@@ -209,13 +216,13 @@ test('DPR History opens an archived site without falling back to an active site'
       item_of_work:'Drain regrading', location:'P2', date_job_carried:'2026-08-16',
       description:'Completed work', prepared_by_name:'Test Administrator', conformed_by_party:'POKB',
       manpower:[], equipment:[], materials:[], signature_url:null,
-      photos:[{ url:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', caption:'Historical site photo' }]
+      photos:[{ url:imageRef, caption:'Historical site photo' }]
     } });
   });
   await page.goto('/dpr.html?site=old-pokb&date=2026-08-16');
   await expect(page.locator('#site')).toHaveValue('old-pokb');
   await expect(page.locator('#site option:checked')).toContainText('POKB - P2 DRAIN');
-  await expect(page.locator('#photos img')).toHaveCount(1);
+  await expect.poll(() => page.locator('#photos img').evaluate(img => img.naturalWidth)).toBe(1);
 });
 
 test('allocation keeps archived sites hidden for future work but shows recorded historical days', async ({ page }) => {

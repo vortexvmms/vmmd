@@ -52,6 +52,10 @@
   async function signature(raw) {
     if (!raw) return '';
     if (/^data:image\/(png|jpeg|webp);base64,/i.test(raw)) return raw;
+    if (window.VCMS_REPORT_IMAGES?.privateReference(raw)) {
+      const source = await window.VCMS_REPORT_IMAGES.resolve(raw);
+      return blobData(await (await fetch(source)).blob());
+    }
     const response = await window.vmmsApi('/api/v1/pr/signature-image?url=' + encodeURIComponent(raw));
     if (!response.ok) throw new Error('Your saved signature could not be loaded. Upload your signature again before printing.');
     return blobData(await response.blob());

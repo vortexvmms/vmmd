@@ -21,6 +21,9 @@ def api(request):
         if req.url.host == 'private.example':
             assert 'Authorization' not in req.headers
             state.setdefault('r2_requests', []).append((req.method, req.url.path))
+            if req.method == 'PUT':
+                assert req.headers['If-None-Match'] == '*'
+                return httpx.Response(200)
             return httpx.Response(200, content=portrait(state['image']))
         assert req.headers['Authorization']=='Bearer test'
         if req.url.path.endswith('/rpc/worker_documents_can_access'):
@@ -91,4 +94,13 @@ def test_private_r2_portrait_scoped_read(api):
     state.update(role='site_sup', access=False)
     assert client.get(endpoint).status_code == 404
     assert state['r2_requests'] == [('GET', path)]
+    assert not state['uploads']
+
+
+@pytest.mark.parametrize('api', [True], indirect=True)
+def test_new_portrait_uses_private_r2(api):
+    client, state = api
+    response = client.post('/api/v1/worker-photos/' + W, content=state['image'])
+    assert response.status_code == 200
+    assert state['r2_requests'] == [('PUT', '/supabase-images/worker-photos/' + response.json()['photo_path'])]
     assert not state['uploads']

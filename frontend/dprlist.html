@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+  <script src="js/report-images.js?v=20261114-private"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     body.dl { background:#F3F4F6; }
@@ -137,7 +137,7 @@
     function xlDMY(v){ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; }
     async function imgForXlsx(url){
       try{
-        const blob=await (await fetch(url,{mode:"cors"})).blob();
+        const blob=await (await fetch(await VCMS_REPORT_IMAGES.resolve(url),{mode:"cors"})).blob();
         const bmp=await createImageBitmap(blob);
         let w=bmp.width,h=bmp.height; const sc=Math.min(1,1000/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
         const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);
