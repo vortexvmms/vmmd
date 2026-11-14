@@ -10,7 +10,7 @@ create table public.private_r2_image_receipts (
 alter table public.private_r2_image_receipts enable row level security;
 revoke all on public.private_r2_image_receipts from public, anon, authenticated;
 grant select on public.private_r2_image_receipts to authenticated;
-grant insert, delete on public.private_r2_image_receipts to service_role;
+grant select, insert, delete on public.private_r2_image_receipts to service_role;
 create policy private_r2_receipt_owner on public.private_r2_image_receipts
  for select to authenticated using (uploader = (select auth.uid()));
 
