@@ -280,3 +280,21 @@ test('import mask editor draws, moves, resizes and undoes a mask',async({page})=
  expect(await page.evaluate(()=>window.maskTestCard.maskBoxes.length)).toBe(1);
 });
 
+
+
+test('card importer and mask editor use the cached VCMS theme',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('vcms_company_appearance_v1',JSON.stringify({
+  primary:'#123A73',page:'#EEF3FA',surface:'#FDFEFF',ink:'#182D50'
+ })));
+ await page.goto('/card-import/index.html');
+ await expect(page.locator('body')).toHaveCSS('background-color','rgb(238, 243, 250)');
+ await expect(page.locator('header')).toHaveCSS('background-color','rgb(18, 58, 115)');
+ await expect(page.locator('.panel').first()).toHaveCSS('background-color','rgb(253, 254, 255)');
+ await page.evaluate(async()=>{
+  const {reviewMask}=await import('/card-import/masking.mjs');
+  const canvas=document.createElement('canvas');
+  canvas.width=160;canvas.height=100;
+  void reviewMask({jpeg:canvas.toDataURL('image/jpeg')});
+ });
+ await expect(page.locator('.mask-dialog')).toHaveCSS('background-color','rgb(253, 254, 255)');
+});

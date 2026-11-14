@@ -79,3 +79,63 @@ assert.equal(uploads,5);
 assert.equal(patches,2);
 await assert.rejects(()=>uploadSets([{back:crop}],bridge,()=>{}),/front/);
 console.log('PASS: FIN geometry, mask movement and resizing, date evidence, review rules, retry and PDF naming');
+
+const {isWorkPermitFront}=await import('./frontend/card-import/fields.mjs');
+const sPass=['S PASS','S Pass No. 0 1234567',{text:'K1234567',x:.82,y:.91}];
+assert.equal(isWorkPermitFront(sPass),true);
+assert.equal(isWorkPermitFront(['Course Title: Permit to Work']),false);
+assert.equal(reviewSides({front:{title:'S Pass'},back:{}}).length,2);
+const permitFields=readCourseFields(sPass,['VISIT PASS','Issued Date: 05/04/2026'],{workPermit:true});
+assert.equal(permitFields.cert_no.value,'K1234567');
+assert.equal(permitFields.issued_date.value,'');
+assert.equal(readCourseFields(['S PASS','S Pass No. 0 1234567'],[],{workPermit:true}).cert_no.value,'');
+
+const supervisor={};
+applyCourseFields(supervisor,readCourseFields([
+ 'EVERSAFE ACADEMY','Serial Number: 001-00002',
+ 'Course Title: Workplace Safety and Health Management',
+ 'IN PROCESS PLANT','(PIW-PRO-1234-1.1-E)','Name: Sample Learner','Issued Date: 14/04/2023'
+],['6. This card will expire Not Applicable']));
+assert.equal(supervisor.cert_no,'001-00002');
+assert.match(supervisor.title,/\(PIW-PRO-1234-1\.1-E\)$/);
+assert.equal(supervisor.no_expiry,true);
+assert.equal(supervisor.expiry_date,'');
+assert.equal(readCourseFields(front,['6. TSC Title/Code: Not Applicable']).no_expiry.value,'');
+
+const workerCourse={};
+const courseFront=['Course Title: Perform Work in Confined Space Operation','Issued Date: 03/08/2023'];
+const courseBack=['This card will expire 3 Years From Last Date Of Course'];
+applyCourseFields(workerCourse,readCourseFields(courseFront,courseBack));
+assert.equal(workerCourse.issued_date,'2023-08-03');
+assert.equal(workerCourse.expiry_date,'');
+assert.equal(workerCourse.no_expiry,false);
+workerCourse.course_end_date='2023-08-01';
+updateCalculatedExpiry(workerCourse);
+assert.equal(workerCourse.expiry_date,'2026-08-01');
+
+const dynamic={};
+applyCourseFields(dynamic,readCourseFields([
+ 'Dynamic Safety Pte Ltd','S/N: DS-SOC-TUN-0001',
+ 'Course Title: Safety Orientation Course (Tunneling) For Workers',
+ '(TSC Title/Code): NA','Issued Date: 29/7/2026','Expiry Date: 28/7/2028'
+],['This card is validity: As per this card front page.']));
+assert.equal(dynamic.institute,'Dynamic Safety Pte Ltd');
+assert.equal(dynamic.cert_no,'DS-SOC-TUN-0001');
+assert.equal(dynamic.title,'Safety Orientation Course (Tunneling) For Workers');
+assert.equal(dynamic.expiry_date,'2028-07-28');
+
+const efg={};
+applyCourseFields(efg,readCourseFields([
+ 'EFG TRAINING SERVICES','PRIVATE LTD','Serial Number','AC-PRO-00001',
+ 'COURSE TITLE: APPLY WORKPLACE SAFETY AND HEALTH IN','PROCESS PLANT','CS CODE: ABC-001',
+ 'ISSUED DATE: 22-Jul-2026'
+],['This card is valid for 3 years from the date of issue.']));
+assert.equal(efg.institute,'EFG TRAINING SERVICES PRIVATE LTD');
+assert.equal(efg.cert_no,'AC-PRO-00001');
+assert.equal(efg.title,'APPLY WORKPLACE SAFETY AND HEALTH IN\nPROCESS PLANT');
+assert.equal(efg.expiry_date,'2029-07-22');
+assert.equal(readCourseFields(['Training Provider: Aster Learning','Course Title: Working at Height']).institute.value,'Aster Learning');
+assert.equal(readCourseFields(['Cedar Skills Pte Ltd','Course Title: Working at Height']).institute.value,'Cedar Skills Pte Ltd');
+assert.equal(maskSuggestions([{text:'ID No.: F1234567N',symbols}]).boxes.length,1);
+assert.equal(maskSuggestions([{text:'ID: 567N'}]).uncertain,true);
+console.log('PASS: five card layouts, unfamiliar providers, date basis, and ID labels');

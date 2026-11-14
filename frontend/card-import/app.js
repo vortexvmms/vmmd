@@ -1,7 +1,7 @@
 import {uploadSets} from './save.mjs';
 import {reviewMask, maskSuggestions, applyMasks} from './masking.mjs';
 import {readCrop} from './ocr.mjs';
-import {readCourseFields, applyCourseFields, updateCalculatedExpiry, cardCategory, reviewSides, workerPdfName} from './fields.mjs';
+import {readCourseFields, isWorkPermitFront, applyCourseFields, updateCalculatedExpiry, cardCategory, reviewSides, workerPdfName} from './fields.mjs';
 import * as pdfjsLib from './vendor/pdf.mjs';
 import {makeCardPdf, matchScannedSides, scanIdentity, selectedSets} from './arrange.mjs';
 import {recognizedFin, suggestedTitle} from './titles.mjs';
@@ -146,17 +146,19 @@ async function reviewBatch(sets) {
       const backLines=set.back?await read(set.back):[];
       if(job.cancelled)break;
       const heading=suggestedTitle(lines);
-      const fields=readCourseFields(lines,backLines);
-      if(!front.category&&heading==='Work Permit')front.category='work_permit';
-      if(!front.titleEdited&&!fields.title.value&&!fields.title.sources.length&&heading){
-        front.title=heading;
-        fields.title.value=heading;
-        fields.title.sources.push({side:'Front',text:heading});
-      }
-      if(cardCategory(front)==='course'&&(lines.length||backLines.length)){
+      if(!front.category&&(isWorkPermitFront(lines)||heading==='Work Permit'))front.category='work_permit';
+      const workPermit=cardCategory(front)==='work_permit';
+      const fields=readCourseFields(lines,backLines,{workPermit});
+      if(workPermit){
+        front.ocrFields={cert_no:fields.cert_no};
+        if(!front.editedFields?.cert_no)front.cert_no=fields.cert_no.value;
+        if(!front.titleEdited)front.title=heading==='S Pass'?'S Pass':'Work Permit';
+      }else if(cardCategory(front)==='course'&&(lines.length||backLines.length)){
+        if(!fields.title.value&&!fields.title.sources.length&&heading){
+          fields.title.value=heading;
+          fields.title.sources.push({side:'Front',text:heading});
+        }
         applyCourseFields(front,fields);
-      }else if(cardCategory(front)==='work_permit'&&!front.titleEdited&&heading){
-        front.title=heading;
       }
       if(!$('fin').value)$('fin').value=recognizedFin(lines)||recognizedFin(backLines);
       for(const card of reviewSides(set)){
@@ -589,6 +591,7 @@ function renderGallery() {
         const field=card.ocrFields?.[key];
         const calculated=key==='expiry_date'&&card.expiry_date&&!card.editedFields?.expiry_date&&!field?.sources.length&&card.ocrFields?.period.value;
         const info=calculated?card.ocrFields.period:field;
+        if(key==='expiry_date'&&card.no_expiry)return;
         if(!info||card.editedFields?.[key]||key==='title'&&card.titleEdited)return;
         const note=document.createElement('small');note.className='field-source';
         note.textContent=(calculated?'Calculated from validity':info.review?'Check this field':'Read from card')+
@@ -596,21 +599,30 @@ function renderGallery() {
         tile.append(note);
       };
       fieldSource('title');
-      for(const [key,label,type] of [['institute','Institute','text'],['cert_no','Certificate number','text'],['issued_date','Issue date','date'],['expiry_date','Expiry date','date']]){
+      const needsCourseEnd=card.ocrFields?.period.value?.basis==='course_end_date'&&!card.ocrFields.expiry_date.sources.length;
+      const fields=[['institute','Institute','text'],['cert_no','Certificate number','text'],['issued_date','Issue date','date'],['expiry_date','Expiry date','date']];
+      if(needsCourseEnd)fields.splice(3,0,['course_end_date','Last date of course','date']);
+      for(const [key,label,type] of fields){
         if(type==='date'&&cardCategory(card)==='work_permit')continue;
         const field=document.createElement('input');field.type=type;field.value=card[key]||'';field.disabled=locked;
         field.onchange=()=>{
           card[key]=field.value;(card.editedFields??={})[key]=true;
-          if(key==='issued_date')updateCalculatedExpiry(card);
-          if(key==='expiry_date'&&field.value)card.no_expiry=false;
+          if(key==='issued_date'||key==='course_end_date')updateCalculatedExpiry(card);
+          if(key==='expiry_date'&&field.value){card.no_expiry=false;card.editedFields.no_expiry=true;}
           invalidateReview();render();
         };
         tile.append(labelField(label,field));fieldSource(key);
       }
+      if(needsCourseEnd&&!card.course_end_date&&!card.expiry_date){
+        const note=document.createElement('small');note.className='field-source';
+        note.textContent='Enter the confirmed last date of the course to calculate expiry. '+card.ocrFields.period.sources.map(source=>source.side+': '+source.text).join(' | ');
+        tile.append(note);
+      }
       if(cardCategory(card)!=='work_permit'){
         const no=document.createElement('input');no.type='checkbox';no.checked=!!card.no_expiry;no.disabled=locked;
-        no.onchange=()=>{card.no_expiry=no.checked;if(no.checked)card.expiry_date='';else updateCalculatedExpiry(card);invalidateReview();render();};
+        no.onchange=()=>{(card.editedFields??={}).no_expiry=true;card.no_expiry=no.checked;if(no.checked)card.expiry_date='';else updateCalculatedExpiry(card);invalidateReview();render();};
         tile.append(labelField('No expiry',no));
+        if(card.no_expiry&&card.ocrFields?.no_expiry?.sources.length)fieldSource('no_expiry');
       }
     }
     if (hardBlock.has(card.status)) {

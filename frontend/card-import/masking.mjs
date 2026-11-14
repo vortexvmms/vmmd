@@ -28,7 +28,8 @@ export function maskSuggestions(lines) {
       }
       boxes.push({x,y,w:right-x,h:bottom-y,field:'FIN'});
     }
-    if(/\b(?:FIN|NRIC)\b/i.test(line.text)&&!line.text.match(finPattern)&&!boxes.length)uncertain=true;
+    if(/^\s*(?:FIN|NRIC|ID(?:\s+(?:No\.?|Number))?)\s*[:.]?\s*\S/i.test(line.text)&&
+      !line.text.match(finPattern)&&!/^\s*(?:FIN|NRIC|ID(?:\s+(?:No\.?|Number))?)\s*[:.]?\s*$/i.test(line.text))uncertain=true;
   }
   return {boxes,uncertain};
 }
