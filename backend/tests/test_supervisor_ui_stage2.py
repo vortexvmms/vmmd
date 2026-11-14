@@ -28,8 +28,9 @@ def test_critical_workflows_use_shared_mobile_actions_and_toast():
 
 def test_supervisor_mobile_home_includes_site_progress_module():
     html = page("home.html")
-    assert 'if(TIER[role]==="supervisor")' in html
-    assert '{name:"Site progress"' in html
+    assert 'function mobileSections(role)' in html
+    assert 'return navFor(role).map' in html
+    assert 'grp:"Projects & Planning"' in html
     for href in ("request.html", "attendance.html", "whatsapp.html", "camera.html", "dpr.html", "dprlist.html", "dashboard.html", "settings.html", "help.html"):
         assert f'"{href}"' in html
     assert "body.sup-mobile" in html
