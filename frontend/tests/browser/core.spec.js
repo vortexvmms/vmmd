@@ -222,7 +222,9 @@ test('DPR History opens an archived site without falling back to an active site'
   await page.goto('/dpr.html?site=old-pokb&date=2026-08-16');
   await expect(page.locator('#site')).toHaveValue('old-pokb');
   await expect(page.locator('#site option:checked')).toContainText('POKB - P2 DRAIN');
-  await expect.poll(() => page.locator('#photos img').evaluate(img => img.naturalWidth)).toBe(1);
+  const preview = page.locator('#photos img');
+  await preview.scrollIntoViewIfNeeded();
+  await expect.poll(() => preview.evaluate(img => img.naturalWidth)).toBe(1);
 });
 
 test('allocation keeps archived sites hidden for future work but shows recorded historical days', async ({ page }) => {
