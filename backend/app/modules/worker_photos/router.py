@@ -2,6 +2,7 @@
 from __future__ import annotations
 from uuid import UUID, uuid4
 from io import BytesIO
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
@@ -88,7 +89,12 @@ def build_worker_photos_router(ctx: WorkerDocumentsContext):
         if not path or not path.startswith(f'{worker_id}/') or '..' in path:
             raise HTTPException(404, 'No profile photo')
         async with ctx.shared_client() as client:
-            r = await client.get(f'{storage}/object/authenticated/worker-photos/{path}', headers=ctx.supabase_headers(user['token']))
+            r = None
+            if ctx.private_image_url:
+                r = await client.get(ctx.private_image_url('worker-photos', path, 'GET'), follow_redirects=False)
+            if r is None or not r.is_success:
+                safe_path = quote(path, safe='/')
+                r = await client.get(f'{storage}/object/authenticated/worker-photos/{safe_path}', headers=ctx.supabase_headers(user['token']))
         if not r.is_success:
             raise HTTPException(404, 'Photo is unavailable')
         return Response(r.content, media_type='image/jpeg', headers={'Cache-Control': 'private, no-store'})

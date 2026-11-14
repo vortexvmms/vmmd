@@ -13,11 +13,15 @@ from app.modules.worker_photos.router import build_worker_photos_router, portrai
 W='10000000-0000-0000-0000-000000000001'
 
 @pytest.fixture
-def api():
+def api(request):
     image=BytesIO(); Image.new('RGB',(800,400),'red').save(image,format='PNG')
     state={'role':'admin','access':True,'conflict':False,'uploads':[],'writes':[],'audit':[],
            'row':{'id':W,'photo_path':None,'updated_at':'v1'},'image':image.getvalue()}
     def transport(req):
+        if req.url.host == 'private.example':
+            assert 'Authorization' not in req.headers
+            state.setdefault('r2_requests', []).append((req.method, req.url.path))
+            return httpx.Response(200, content=portrait(state['image']))
         assert req.headers['Authorization']=='Bearer test'
         if req.url.path.endswith('/rpc/worker_documents_can_access'):
             return httpx.Response(200,json=state['access'])
@@ -34,9 +38,13 @@ def api():
     async def shared():
         async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as c:yield c
     async def audit(*args):state['audit'].append(args)
+    private_image_url = None
+    if getattr(request, 'param', False):
+        def private_image_url(bucket, key, method):
+            return f'https://private.example/supabase-images/{bucket}/{key}'
     app=FastAPI();app.include_router(build_worker_photos_router(WorkerDocumentsContext(
         lambda:{'role':state['role'],'token':'test'},shared,'https://test/rest/v1',
-        lambda t:{'Authorization':'Bearer '+t},audit,'')))
+        lambda t:{'Authorization':'Bearer '+t},audit,'',private_image_url=private_image_url)))
     with TestClient(app) as c:yield c,state
 
 def test_portrait_upload_resize_private_read_and_remove(api):
@@ -71,3 +79,16 @@ def test_bad_large_images_and_concurrent_change(api):
     s['conflict']=True
     assert c.post('/api/v1/worker-photos/'+W,content=s['image']).status_code==409
     assert s['row']['photo_path'] is None and not s['writes']
+
+
+@pytest.mark.parametrize('api', [True], indirect=True)
+def test_private_r2_portrait_scoped_read(api):
+    client, state = api
+    endpoint = '/api/v1/worker-photos/' + W
+    state['row']['photo_path'] = f'{W}/existing.jpg'
+    path = '/supabase-images/worker-photos/' + state['row']['photo_path']
+    assert client.get(endpoint).status_code == 200
+    state.update(role='site_sup', access=False)
+    assert client.get(endpoint).status_code == 404
+    assert state['r2_requests'] == [('GET', path)]
+    assert not state['uploads']

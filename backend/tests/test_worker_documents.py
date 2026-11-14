@@ -22,7 +22,7 @@ def review(data, pages=1, boxes=None):
 
 
 @pytest.fixture
-def api():
+def api(request):
     pix = fitz.Pixmap(fitz.csRGB, (0, 0, 20, 10));pix.clear_with(255)
     state = {'role': 'site_sup', 'access': True, 'writes': [], 'uploads': [], 'reads': [], 'media_status': 200, 'audits': [], 'deletes': [], 'cleanup_status': 200, 'receipt': None, 'png': pix.tobytes('png'),
              'row': {'id': ID, 'worker_id': W, 'image_path': W+'/00000000-0000-0000-0000-000000000001.png', 'back_image_path': None, 'category': 'course', 'updated_at': 'version1'}}
@@ -55,7 +55,7 @@ def api():
             return httpx.Response(200,json=[state['receipt']] if state.get('composite_array') else state['receipt'])
         if path.endswith('/worker_card_deletions'):
             return httpx.Response(200,json=[state['receipt']] if state['receipt'] else [])
-        if req.method == 'DELETE':
+        if req.method == 'DELETE' and not path.startswith('/supabase-images/'):
             state['deletes'].append((str(req.url),json.loads(req.content) if req.content else None))
             return httpx.Response(state['cleanup_status'],json=[])
         if '/storage/v1/object/' in path:
@@ -65,6 +65,10 @@ def api():
                 return httpx.Response(200, json={})
             state['reads'].append(str(req.url))
             return httpx.Response(state['media_status'], content=state['png'])
+        if path.startswith('/supabase-images/'):
+            assert 'Authorization' not in req.headers
+            state.setdefault('r2_requests', []).append((req.method, path))
+            return httpx.Response(state.get('r2_status', 200), content=state['png'])
         if path.startswith('/worker-cards/'):
             assert 'Authorization' not in req.headers
             state['reads'].append(str(req.url))
@@ -90,8 +94,12 @@ def api():
     def user():
         return {'role': state['role'], 'token': 'test', 'user_id': '00000000-0000-0000-0000-000000000001'}
 
+    private_image_url = None
+    if getattr(request, 'param', False):
+        def private_image_url(bucket, key, method):
+            return f'https://private.example/supabase-images/{bucket}/{key}'
     app = FastAPI()
-    app.include_router(build_worker_documents_router(WorkerDocumentsContext(user, shared, 'https://test.supabase.co/rest/v1', lambda t: {'Authorization': 'Bearer '+t}, audit, 'https://legacy.example', lambda key: 'https://legacy.example/'+key+'?signed=test', lambda key: 'https://r2-delete.example/'+key+'?signed=test')))
+    app.include_router(build_worker_documents_router(WorkerDocumentsContext(user, shared, 'https://test.supabase.co/rest/v1', lambda t: {'Authorization': 'Bearer '+t}, audit, 'https://legacy.example', lambda key: 'https://legacy.example/'+key+'?signed=test', lambda key: 'https://r2-delete.example/'+key+'?signed=test', private_image_url)))
     with TestClient(app) as client:
         yield client, state
 
@@ -378,3 +386,41 @@ def test_import_retry_reuses_same_front_and_back(api):
     assert len(s['writes']) == len(s['uploads']) == 2
     assert front.json()['image_path'] != back.json()['back_image_path']
 
+
+
+@pytest.mark.parametrize('api', [True], indirect=True)
+def test_private_r2_card_read_and_fallback(api):
+    client, state = api
+    read_url = f'/api/v1/worker-documents/cards/{ID}/file'
+    response = client.get(read_url)
+    assert response.status_code == 200
+    assert response.content == state['png']
+    assert state['r2_requests'] == [('GET', '/supabase-images/worker-cards/' + state['row']['image_path'])]
+    assert not state['reads']
+
+    state['r2_status'] = 404
+    assert client.get(read_url).status_code == 200
+    assert len(state['reads']) == 1
+
+
+@pytest.mark.parametrize('api', [True], indirect=True)
+def test_scoped_historical_r2_read_and_delete(api):
+    client, state = api
+    key = f'worker-cards/{W}/original_front.jpg'
+    state['row']['image_path'] = f'https://test.supabase.co/storage/v1/object/public/dpr-photos/{key}'
+    endpoint = f'/api/v1/worker-documents/cards/{ID}'
+    assert client.get(endpoint + '/file').status_code == 200
+    assert state['r2_requests'] == [('GET', '/supabase-images/dpr-photos/' + key)]
+    assert not state['reads']
+
+    state['row']['image_path'] = state['row']['image_path'].replace(W, ID)
+    assert client.get(endpoint + '/file').status_code == 422
+    assert len(state['r2_requests']) == 1
+
+    state['role'] = 'admin'
+    state['row']['image_path'] = state['row']['image_path'].replace(ID, W)
+    response = client.request('DELETE', endpoint, json={'updated_at': 'version1', 'confirmation': 'DELETE'})
+    assert response.status_code == 200
+    assert not response.json()['cleanup_pending']
+    assert state['r2_requests'][-1] == ('DELETE', '/supabase-images/dpr-photos/' + key)
+    assert state['deletes'][0][1] == {'prefixes': [key]}
