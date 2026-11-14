@@ -46,7 +46,8 @@ from .storage import r2_presign_delete as _r2_presign_delete
 from .storage import r2_presign_put as _r2_presign_put
 from .storage import pr_r2_presign_get as _pr_r2_presign_get
 from .storage import pr_r2_presign_put as _pr_r2_presign_put
-from .modules.report_images import router as report_images_router
+from .modules.report_images import router as report_images_router, image_mime
+from .modules.private_image_writes import store_card_image
 from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router; from .modules.pcs_plan_router import PcsPlanContext, build_pcs_plan_router; from .modules.pcs_report_router import PcsReportContext, build_pcs_report_router; from .modules.pcs_dist_router import PcsDistContext, build_pcs_dist_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
@@ -140,6 +141,36 @@ app.include_router(build_worker_photos_router(WorkerDocumentsContext(
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
     private_image_url=private_image_url if PRIVATE_IMAGES_R2_ENABLED else None,
 )))
+
+@app.put("/api/v1/sic/records/{record_id}/image")
+async def upload_sic_image(record_id: uuid.UUID, upload_id: uuid.UUID, request: Request, user: dict = Depends(get_current_user)):
+    if not PRIVATE_IMAGES_R2_ENABLED:
+        raise HTTPException(501, "Private SIC image storage is unavailable")
+    async with shared_client() as client:
+        headers = supabase_headers(user["token"])
+        records = await client.get(f"{REST}/sic_records", params={
+            "id": f"eq.{record_id}", "archived": "eq.false", "select": "site_id",
+        }, headers=headers)
+        if not records.is_success:
+            raise HTTPException(503, "Could not verify SIC card access")
+        rows = records.json()
+        if not rows:
+            raise HTTPException(404, "SIC record is unavailable")
+        allowed = await client.post(f"{REST}/rpc/sic_can_manage", json={"p_site": rows[0]["site_id"]}, headers=headers)
+        if not allowed.is_success or allowed.json() is not True:
+            raise HTTPException(403, "You cannot add a card to this SIC record")
+        data = bytearray()
+        async for chunk in request.stream():
+            if len(data) + len(chunk) > 20 * 1024 * 1024:
+                raise HTTPException(413, "SIC image exceeds 20 MB")
+            data.extend(chunk)
+        mime = image_mime(data)
+        if mime not in ("image/jpeg", "image/png"):
+            raise HTTPException(415, "Use a PNG or JPEG SIC image")
+        key = f"{record_id}/{upload_id}"
+        await store_card_image(client, private_image_url, REST, user["auth_uid"], "sic-cards", key, mime, bytes(data), retry=True)
+        return {"object_key": key, "mime_type": mime}
+
 
 @app.get("/api/v1/sic/attachments/{attachment_id}/image")
 async def sic_attachment_image(attachment_id: uuid.UUID, user: dict = Depends(get_current_user)):

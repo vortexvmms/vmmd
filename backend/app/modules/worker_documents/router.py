@@ -18,6 +18,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ...core.roles import ATTENDANCE_ROLES
 from . import masking
+from ..private_image_writes import store_card_image, clear_card_image_receipt
 
 MAX_FILE = 20 * 1024 * 1024
 TABLES = {'cards': 'worker_cards', 'certificates': 'worker_certificates'}
@@ -203,6 +204,8 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
                 if bucket:
                     async with ctx.shared_client() as client:
                         if ctx.private_image_url and not key.lower().endswith('.pdf'):
+                            if bucket == 'worker-cards':
+                                await clear_card_image_receipt(client, ctx.rest_url, bucket, key)
                             deleted = await client.delete(ctx.private_image_url(bucket, key, 'DELETE'), follow_redirects=False)
                             if not deleted.is_success and deleted.status_code != 404:
                                 raise ValueError('Private R2 cleanup failed')
@@ -352,15 +355,19 @@ def build_worker_documents_router(ctx: WorkerDocumentsContext):
             extension = {'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf'}[mime]
             key = f'{worker_id}/{uuid4()}.{extension}'
         async with ctx.shared_client() as client:
-            r = await client.post(f'{storage}/object/worker-cards/{key}', headers={**ctx.supabase_headers(user['token']), 'Content-Type': mime, 'x-upsert': 'false'}, content=bytes(data))
-            if not r.is_success:
-                try:
-                    error = r.json()
-                except ValueError:
-                    error = {}
-                duplicate = r.status_code in (400, 409) and isinstance(error, dict) and error.get('error') in ('Duplicate', 'AlreadyExists')
-                if not (import_id and duplicate):
-                    raise HTTPException(503, 'Private storage upload failed. Please try again.')
+            if ctx.private_image_url and mime.startswith('image/'):
+                await store_card_image(client, ctx.private_image_url, ctx.rest_url, user['auth_uid'],
+                                       'worker-cards', key, mime, bytes(data), retry=bool(import_id))
+            else:
+                r = await client.post(f'{storage}/object/worker-cards/{key}', headers={**ctx.supabase_headers(user['token']), 'Content-Type': mime, 'x-upsert': 'false'}, content=bytes(data))
+                if not r.is_success:
+                    try:
+                        error = r.json()
+                    except ValueError:
+                        error = {}
+                    duplicate = r.status_code in (400, 409) and isinstance(error, dict) and error.get('error') in ('Duplicate', 'AlreadyExists')
+                    if not (import_id and duplicate):
+                        raise HTTPException(503, 'Private storage upload failed. Please try again.')
         payload = {field: key}
         if kind == 'certificates':
             payload['file_type'] = 'pdf' if mime == 'application/pdf' else 'image'

@@ -143,7 +143,61 @@ async function readEntryCards(){
   finally{if(version===readVersion){readController=null;$('cancel-read').hidden=true;entryControls()}}
 }
 async function chooseEntryFiles(files){if(busy||readController)return;await previewFiles(files,'entry-preview','entry');await readEntryCards()}
-async function uploadCards(recordId,files,status){const failed=[];for(let i=0;i<files.length;i++){const x=files[i];if(x.saved)continue;const key=recordId+'/'+crypto.randomUUID();$(status).textContent=`Uploading ${i+1} of ${files.length}: ${x.file.name}`;let stored=false;try{await request('/storage/v1/object/sic-cards/'+key,{method:'POST',headers:{'Content-Type':x.type,'x-upsert':'false'},body:x.file});stored=true;await db('sic_attachments',{method:'POST',body:JSON.stringify({record_id:recordId,object_key:key,filename:x.file.name.slice(0,240),mime_type:x.type,file_size:x.file.size})});x.saved=true}catch(e){if(stored){try{await request('/storage/v1/object/sic-cards',{method:'DELETE',body:JSON.stringify({prefixes:[key]})})}catch{}}failed.push({file:x,error:e.message})}}return failed}
+const privateUploads = new WeakMap();
+async function uploadCards(recordId, files, status) {
+  const failed = [];
+  for (const [index, item] of files.entries()) {
+    if (item.saved) continue;
+    $(status).textContent = `Uploading ${index + 1} of ${files.length}: ${item.file.name}`;
+    let key = recordId + '/' + crypto.randomUUID(), mime = item.type, storedInSupabase = false;
+    try {
+      if (mime === 'image/jpeg' || mime === 'image/png') {
+        let prepared = privateUploads.get(item.file);
+        if (prepared?.recordId !== recordId) {
+          prepared = {recordId, id:crypto.randomUUID()};
+          privateUploads.set(item.file, prepared);
+        }
+        const response = await vmmsApi('/api/v1/sic/records/' + recordId + '/image?upload_id=' + prepared.id, {
+          method:'PUT', body:item.file, headers:{'Content-Type':mime}
+        });
+        if (response.ok) {
+          const uploaded = await response.json();
+          if (uploaded.object_key !== recordId + '/' + prepared.id) throw Error('Could not verify SIC image upload');
+          key = uploaded.object_key;
+          mime = uploaded.mime_type;
+        } else if (response.status !== 501) {
+          const detail = await response.json().catch(() => ({}));
+          throw Error(detail.detail || 'Could not upload SIC image');
+        } else {
+          storedInSupabase = true;
+        }
+      } else {
+        storedInSupabase = true;
+      }
+      if (storedInSupabase) {
+        await request('/storage/v1/object/sic-cards/' + key, {method:'POST', headers:{
+          'Content-Type':mime, 'x-upsert':'false'
+        }, body:item.file});
+      }
+      try {
+        await db('sic_attachments', {method:'POST', body:JSON.stringify({
+          record_id:recordId, object_key:key, filename:item.file.name.slice(0,240),
+          mime_type:mime, file_size:item.file.size
+        })});
+      } catch (error) {
+        const attached = !storedInSupabase && await db('sic_attachments?select=id&object_key=eq.' + encodeURIComponent(key));
+        if (!attached?.length) throw error;
+      }
+      item.saved = true;
+    } catch (error) {
+      if (storedInSupabase) {
+        try { await request('/storage/v1/object/sic-cards', {method:'DELETE', body:JSON.stringify({prefixes:[key]})}); } catch {}
+      }
+      failed.push({file:item,error:error.message});
+    }
+  }
+  return failed;
+}
 $('entry-form').onsubmit=async e=>{e.preventDefault();if(busy||readController||refreshing)return;busy=true;entryControls();try{overrideCheck();designationCheck();const selectedDesignation=designationValue();if((!edit||edit.designation)&&!selectedDesignation)throw Error('Select a designation for this SIC entry.');if(!$('worker').value)throw Error('Choose a matching worker from the directory suggestions.');if(cardBatch?.drafts[draftIndex].mixed)throw Error('Split the file containing multiple workers before saving.');if(!$('card-review').hidden&&!$('card-confirmed').checked)throw Error('Check the original card and confirm the extracted details before saving.');busy=false;entryControls();const valid=$('entry-form').reportValidity();busy=true;entryControls();if(!valid)return;const data={worker_id:$('worker').value,site_id:$('entry-site').value,designation:selectedDesignation,fin:$('fin').value.trim().toUpperCase(),sic_date:$('sic-date').value,validity_months:months(),expiry_date:$('expiry').value,override_reason:$('override-reason').value.trim(),remarks:$('remarks').value.trim()};if(data.sic_date>SIC.today())throw Error('SIC Date cannot be in the future.');if(data.expiry_date<data.sic_date)throw Error('Expiry Date cannot be earlier than SIC Date.');const duplicate=current().find(r=>!r.archived&&r.site_id===data.site_id&&(r.worker_id===data.worker_id||r.fin.toUpperCase()===data.fin)&&r.id!==edit?.id&&r.id!==renew?.id);if(duplicate)throw Error('A current SIC already exists for this worker at this site. Use Renew SIC from the log.');const saved=await db('rpc/sic_save',{method:'POST',body:JSON.stringify({p_data:data,p_id:edit?.id||null,p_renew:renew?.id||null,p_expected:edit?.updated_at||renew?.updated_at||null})});edit=saved;renew=null;$('entry-title').textContent='Edit SIC Entry';const failed=await uploadCards(saved.id,entryFiles,'entry-error');await load();if(failed.length){entryFiles=failed.map(f=>f.file);if(cardBatch){const d=cardBatch.drafts[draftIndex];d.fileIndexes=d.fileIndexes.filter(i=>entryFiles.some(x=>x.file===cardBatch.files[i].file))}await previewFiles(entryFiles.map(x=>x.file),'entry-preview','entry');throw Error(`SIC record saved. ${failed.length} card(s) failed: ${failed.map(f=>f.error).join('; ')}. Retry Save to attach only failed cards.`)}if(cardBatch){cardBatch.drafts[draftIndex].saved=true;const next=cardBatch.drafts.findIndex(d=>!d.saved);if(next>=0){edit=null;renew=null;await showDraft(next);message('SIC saved. Review the next card entry.');return}}if(e.submitter?.value==='another'){resetEntry();message('SIC saved. Ready for another entry.')}else{resetEntry();switchTab('log');message('SIC record and selected cards saved.')}}catch(e){$('entry-error').textContent=e.message}finally{busy=false;entryControls()}};
 $('upload-form').onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;const btn=e.submitter;btn.disabled=true;try{if(!uploadFiles.length)throw Error('Choose at least one SIC card file.');const rs=records.find(r=>r.id===$('upload-record').value);if(!rs||!canManage(rs))throw Error('Select a SIC record you can manage.');const failed=await uploadCards(rs.id,uploadFiles,'upload-status');await load();uploadFiles=failed.map(f=>f.file);await previewFiles(uploadFiles.map(x=>x.file),'upload-preview','upload');$('upload-files').value='';$('upload-files').required=uploadFiles.length===0;if(failed.length)throw Error(`${failed.length} file(s) failed: ${failed.map(f=>f.error).join('; ')}. Retry uploads for failed files.`);$('upload-status').className='';$('upload-status').textContent='Cards uploaded successfully. Previous uploads retained.'}catch(e){$('upload-status').className='error';$('upload-status').textContent=e.message}finally{busy=false;btn.disabled=false}};
 async function run(fn){try{await fn()}catch(e){message(e.message)}}
