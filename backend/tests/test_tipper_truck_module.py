@@ -33,8 +33,8 @@ def test_equipment_navigation_and_page_are_published():
     home = (ROOT / "frontend" / "home.html").read_text()
     page = (ROOT / "frontend" / "tipper-trucks.html").read_text()
     sw = (ROOT / "frontend" / "sw.js").read_text()
-    assert "Equipment & Machineries" in shell
-    assert "Equipment & Machineries" in home
+    assert "Equipment & Logistics" in shell
+    assert "Equipment & Logistics" in home
     assert "Tipper Truck Supply" in shell
     assert "tipper-trucks.html" in shell and "tipper-trucks.html" in sw
     assert "Bulk Trip Sheets" in page

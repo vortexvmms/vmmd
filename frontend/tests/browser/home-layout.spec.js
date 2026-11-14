@@ -36,3 +36,16 @@ test('supervisor phone keeps its original lightweight home menu',async({page},in
  await expect(page.locator('.mnav a[href="attendance.html"]')).toBeVisible();await expect(page.locator('#kpis')).toBeHidden();await expect(page.locator('.tasks')).toBeHidden();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
 });
+
+test('sidebar groups renamed pages without adding supervisor links',async({page},info)=>{
+ await fixture(page,'site_sup');await page.goto('/home.html');
+ const mobile=info.project.name==='mobile-safari';
+ const menu=page.locator(mobile?'#mnav':'#vcms-app-nav');
+ const safety=mobile?menu.locator('.msec').filter({hasText:'Safety & Training'}):menu.getByRole('button',{name:/Safety & Training/});
+ await expect(safety).toBeVisible();
+ if(!mobile)await safety.click();
+ await expect(menu.locator('a[href="worker-cards.html"]')).toHaveText('Training Records');
+ await expect(menu.locator('a[href="sic-register.html"]')).toHaveText('Site Induction Register (SIC)');
+ await expect(menu.locator('a[href="attendance.html"]')).toHaveText('Mark Attendance');
+ await expect(menu.locator('a[href="verify.html"],a[href="users.html"]')).toHaveCount(0);
+});

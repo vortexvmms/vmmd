@@ -13,9 +13,9 @@ def test_old_planning_is_not_exposed_in_navigation():
         assert "reports.html" not in source
     # The obsolete schedule/reports implementation stays removed. Planning V2.1
     # is a new administrator-only page with a different route and contracts.
-    assert 'grp:"Planning"' in home
+    assert 'grp:"Projects & Planning"' in home
     assert '"planning.html"' in home
-    assert 'group:"Planning"' in shell
+    assert 'group:"Projects & Planning"' in shell
     assert '"planning.html"' in shell
 
 
