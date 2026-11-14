@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260905-navyheaders"></script>
+  <script src="js/report-images.js?v=20261114-private"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script><script src="js/pcs-dpr.js?v=20260905-navyheaders"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     body.dpr { background:#F3F4F6; }
@@ -292,7 +292,7 @@
       "WSHC","WSHS","Confined Space Assessor","Confined Space Attendant","First Aider","Rescuer",
       "Rigger Signalman","Banksman","Traffic Controller","Excavator Operator","Roller Operator",
       "Lorrycrane Operator","Tipper Truck Driver","Driver","Welder","Fire Watchman","General Worker"];
-    const DPR_LOGO="https://dyfwyhpbffnzxfnwjfxg.supabase.co/storage/v1/object/public/dpr-photos/branding/vortex-logo.png";
+    const DPR_LOGO="https://raw.githubusercontent.com/vortexvmms/vmmd/d7d1801edd94645fabaac71047fcf8cfb2926183/backend/assets/vortex-logo.png";
     (function(){ var _l=new Image(); _l.crossOrigin="anonymous"; _l.src=DPR_LOGO; })();  // preload so html2canvas has it ready
 
     function toast(m,long=false,ok=false){const t=document.getElementById("toast");t.textContent=m;t.style.background=ok?"#16a34a":"";t.classList.remove("hidden");setTimeout(()=>t.classList.add("hidden"),long?6000:(ok?1500:2600));}
@@ -447,8 +447,9 @@
     function renderPhotos(){
       document.getElementById("photos").innerHTML=PHOTOS.map((p,i)=>`
         <div class="photo"><button class="rm" onclick="rmPhoto(${i})">×</button>
-        <img loading="lazy" decoding="async" src="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
+        <img loading="lazy" decoding="async" data-report-image="${esc(p.url)}" alt=""><input value="${esc(p.caption||"")}" placeholder="Caption" oninput="PHOTOS[${i}].caption=this.value"></div>`).join("");
       if(typeof updateDprReadiness==="function") updateDprReadiness();
+      VCMS_REPORT_IMAGES.fill(document.getElementById("photos"));
     }
     function rmPhoto(i){ PHOTOS.splice(i,1); renderPhotos(); }
     async function handleUpload(files){
@@ -456,7 +457,7 @@
       const site=siteVal(), date=dateVal(), msg=document.getElementById("upmsg");
       for(let i=0;i<files.length;i++){ msg.textContent=`Uploading ${i+1} of ${files.length}…`;
         try{ const url=await uploadPhoto(files[i], site, date); PHOTOS.push({url, caption:""}); renderPhotos(); }
-        catch(ex){ toast("Photo upload failed — is the dpr-photos bucket set up?", true); } }
+        catch(ex){ toast("Photo upload failed. Please try again.", true); } }
       msg.textContent="";
     }
     async function onPhotos(e){ const f=[...e.target.files]; e.target.value=""; await handleUpload(f); }
@@ -481,27 +482,11 @@
         return (blob && blob.size < file.size) ? blob : file;   // keep whichever is smaller
       }catch(e){ return file; }
     }
-    // Store an image blob at <path>: Cloudflare R2 if configured, else Supabase. Returns public URL.
-    async function storeImage(blob, path){
-      const type=blob.type||"image/jpeg";
-      // 1) R2 via the backend proxy (backend → R2 server-side; no browser→S3 CORS)
-      try{
-        const s=getSession();
-        const url=`${VMMS_CONFIG.BACKEND_URL}/api/v1/storage/upload?path=${encodeURIComponent(path)}&content_type=${encodeURIComponent(type)}`;
-        const r=await fetch(url,{method:"PUT",headers:{"Authorization":"Bearer "+s.access_token,"Content-Type":type},body:blob});
-        if(r.ok){ const j=await r.json(); if(j.public_url) return j.public_url; }
-      }catch(e){ /* fall back to Supabase */ }
-      const s=getSession();
-      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:blob });
-      if(!r.ok) throw new Error("upload "+r.status);
-      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
-    }
     async function uploadPhoto(file, site, date){
       const body=await compressImage(file);
       const ext = body.type==="image/jpeg" ? "jpg" : ((file.type.split("/")[1]||"png").replace(/[^a-z0-9]/gi,""));
       const path=`${site}/${date}/${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-      return storeImage(body, path);
+      return VCMS_REPORT_IMAGES.upload(body, path);
     }
 
     // ---- signature: draw pad + upload image ----
@@ -535,12 +520,19 @@
     }
     async function uploadSig(file){
       const path=`signatures/${siteVal()}/${dateVal()}_${Date.now()}_${Math.random().toString(36).slice(2,6)}.png`;
-      return storeImage(file, path);
+      return VCMS_REPORT_IMAGES.upload(file, path);
     }
     function setSignature(url){
       SIGNATURE_URL=url||"";
       const img=document.getElementById("sigimg"), pad=document.getElementById("sigpad");
-      if(SIGNATURE_URL){ img.src=SIGNATURE_URL; img.classList.remove("hidden"); if(pad) pad.classList.add("hidden"); }
+      if(SIGNATURE_URL){
+        const ref=SIGNATURE_URL;
+        img.removeAttribute("src");
+        VCMS_REPORT_IMAGES.resolve(ref).then(url=>{
+          if(SIGNATURE_URL===ref) img.src=url;
+        }).catch(()=>{ if(SIGNATURE_URL===ref) toast("Saved signature is unavailable",true); });
+        img.classList.remove("hidden"); if(pad) pad.classList.add("hidden");
+      }
       else { img.classList.add("hidden"); img.removeAttribute("src"); if(pad) pad.classList.remove("hidden"); sigClear(); }
     }
     function sigRemove(){ setSignature(""); }
@@ -670,7 +662,7 @@
     }
 
     // ---- PDF ----
-    function buildSheet(forPrint){
+    function buildSheet(forPrint, imageUrls = new Map()){
       const co = forPrint ? "" : ' crossorigin="anonymous"';
       const d=collect(); const mp=d.manpower, eq=d.equipment, mt=d.materials;
       const noSum=mp.reduce((a,r)=>a+(parseFloat(r.no)||0),0);
@@ -711,13 +703,13 @@
         <p style="font-size:10px;margin:8px 0 4px">Verification of these details confirms that the information recorded is accurate.</p>
         <table class="st">
           <tr><td style="width:50%"><b>Prepared By :</b> (VORTEX) Representative</td><td style="width:50%"><b>Conformed By:</b> ${e(d.conformed_by_party)}</td></tr>
-          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${SIGNATURE_URL}"${co} style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
+          <tr class="signrow"><td>${SIGNATURE_URL?`<img src="${e(imageUrls.get(SIGNATURE_URL)||SIGNATURE_URL)}"${co} style="max-height:48px;max-width:74%;display:block;margin-bottom:2px">`:""}${e(d.prepared_by_name)}${d.report_date?`&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight:normal">${dmy(d.report_date)}</span>`:""}</td><td></td></tr>
           <tr><td class="c">Name / Signature / Date</td><td class="c">Name / Signature / Date</td></tr>
         </table>
         </div></div>`;
       if(PHOTOS.length){
         html+=`<div class="photos-block"><div class="photos-head" style="font-weight:bold;margin:10px 0 6px">Activity Photos</div><div class="pgrid">`;
-        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(p.url)}"${co}></div></div>`).join("");
+        html+=PHOTOS.map(p=>`<div class="pcell"><div class="cap">${e(p.caption)}</div><div class="imgwrap"><img src="${e(imageUrls.get(p.url)||p.url)}"${co}></div></div>`).join("");
         html+=`</div></div>`;
       }
       return html+`</div>`;
@@ -771,9 +763,14 @@
       }catch(e){ if(e.name!=="AbortError") document.getElementById("iosdownload").click(); }
     }
     function closePreparedPdf(){ document.getElementById("iospdf").style.display="none"; }
+    async function reportSheetImages(){
+      const refs=[...new Set([...PHOTOS.map(p=>p.url),SIGNATURE_URL].filter(Boolean))];
+      return new Map(await Promise.all(refs.map(async ref=>[ref,await VCMS_REPORT_IMAGES.resolve(ref)])));
+    }
     async function downloadPdf(){
       const el=document.getElementById("sheet"), mask=document.getElementById("sheetmask");
-      el.innerHTML=buildSheet();
+      try{ el.innerHTML=buildSheet(false,await reportSheetImages()); }
+      catch(e){ toast(e.message,true); return; }
       // bring the sheet on-screen (behind a white mask) so html2canvas captures real pixels
       mask.classList.add("on"); el.classList.add("cap");
       await waitSheetImages(el);                                   // logo + photos fully loaded
@@ -793,12 +790,16 @@
     }
 
     // ---- Print / PDF (native browser render → correct vertical alignment, sharp text) ----
-    function printSheet(){
+    async function printSheet(){
       if(IS_IOS){ downloadPdf(); return; }
       const styles=[...document.querySelectorAll("style")].map(s=>s.textContent).join("\n");
       const iow=(val("f-item")||"DPR").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,60);
       const w=window.open("","_dprprint");
       if(!w){ toast("Allow pop-ups, then tap Print / PDF again"); return; }
+      w.document.body.textContent="Loading report images…";
+      let imageUrls;
+      try{ imageUrls=await reportSheetImages(); }
+      catch(e){ w.close(); toast(e.message,true); return; }
       w.document.open();
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${iow}_${dateVal()}</title>
         <style>${styles}
@@ -822,7 +823,7 @@
             function tick(){ if(b) b.textContent="Loading photos… ("+(n-left)+"/"+n+")"; if(left===0) ready(); }
             imgs.forEach(function(im){ if(im.complete){ left--; tick(); } else { im.onload=im.onerror=function(){ left--; tick(); }; } });
           });
-        <\/script></head><body><div class="pbar"><button id="prbtn" disabled onclick="window.print()">Loading photos…</button><button class="cl" onclick="window.close()">✕ Close</button></div><div id="sheet">${buildSheet(true)}</div></body></html>`);
+        <\/script></head><body><div class="pbar"><button id="prbtn" disabled onclick="window.print()">Loading photos…</button><button class="cl" onclick="window.close()">✕ Close</button></div><div id="sheet">${buildSheet(true,imageUrls)}</div></body></html>`);
       w.document.close();
     }
 
@@ -831,7 +832,7 @@
     function xlDMY(v){ if(!v) return ""; const p=String(v).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:v; }
     async function imgForXlsx(url){
       try{
-        const blob=await (await fetch(url,{mode:"cors"})).blob();
+        const blob=await (await fetch(await VCMS_REPORT_IMAGES.resolve(url),{mode:"cors"})).blob();
         const bmp=await createImageBitmap(blob);
         let w=bmp.width,h=bmp.height; const sc=Math.min(1,1000/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
         const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bmp,0,0,w,h);

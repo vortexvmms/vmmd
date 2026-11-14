@@ -71,8 +71,13 @@ def build_worker_photos_router(ctx: WorkerDocumentsContext):
         raw = await run_in_threadpool(portrait, bytes(data))
         key = f'{worker_id}/{uuid4()}.jpg'
         async with ctx.shared_client() as client:
-            r = await client.post(f'{storage}/object/worker-photos/{key}', content=raw,
-                headers={**ctx.supabase_headers(user['token']), 'Content-Type': 'image/jpeg', 'x-upsert': 'false'})
+            if ctx.private_image_url:
+                r = await client.put(ctx.private_image_url('worker-photos', key, 'PUT'), content=raw,
+                    headers={'Content-Type': 'image/jpeg', 'Cache-Control': 'private, no-store', 'If-None-Match': '*'},
+                    follow_redirects=False)
+            else:
+                r = await client.post(f'{storage}/object/worker-photos/{key}', content=raw,
+                    headers={**ctx.supabase_headers(user['token']), 'Content-Type': 'image/jpeg', 'x-upsert': 'false'})
         if not r.is_success:
             raise HTTPException(503, 'Photo upload failed. Please try again.')
         # Immutable keys preserve the previous photo if attaching this upload fails.

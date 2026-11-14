@@ -9,7 +9,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <script src="js/theme-boot.js?v=20260927-1"></script><link rel="stylesheet" href="css/theme-boot.css?v=20260927-1"><link rel="stylesheet" href="css/app.css">
   <script src="js/core-bundle.js?v=20260904-history1"></script>
-  <script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
+  <script src="js/report-images.js?v=20261114-private"></script><script src="js/auth.js?v=20260813-8"></script><script src="js/ui.js?v=20260825-ui5"></script>
   <script>window.esc=window.esc||function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});};</script>
   <style>
     body.dl { background:#F3F4F6; }
@@ -66,7 +66,7 @@
       .pr-top { grid-template-columns:minmax(0,1.45fr) minmax(420px,.55fr); }
     }
   </style>
-  <script src="js/pr-support.js?v=20261010-2"></script>
+  <script src="js/pr-support.js?v=private-20261010-2"></script>
 </head>
 <body class="dl min-h-screen flex flex-col">
   <header class="bg-red-700 text-white p-4 shadow sticky top-0 z-10">
@@ -225,20 +225,6 @@
         return (blob && blob.size<file.size)?blob:file;
       }catch(e){ return file; }
     }
-    async function storeImage(blob, path){
-      const type=blob.type||"image/jpeg";
-      try{
-        const s=getSession();
-        const url=`${VMMS_CONFIG.BACKEND_URL}/api/v1/storage/upload?path=${encodeURIComponent(path)}&content_type=${encodeURIComponent(type)}`;
-        const r=await fetch(url,{method:"PUT",headers:{"Authorization":"Bearer "+s.access_token,"Content-Type":type},body:blob});
-        if(r.ok){ const j=await r.json(); if(j.public_url) return j.public_url; }
-      }catch(e){}
-      const s=getSession();
-      const r=await fetch(`${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/dpr-photos/${path}`,{
-        method:"POST", headers:{ "Authorization":"Bearer "+s.access_token, "apikey":VMMS_CONFIG.SUPABASE_PUBLISHABLE, "Content-Type":type, "x-upsert":"true" }, body:blob });
-      if(!r.ok) throw new Error("upload "+r.status);
-      return `${VMMS_CONFIG.SUPABASE_URL}/storage/v1/object/public/dpr-photos/${path}`;
-    }
     // Load pdf.js on demand (to rasterise PDF invoices so they print inline).
     let PDFJS_READY=null;
     function loadPdfJs(){
@@ -353,7 +339,7 @@
           for(const pg of pages){
             const ph={url:"", caption: base + (pg.pages>1?` (p${pg.page})`:""), _up:true};
             PR_PHOTOS.push(ph); renderPhotos();
-            ph.url=await storeImage(pg.blob, _prPath()); ph._up=false; renderPhotos();
+            ph.url=await VCMS_REPORT_IMAGES.upload(pg.blob, _prPath()); ph._up=false; renderPhotos();
           }
         }catch(e){ toast("Couldn't read that PDF"); }
         // pull text lines (digital PDFs only) so items can be imported
@@ -371,7 +357,7 @@
       const ph={url:"", caption:"", _up:true}; PR_PHOTOS.push(ph); renderPhotos();
       try{
         const blob=await compressImage(file);
-        ph.url=await storeImage(blob, _prPath()); ph._up=false;
+        ph.url=await VCMS_REPORT_IMAGES.upload(blob, _prPath()); ph._up=false;
       }catch(e){ PR_PHOTOS=PR_PHOTOS.filter(p=>p!==ph); toast("Upload failed"); }
       renderPhotos();
     }
@@ -380,11 +366,12 @@
       g.innerHTML=PR_PHOTOS.map((p,i)=>`
         <div style="position:relative;border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;background:#fff">
           <div style="height:88px;background:#F3F4F6;display:flex;align-items:center;justify-content:center">
-            ${p.url?`<img loading="lazy" decoding="async" src="${p.url}" style="width:100%;height:88px;object-fit:cover">`:`<span style="font-size:11px;color:#9CA3AF">Uploading…</span>`}
+            ${p.url?`<img loading="lazy" decoding="async" data-report-image="${esc(p.url)}" style="width:100%;height:88px;object-fit:cover">`:`<span style="font-size:11px;color:#9CA3AF">Uploading…</span>`}
           </div>
           <input value="${esc(p.caption||"")}" oninput="PR_PHOTOS[${i}].caption=this.value" placeholder="Caption / Invoice no." style="width:100%;border:none;border-top:1px solid #eee;font-size:11px;padding:4px">
           <button onclick="PR_PHOTOS.splice(${i},1);renderPhotos()" style="position:absolute;top:3px;right:3px;background:#C00000;color:#fff;border:none;border-radius:9999px;width:20px;height:20px;font-weight:700;cursor:pointer">×</button>
         </div>`).join("");
+      VCMS_REPORT_IMAGES.fill(g);
     }
     function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.remove("hidden"); setTimeout(()=>t.classList.add("hidden"),2400); }
     function fmtDMY(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; }
@@ -615,12 +602,12 @@
       let pad="";
       const total=document.getElementById("grand").textContent;
       const totalRow = anyPrice ? `<tr class="tot"><td colspan="5" class="r">Total</td><td class="r">${esc(total)}</td><td></td></tr>` : "";
-      const photos=(d.photos||[]).filter(p=>p.url);
+      const photos=await Promise.all((d.photos||[]).filter(p=>p.url).map(async p=>({...p,url:await VCMS_REPORT_IMAGES.resolve(p.url)})));
       const oris=await Promise.all(photos.map(p=>imgAspect(p.url)));
       const atts=photos.map((p,i)=>`
         <div class="attpage ${oris[i]==='port'?'attn-port':'attn-land'}">
           <div class="attcap">Attachment ${i+1}${p.caption?(" — "+esc(p.caption)):""} &nbsp;·&nbsp; P.R No ${esc(d.pr_no||"")}</div>
-          <img src="${p.url}">
+          <img src="${esc(p.url)}">
         </div>`).join("");
       w.document.open();
       w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>PR ${esc(d.pr_no||"")}</title>
