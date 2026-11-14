@@ -139,6 +139,49 @@ app.include_router(build_worker_photos_router(WorkerDocumentsContext(
     private_image_url=private_image_url if PRIVATE_IMAGES_R2_ENABLED else None,
 )))
 
+@app.get("/api/v1/sic/attachments/{attachment_id}/image")
+async def sic_attachment_image(attachment_id: uuid.UUID, user: dict = Depends(get_current_user)):
+    if not PRIVATE_IMAGES_R2_ENABLED:
+        raise HTTPException(501, "Private SIC image storage is unavailable")
+    from fastapi.responses import Response
+
+    async with shared_client() as client:
+        # The attachment SELECT uses the caller's token and existing SIC site RLS.
+        records = await client.get(
+            f"{REST}/sic_attachments",
+            params={"id": f"eq.{attachment_id}", "select": "record_id,object_key,mime_type"},
+            headers=supabase_headers(user["token"]),
+        )
+        if not records.is_success:
+            raise HTTPException(503, "Could not load the SIC attachment")
+        rows = records.json()
+        if not rows:
+            raise HTTPException(404, "SIC attachment is unavailable")
+        attachment = rows[0]
+        key = attachment["object_key"]
+        mime = attachment["mime_type"]
+        if (mime not in ("image/jpeg", "image/png")
+                or not re.fullmatch(r"[0-9a-f-]{36}/[0-9a-f-]{36}", key)
+                or key.split("/")[0] != attachment["record_id"]):
+            raise HTTPException(404, "SIC attachment is unavailable")
+        try:
+            async with client.stream(
+                "GET", private_image_url("sic-cards", key, "GET"), follow_redirects=False,
+            ) as image:
+                if image.status_code == 200:
+                    data = bytearray()
+                    async for chunk in image.aiter_bytes():
+                        if len(data) + len(chunk) > 20 * 1024 * 1024:
+                            raise HTTPException(413, "SIC image exceeds 20 MB")
+                        data.extend(chunk)
+                    if data:
+                        return Response(bytes(data), media_type=mime, headers={"Cache-Control": "private, no-store"})
+        except httpx.RequestError:
+            pass
+    # Authenticated frontend can fall back to the original Storage API.
+    raise HTTPException(501, "Private SIC image is unavailable")
+
+
 @app.get("/api/v1/audit-log")
 async def get_audit_log(date_from: str | None = None, date_to: str | None = None,
                         action: str | None = None, actor_id: str | None = None,

@@ -135,6 +135,7 @@ test('site summary opens exact matching rows and omits sites without records',as
 });
 test('dashboard supports direct renewal and original-card viewing with role-aware controls',async({page})=>{
  await boot(page,'admin',2);let read=false;
+ await page.route('**/api/v1/sic/attachments/card-1/image',r=>r.fulfill({status:501,json:{detail:'Private SIC image is unavailable'}}));
  await page.route('**/rest/v1/sic_attachments?**',r=>r.fulfill({json:[{id:'card-1',record_id:'30000000-0000-0000-0000-000000000002',object_key:'record/card',mime_type:'image/png',filename:'card.png'}]}));
  await page.route('**/storage/v1/object/authenticated/sic-cards/record/card',r=>{read=true;return r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aH5sAAAAASUVORK5CYII=','base64')})});
  await page.locator('#refresh').click();await page.locator('#action-table').getByRole('button',{name:'View card',exact:true}).click();await expect(page.locator('#preview-dialog')).toBeVisible();expect(read).toBe(true);await page.locator('#close-preview').click();
