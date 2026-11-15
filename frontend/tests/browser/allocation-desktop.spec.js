@@ -89,3 +89,13 @@ test('failed save never opens a broadcast, and saved incomplete days do not show
  await expect(page.locator('#toast')).toContainText('Attendance already recorded');
 });
 
+test('WhatsApp refreshes returned workers and assignments instead of using cached home leave',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/v1/workers',r=>r.fulfill({json:workers.map(w=>w.id==='w4'?{...w,status:'active'}:w)}));
+ await page.route('**/api/v1/allocations?date=*',r=>r.fulfill({json:[{worker_id:'w4',site_id:'s2',site_name:'TWRP',worker_code:'QA04',worker_name:'On Leave Worker'}]}));
+ await page.locator('#generate-whatsapp').click();
+ await expect(page.locator('#allocation-message')).toBeVisible();
+ await expect(page.locator('#allocation-message-text')).toHaveValue(/QA04_ON LEAVE WORKER/);
+ await expect(page.locator('#allocation-message-text')).not.toHaveValue(/HOME LEAVE \(CURRENT STATUS\)/);
+});
+
