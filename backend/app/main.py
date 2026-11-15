@@ -1935,15 +1935,18 @@ async def allocation_message(date: str, user: dict = Depends(get_current_user)):
         sites = rs.json() if rs.status_code == 200 else []
         ra = await client.get(f"{REST}/allocations",
                               params={"work_date": f"eq.{date}", "status": "eq.allocated",
-                                      "select": "site_id,workers(name,worker_code),sites(site_name)"},
+                                      "select": "worker_id,site_id,workers(name,worker_code),sites(site_name)"},
                               headers=supabase_headers(user["token"]))
         allocs = ra.json() if ra.status_code == 200 else []
         rw = await client.get(f"{REST}/workers",
-                              params={"status": "eq.on_leave", "select": "name,worker_code",
+                              params={"status": "eq.on_leave", "select": "id,name,worker_code",
                                       "order": "name.asc"},
                               headers=supabase_headers(user["token"]))
+        if ra.status_code != 200 or rw.status_code != 200 or rs.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not verify current allocation and home leave")
+        assigned_ids = {a["worker_id"] for a in allocs}
         leave = [f'{w["worker_code"]}_{tc(w["name"])}'
-                 for w in (rw.json() if rw.status_code == 200 else [])]
+                 for w in rw.json() if w["id"] not in assigned_ids]
 
         by_site: dict[str, list[str]] = {}
         for a in allocs:

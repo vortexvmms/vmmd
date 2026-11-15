@@ -253,10 +253,9 @@
       const tmr = new Date(Date.now() + 24 * 3600 * 1000);
       document.getElementById("date").value = fmtDate(tmr);
 
-      const [rs, rw] = await Promise.all([vmmsApi("/api/v1/sites"), vmmsApi("/api/v1/workers")]);
+      const rs = await vmmsApi("/api/v1/sites");
       ALL_SITES = await rs.json();
       SITES = VCMS_SITES.forOperationalDate(ALL_SITES, document.getElementById("date").value, []);
-      WORKERS = (await rw.json()).filter(w => w.status !== "inactive");
       document.getElementById("site").innerHTML =
         SITES.map(s => `<option value="${s.id}">${esc(s.site_name)}</option>`).join("");
       await loadDay();          // fetches the day, then renders in the current MODE
@@ -296,12 +295,16 @@
 
     async function loadDay() {
       const date = document.getElementById("date").value;
-      const [r, rq, so] = await Promise.all([
+      // Worker status may have changed in HR or on another device since boot.
+      vmmsClearRefCache('/api/v1/workers');
+      const [r, rq, so, rw] = await Promise.all([
         vmmsApi(`/api/v1/allocations?date=${date}`),
         vmmsApi(`/api/v1/requests?date=${date}`),
         vmmsApi(`/api/v1/site_off?date=${date}`),
+        vmmsApi('/api/v1/workers', {cache: 'no-store'}),
       ]);
-      if (!r.ok || !rq.ok || !so.ok) throw new Error('Could not load allocation data. Please retry.');
+      if (!r.ok || !rq.ok || !so.ok || !rw.ok) throw new Error('Could not load allocation data. Please retry.');
+      WORKERS = (await rw.json()).filter(w => w.status !== 'inactive');
       SITE_OFF = new Set(await so.json());
       ALLOC = r.ok ? await r.json() : [];
       ALLOCMAP = {};
@@ -1015,6 +1018,12 @@
       if(allocationBusy)return;
       // Do not generate a saved-day broadcast after a failed or partial save.
       if(dayHasChanges() && !(await persistAllocation()))return;
+      // Even with no local edits, another user may have changed assignments
+      // or returned a worker from home leave. Never broadcast a stale snapshot.
+      setAllocationBusy(true);
+      try { await loadDay(); }
+      catch(ex){toast(ex.message,true);return;}
+      finally {setAllocationBusy(false);}
       const select=document.getElementById('message-site');
       select.innerHTML='<option value="__all__">All sites</option>'+SITES.map(s=>`<option value="${esc(s.id)}">${esc(s.site_name)}</option>`).join('');
       select.value=MODE==='site'?document.getElementById('site').value:'__all__';
@@ -1042,7 +1051,7 @@
       });
       lines.push('',`*TOTAL ALLOCATED: ${total} PAX*`);
       if(scope==='__all__'){
-        const leave=WORKERS.filter(w=>w.status==='on_leave').sort((a,b)=>a.name.localeCompare(b.name));
+        const leave=WORKERS.filter(w=>w.status==='on_leave'&&!saved[w.id]).sort((a,b)=>a.name.localeCompare(b.name));
         if(leave.length){lines.push('',`*HOME LEAVE (CURRENT STATUS): ${leave.length} PAX*`);if(!summary)leave.forEach((w,i)=>lines.push(`${i+1}. ${w.worker_code}_${w.name.toUpperCase()}`));}
       }
       const offConflict=sites.some(s=>SITE_OFF.has(s.id)&&ALLOC.some(a=>a.site_id===s.id));
