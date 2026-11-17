@@ -54,6 +54,20 @@ begin
         perform public.store_edit_asset(asset,'{"name":"Unauthorized"}');
         raise exception 'Shared asset edited by supervisor';
     exception when insufficient_privilege then null; end;
+    begin
+        perform public.store_archive_asset(asset);
+        raise exception 'Site supervisor archived equipment';
+    exception when insufficient_privilege then null; end;
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',true);
+    perform public.store_archive_asset(asset);
+    perform public.store_archive_asset(asset);
+    if jsonb_array_length(public.store_register()->'stock')<>0
+       or jsonb_array_length(public.store_extras()->'reminders')<>0
+       or jsonb_array_length(public.store_movement_log(sg_today,sg_today,0,'','', 'TOOLS-1'))<>1 then
+        raise exception 'Archiving did not remove active stock or preserve movement history';
+    end if;
+    if public.store_photo_read(photo)->>'mime'<>'image/jpeg' then raise exception 'Archived movement lost photo access'; end if;
+    perform public.store_confirm_count(gen_random_uuid(),site,'{}');
     perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000003',true);
     begin
         perform public.store_register();
