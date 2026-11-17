@@ -88,11 +88,17 @@ function renderStock() {
   byId('confirm-stock').hidden = !locations().some(row => row.id === selected);
   for (const item of rows) {
     const row = tbody.insertRow();
-    labelCell(row,'Equipment',item.name,[item.code,item.category,item.equipment_type].filter(Boolean).join(' · '));
-    labelCell(row,'Serial / reference',item.serial_number || item.registration_number || item.lm_reference || '—',
-      [item.brand,item.model,item.condition].filter(Boolean).join(' · '));
+    labelCell(row,'Asset code',item.code);
+    labelCell(row,'Description',item.name,[item.category,item.equipment_type].filter(Boolean).join(' · '));
+    labelCell(row,'Brand / model',[item.brand,item.model].filter(Boolean).join(' · ') || '—');
+    labelCell(row,'Serial / vehicle',[item.serial_number,item.registration_number,item.lm_reference].filter(Boolean).join(' · ') || '—');
     labelCell(row,'Location',item.location);
-    labelCell(row,'Quantity',item.quantity);
+    labelCell(row,'Qty',item.quantity);
+    labelCell(row,'Condition',item.condition);
+    labelCell(row,'Remarks',item.notes || '—');
+    const dates=[['Purchased',item.purchase_date],['Maintenance',item.last_maintenance],['Calibration',item.last_calibration],['Repair',item.last_repair]];
+    labelCell(row,'Service dates',dates.filter(([,date])=>date).map(([name,date])=>name+' '+fmt(date)).join(' · ') || '—');
+    labelCell(row,'Updated',fmt(item.updated_at?.slice(0,10)));
     labelCell(row,'Action',actions(button('Edit',()=>openAsset(item)),button('Photos',()=>openPhotos('asset',item.id)),
       store.can_move && button('Move',()=>openMove(item),true)));
   }
@@ -176,6 +182,7 @@ submit(assetForm,'asset-error',async fields=>{
   const {site,quantity,...asset} = fields;
   for(const name of ['purchase_date','last_maintenance','last_repair','last_calibration']) asset[name] ||= null;
   const exists = Boolean(assetDraft.code);
+  asset.code=asset.code.trim() || 'EQ-'+assetDraft.id.slice(0,13).toUpperCase();
   const result = exists ? await request('/assets/'+assetDraft.id,'PUT',asset) : await request('/assets','POST',{
     id:assetDraft.id,site:nullableSite(site),quantity:Number(quantity),asset,
   });
@@ -297,7 +304,7 @@ function matchesReminder(row,status,day=today()){
   return true;
 }
 function renderOverview(){
-  const rows=store.reminders;
+  const rows=byId('my-reminders').checked ? store.reminders.filter(row=>row.assignee===store.actor_id) : store.reminders;
   const metrics=byId('store-metrics');
   metrics.replaceChildren();
   const day=today();
@@ -318,7 +325,9 @@ function renderOverview(){
     labelCell(row,'Required action',item.kind,item.reference);
     labelCell(row,'Due date',fmt(item.due));
     labelCell(row,'Responsible person',item.assignee_name || 'Unassigned');
-    const due=item.due<day?'Overdue':item.due<=shift(day,7)?'Due soon':'';
+    const noticeDays=/renewal|inspection/i.test(item.kind)?[30,14,7]:[14,7,1];
+    const alert=noticeDays.some(days=>item.due===shift(day,days));
+    const due=item.due<day?'Overdue':item.due===day?'Due today':alert?'Reminder today':item.due<=shift(day,7)?'Due soon':'';
     labelCell(row,'Status',item.status,item.status==='Completed'?'':due);
     labelCell(row,'Action',actions(button(item.status==='Completed'?'History':'Edit / history',()=>openReminder(item)),
       item.status!=='Completed' && button('Complete',()=>openCompletion(item),true)));
@@ -365,6 +374,7 @@ completeForm.elements.done.addEventListener('change',()=>{
 });
 byId('add-reminder').addEventListener('click',()=>openReminder());
 reminderStatus.addEventListener('change',renderOverview);
+byId('my-reminders').addEventListener('change',renderOverview);
 submit(reminderForm,'reminder-error',async fields=>{
   await request('/reminders','POST',{...fields,id:reminderDraft.id,asset:reminderDraft.asset_id || fields.asset,assignee:fields.assignee || null});
   byId('reminder-dialog').close();

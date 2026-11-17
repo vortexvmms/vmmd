@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/store.css">
 <script defer src="js/core-bundle.js?v=20260904-history1"></script>
 <script defer src="js/auth.js?v=20260930-upload2"></script>
+<script defer src="js/ui.js?v=20260825-ui5"></script>
 <script defer src="js/store.js?v=20261117-1"></script>
 </head>
 <body>
@@ -29,7 +30,7 @@
     <div class="store-metrics" id="store-metrics"></div>
     <div class="store-card">
       <div class="section-heading"><h2>Service &amp; Renewals</h2><button class="primary" type="button" id="add-reminder" disabled>Add reminder</button></div>
-      <div class="store-tools"><label>Reminder status<select id="reminder-filter"><option value="">All open reminders</option><option value="overdue">Overdue</option><option value="soon">Due in 7 days</option><option value="upcoming">Due in 8–30 days</option><option value="service">Out for service</option><option value="closed">Completed</option></select></label></div>
+      <div class="store-tools"><label class="check-label"><input type="checkbox" id="my-reminders"> My assigned reminders</label><label>Reminder status<select id="reminder-filter"><option value="">All open reminders</option><option value="overdue">Overdue</option><option value="soon">Due in 7 days</option><option value="upcoming">Due in 8–30 days</option><option value="service">Out for service</option><option value="closed">Completed</option></select></label></div>
       <div class="store-table"><table><thead><tr><th>Equipment</th><th>Required action</th><th>Due date</th><th>Responsible person</th><th>Status</th><th>Action</th></tr></thead><tbody id="reminder-rows"></tbody></table></div>
     </div>
     <div class="overview-lists">
@@ -45,7 +46,7 @@
     </div>
     <div class="section-heading"><p class="store-count" id="stock-count"></p><div class="compact-actions"><button type="button" data-export="stock">Export Excel</button><button type="button" data-print="stock">Print / PDF</button><button type="button" id="confirm-stock" hidden>Confirm count</button></div></div>
     <div class="store-table"><table>
-      <thead><tr><th scope="col">Equipment</th><th scope="col">Serial / reference</th><th scope="col">Location</th><th scope="col">Quantity</th><th scope="col">Action</th></tr></thead>
+      <thead><tr><th scope="col">Asset code</th><th scope="col">Description</th><th scope="col">Brand / model</th><th scope="col">Serial / vehicle</th><th scope="col">Store / site</th><th scope="col">Qty</th><th scope="col">Condition</th><th scope="col">Remarks</th><th scope="col">Service dates</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
       <tbody id="stock-rows"></tbody>
     </table></div>
   </section>
@@ -73,7 +74,7 @@
   <div class="dialog-heading"><h2 id="asset-title">Add equipment</h2><button type="button" data-close aria-label="Close">×</button></div>
   <div class="dialog-body">
     <div class="store-fields">
-      <label>Asset code<input name="code" maxlength="60" required></label>
+      <label>Asset code<input name="code" maxlength="60" placeholder="Auto-generated if blank"></label>
       <label>Category<select name="category" required><option>Machinery</option><option>Equipment</option><option>Tool</option></select></label>
       <label class="wide">Description<input name="name" maxlength="150" required></label>
       <label>Brand<input name="brand" maxlength="70"></label>

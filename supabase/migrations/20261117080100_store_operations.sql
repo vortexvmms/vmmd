@@ -175,9 +175,9 @@ begin
         history=history || jsonb_build_array(jsonb_build_object('id',p_completion,'done',p_done,'next',p_next,'reference',p_reference,'by',profile.name))
     where id=p_id;
     if item.kind ilike '%calibration%' then
-        update vcms_store.assets set last_calibration=greatest(last_calibration,p_done) where id=item.asset_id;
+        update vcms_store.assets set last_calibration=greatest(last_calibration,p_done),updated_at=now() where id=item.asset_id;
     elsif item.kind ilike '%maintenance%' or item.kind ilike '%service%' then
-        update vcms_store.assets set last_maintenance=greatest(last_maintenance,p_done) where id=item.asset_id;
+        update vcms_store.assets set last_maintenance=greatest(last_maintenance,p_done),updated_at=now() where id=item.asset_id;
     end if;
     return p_id;
 end;
@@ -208,7 +208,7 @@ begin
         purchase_date=nullif(p_asset->>'purchase_date','')::date,
         last_maintenance=nullif(p_asset->>'last_maintenance','')::date,
         last_calibration=nullif(p_asset->>'last_calibration','')::date,
-        last_repair=nullif(p_asset->>'last_repair','')::date
+        last_repair=nullif(p_asset->>'last_repair','')::date,updated_at=now()
     where id=p_id;
     return p_id;
 end;

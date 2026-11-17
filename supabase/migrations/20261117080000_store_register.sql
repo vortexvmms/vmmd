@@ -22,7 +22,8 @@ create table vcms_store.assets (
     serial_number text,
     registration_number text,
     created_by uuid not null references public.users(id),
-    created_at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
 );
 create unique index store_code_unique on vcms_store.assets(lower(code));
 
@@ -114,6 +115,7 @@ declare
     profile public.users := vcms_store.actor();
 begin
     return jsonb_build_object(
+        'actor_id',profile.id,
         'can_move',profile.role <> 'site_sup',
         'locations',(
             select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'name',s.site_name) order by s.site_name),'[]')
@@ -273,6 +275,7 @@ begin
     end if;
     insert into vcms_store.stock as stock values(p_asset,p_to,p_quantity)
     on conflict(asset_id,site_id) do update set quantity=stock.quantity+excluded.quantity;
+    update vcms_store.assets set updated_at=now() where id=p_asset;
     insert into vcms_store.movements(
         id,asset_id,from_site,to_site,from_name,to_name,quantity,moved_on,handed_over,
         received_by,receiver_name,requested_by,requester_name,notes,created_by

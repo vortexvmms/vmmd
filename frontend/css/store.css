@@ -95,3 +95,8 @@ button:active:not(:disabled){transform:translateY(1px)}
 .movement-metrics{grid-template-columns:repeat(5,minmax(0,1fr));padding:12px 14px 0}
 .movement-metrics>div{background:#f0f5fe;border:1px solid #dce8f9;border-radius:8px;padding:8px 10px;font-size:.82rem}
 @media(max-width:620px){.movement-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:621px){#stock-panel .store-table table{min-width:950px}}
+@media(max-width:620px){
+ #stock-panel .store-table td:first-child{grid-column:auto}
+ #stock-panel .store-table td:last-child{grid-column:1/-1}
+}
