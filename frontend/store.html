@@ -7,30 +7,34 @@
 <link rel="icon" href="icons/icon-192.png">
 <script src="js/theme-boot.js"></script>
 <link rel="stylesheet" href="css/theme-boot.css">
-<link rel="stylesheet" href="css/store.css">
+<link rel="stylesheet" href="css/store.css?v=20261117-2">
 <script defer src="js/core-bundle.js?v=20260904-history1"></script>
 <script defer src="js/auth.js?v=20260930-upload2"></script>
 <script defer src="js/ui.js?v=20260825-ui5"></script>
 <script defer src="js/store.js?v=20261117-1"></script>
 </head>
 <body>
-<header class="store-header"><a href="home.html">‹ Home</a><span>VCMS</span></header>
 <main class="store-main">
-  <section class="store-hero">
-    <div><h1>Equipment Store</h1><p>Track equipment at the main store and project sites.</p></div>
-    <button type="button" class="primary" id="add-asset" disabled>Add equipment</button>
-  </section>
-  <nav class="store-nav" aria-label="Store sections">
-    <button type="button" id="overview-tab" aria-pressed="true">Store Overview</button>
-    <button type="button" id="stock-tab" aria-pressed="false">Equipment Register</button>
-    <button type="button" id="movements-tab" aria-pressed="false">Movement Log</button>
-  </nav>
+  <div class="store-hero">
+    <a class="store-home" href="home.html" aria-label="Back to VCMS Home">‹ Home</a>
+    <h1>Equipment Store</h1>
+    <nav class="store-nav" aria-label="Store sections">
+      <button type="button" id="overview-tab" aria-pressed="true" aria-label="Store Overview"><span>Store Overview</span><span class="short-label" aria-hidden="true">Overview</span></button>
+      <button type="button" id="stock-tab" aria-pressed="false" aria-label="Equipment Register"><span>Equipment Register</span><span class="short-label" aria-hidden="true">Register</span></button>
+      <button type="button" id="movements-tab" aria-pressed="false" aria-label="Movement Log"><span>Movement Log</span><span class="short-label" aria-hidden="true">Movements</span></button>
+    </nav>
+    <button type="button" class="primary" id="add-asset" aria-label="Add equipment" disabled><span>Add equipment</span><span class="short-label" aria-hidden="true">+ Add</span></button>
+  </div>
   <p id="store-notice" role="status">Loading equipment…</p>
   <section id="overview-panel" aria-label="Store Overview">
     <div class="store-metrics" id="store-metrics"></div>
     <div class="store-card">
-      <div class="section-heading"><h2>Service &amp; Renewals</h2><button class="primary" type="button" id="add-reminder" disabled>Add reminder</button></div>
-      <div class="store-tools"><label class="check-label"><input type="checkbox" id="my-reminders"> My assigned reminders</label><label>Reminder status<select id="reminder-filter"><option value="">All open reminders</option><option value="overdue">Overdue</option><option value="soon">Due in 7 days</option><option value="upcoming">Due in 8–30 days</option><option value="service">Out for service</option><option value="closed">Completed</option></select></label></div>
+      <div class="section-heading reminder-toolbar">
+        <h2>Service &amp; Renewals</h2>
+        <label class="check-label"><input type="checkbox" id="my-reminders"> My assigned reminders</label>
+        <label class="reminder-status">Status<select aria-label="Reminder status" id="reminder-filter"><option value="">All open reminders</option><option value="overdue">Overdue</option><option value="soon">Due in 7 days</option><option value="upcoming">Due in 8–30 days</option><option value="service">Out for service</option><option value="closed">Completed</option></select></label>
+        <button class="primary" type="button" id="add-reminder" disabled>Add reminder</button>
+      </div>
       <div class="store-table"><table><thead><tr><th>Equipment</th><th>Required action</th><th>Due date</th><th>Responsible person</th><th>Status</th><th>Action</th></tr></thead><tbody id="reminder-rows"></tbody></table></div>
     </div>
     <div class="overview-lists">

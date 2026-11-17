@@ -22,6 +22,16 @@ test('Store stays responsive while moving equipment and reviewing site stock', a
   });
   await page.goto('/store.html');
   await expect(page.locator('#add-asset')).toBeEnabled();
+  await expect(page.getByRole('heading',{name:'Equipment Store',exact:true})).toHaveCSS('color','rgb(255, 255, 255)');
+  const toolbarButtons = await page.locator('.store-hero button').evaluateAll(buttons =>
+    buttons.map(button => {
+      const {top,right}=button.getBoundingClientRect();
+      return {top,right};
+    })
+  );
+  expect(toolbarButtons).toHaveLength(4);
+  expect(new Set(toolbarButtons.map(button => Math.round(button.top))).size).toBe(1);
+  expect(toolbarButtons.at(-1).right).toBeLessThanOrEqual(await page.evaluate(()=>window.innerWidth));
   const fits=()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth);
   expect(await fits()).toBe(true);
   await page.getByRole('button',{name:'Equipment Register',exact:true}).click();
