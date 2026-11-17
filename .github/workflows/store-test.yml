@@ -37,3 +37,19 @@ jobs:
             -f supabase/migrations/20261117080000_store_register.sql \
             -f supabase/migrations/20261117080100_store_operations.sql \
             -f backend/tests/store_db_checks.sql
+  responsive:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test store.spec.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: store-browser-results
+          path: test-results/
+          retention-days: 3
