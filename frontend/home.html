@@ -277,7 +277,7 @@ body.legacy-blue-home .tasks .tb{overflow:visible;max-height:none}
 
     function navFor(role){
       const permitted=new Set(roleNav(role).flatMap(section=>section.items.map(item=>item[1])));
-      if(["admin","general_manager","operation_manager","hr_assistant","main_sup","wshc_lead","logistics_sup","site_sup"].includes(role)) permitted.add("store.html");
+      if(ME && (["admin","general_manager","operation_manager","main_sup"].includes(ME.role) || ME.menu?.includes("store.html"))) permitted.add("store.html");
       return [
         {items:[["Home","home.html","home"],["My Tasks","todo.html","check"]]},
         {grp:"Daily Site Work",items:[["Request Manpower","request.html","cal"],["Mark Attendance","attendance.html","chk"],["End-Time Verification","verify.html","clk"],["Submit Daily Report","dpr.html","doc"],["WhatsApp Messages","whatsapp.html","chat"]]},

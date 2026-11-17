@@ -37,6 +37,7 @@ jobs:
             -f supabase/migrations/20261117080000_store_register.sql \
             -f supabase/migrations/20261117080100_store_operations.sql \
             -f supabase/migrations/20261117100500_store_asset_archive.sql \
+            -f supabase/migrations/20261117113000_store_user_access.sql \
             -f backend/tests/store_db_checks.sql
   responsive:
     runs-on: ubuntu-24.04

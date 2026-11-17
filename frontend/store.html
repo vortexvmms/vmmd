@@ -11,14 +11,14 @@
 <script defer src="js/core-bundle.js?v=20260904-history1"></script>
 <script defer src="js/auth.js?v=20260930-upload2"></script>
 <script defer src="js/ui.js?v=20260825-ui5"></script>
-<script defer src="js/store.js?v=20261117-4"></script>
+<script defer src="js/store.js?v=20261117-5"></script>
 </head>
 <body>
 <main class="store-main">
   <div class="store-hero">
     <a class="store-home" href="home.html" aria-label="Back to VCMS Home">‹ Home</a>
     <h1>Equipment Store</h1>
-    <nav class="store-nav" aria-label="Store sections">
+    <nav id="store-sections" class="store-nav" aria-label="Store sections" hidden>
       <button type="button" id="overview-tab" aria-pressed="true" aria-label="Store Overview"><span>Store Overview</span><span class="short-label" aria-hidden="true">Overview</span></button>
       <button type="button" id="stock-tab" aria-pressed="false" aria-label="Equipment Register"><span>Equipment Register</span><span class="short-label" aria-hidden="true">Register</span></button>
       <button type="button" id="movements-tab" aria-pressed="false" aria-label="Movement Log"><span>Movement Log</span><span class="short-label" aria-hidden="true">Movements</span></button>
@@ -26,7 +26,7 @@
     <button type="button" class="primary" id="add-asset" aria-label="Add equipment" disabled><span>Add equipment</span><span class="short-label" aria-hidden="true">+ Add</span></button>
   </div>
   <p id="store-notice" role="status">Loading equipment…</p>
-  <section id="overview-panel" aria-label="Store Overview">
+  <section id="overview-panel" aria-label="Store Overview" hidden>
     <div class="store-metrics" id="store-metrics"></div>
     <div class="store-card">
       <div class="section-heading reminder-toolbar">

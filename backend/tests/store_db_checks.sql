@@ -1,7 +1,11 @@
 insert into public.users values
 ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','Store Manager','admin','active'),
 ('10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000002','Site Supervisor','site_sup','active'),
-('10000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000003','Payroll','payroll','active');
+('10000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000003','Payroll','payroll','active'),
+('10000000-0000-0000-0000-000000000004','20000000-0000-0000-0000-000000000004','Other Supervisor','site_sup','active'),
+('10000000-0000-0000-0000-000000000005','20000000-0000-0000-0000-000000000005','Site Manager','main_sup','active'),
+('10000000-0000-0000-0000-000000000006','20000000-0000-0000-0000-000000000006','HR Assistant','hr_assistant','active');
+update public.users set menu='["store.html"]' where role='site_sup' and name='Site Supervisor';
 insert into public.sites values
 ('30000000-0000-0000-0000-000000000002','Assigned site','active',null),
 ('30000000-0000-0000-0000-000000000003','Other site','active',null);
@@ -73,8 +77,32 @@ begin
         perform public.store_register();
         raise exception 'Unauthorized account read the register';
     exception when insufficient_privilege then null; end;
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000004',true);
+    begin
+        perform public.store_movement_log(sg_today,sg_today,0,'','','');
+        raise exception 'Unselected supervisor read movements';
+    exception when insufficient_privilege then null; end;
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000005',true);
+    if not (public.store_register()->>'can_move')::boolean then
+        raise exception 'Site Manager default access failed';
+    end if;
 end $$;
 reset role;
+do $
+begin
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000006',true);
+    begin
+        update public.users set menu='["store.html"]' where name='HR Assistant';
+        raise exception 'HR Assistant granted Store access';
+    exception when insufficient_privilege then null; end;
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',true);
+    update public.users set menu=null where name='Site Supervisor';
+    perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000002',true);
+    begin
+        perform public.store_register();
+        raise exception 'Revoked account read the register';
+    exception when insufficient_privilege then null; end;
+end $;
 set role anon;
 do $$
 begin
