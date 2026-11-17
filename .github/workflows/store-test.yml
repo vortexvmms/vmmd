@@ -1,0 +1,55 @@
+name: Store module
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/*_store_*.sql'
+      - 'backend/app/modules/store/**'
+      - 'backend/tests/store*'
+      - 'frontend/store.html'
+      - 'frontend/js/store.js'
+      - 'frontend/css/store.css'
+      - 'frontend/tests/browser/store.spec.js'
+      - '.github/workflows/store-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/tests/store_db_foundation.sql \
+            -f supabase/migrations/20261117080000_store_register.sql \
+            -f supabase/migrations/20261117080100_store_operations.sql \
+            -f backend/tests/store_db_checks.sql
+  responsive:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test store.spec.js
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: store-browser-results
+          path: test-results/
+          retention-days: 3

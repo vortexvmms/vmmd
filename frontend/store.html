@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VCMS — Store</title>
+<link rel="icon" href="icons/icon-192.png">
+<script src="js/theme-boot.js"></script>
+<link rel="stylesheet" href="css/theme-boot.css">
+<link rel="stylesheet" href="css/store.css">
+<script defer src="js/core-bundle.js?v=20260904-history1"></script>
+<script defer src="js/auth.js?v=20260930-upload2"></script>
+<script defer src="js/ui.js?v=20260825-ui5"></script>
+<script defer src="js/store.js?v=20261117-1"></script>
+</head>
+<body>
+<header class="store-header"><a href="home.html">‹ Home</a><span>VCMS</span></header>
+<main class="store-main">
+  <section class="store-hero">
+    <div><h1>Equipment Store</h1><p>Track equipment at the main store and project sites.</p></div>
+    <button type="button" class="primary" id="add-asset" disabled>Add equipment</button>
+  </section>
+  <nav class="store-nav" aria-label="Store sections">
+    <button type="button" id="overview-tab" aria-pressed="true">Store Overview</button>
+    <button type="button" id="stock-tab" aria-pressed="false">Equipment Register</button>
+    <button type="button" id="movements-tab" aria-pressed="false">Movement Log</button>
+  </nav>
+  <p id="store-notice" role="status">Loading equipment…</p>
+  <section id="overview-panel" aria-label="Store Overview">
+    <div class="store-metrics" id="store-metrics"></div>
+    <div class="store-card">
+      <div class="section-heading"><h2>Service &amp; Renewals</h2><button class="primary" type="button" id="add-reminder" disabled>Add reminder</button></div>
+      <div class="store-tools"><label class="check-label"><input type="checkbox" id="my-reminders"> My assigned reminders</label><label>Reminder status<select id="reminder-filter"><option value="">All open reminders</option><option value="overdue">Overdue</option><option value="soon">Due in 7 days</option><option value="upcoming">Due in 8–30 days</option><option value="service">Out for service</option><option value="closed">Completed</option></select></label></div>
+      <div class="store-table"><table><thead><tr><th>Equipment</th><th>Required action</th><th>Due date</th><th>Responsible person</th><th>Status</th><th>Action</th></tr></thead><tbody id="reminder-rows"></tbody></table></div>
+    </div>
+    <div class="overview-lists">
+      <div class="store-card"><h2 class="section-heading">Stock by store / site</h2><ul id="stock-by-location" class="summary-list"></ul></div>
+      <div class="store-card"><h2 class="section-heading">Recent movements</h2><ul id="recent-movements" class="summary-list"></ul></div>
+    </div>
+  </section>
+  <section class="store-card" id="stock-panel" hidden aria-label="Equipment Register">
+    <div class="store-tools">
+      <label>Search<input type="search" id="store-search" placeholder="Name, asset code, serial or plate number"></label>
+      <label>Store / site<select id="store-location"><option value="">All locations</option></select></label>
+      <label>Category<select id="store-category"><option value="">All categories</option><option>Machinery</option><option>Equipment</option><option>Tool</option></select></label>
+    </div>
+    <div class="section-heading"><p class="store-count" id="stock-count"></p><div class="compact-actions"><button type="button" data-export="stock">Export Excel</button><button type="button" data-print="stock">Print / PDF</button><button type="button" id="confirm-stock" hidden>Confirm count</button></div></div>
+    <div class="store-table"><table>
+      <thead><tr><th scope="col">Asset code</th><th scope="col">Description</th><th scope="col">Brand / model</th><th scope="col">Serial / vehicle</th><th scope="col">Store / site</th><th scope="col">Qty</th><th scope="col">Condition</th><th scope="col">Remarks</th><th scope="col">Service dates</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead>
+      <tbody id="stock-rows"></tbody>
+    </table></div>
+  </section>
+  <section class="store-card" id="movements-panel" aria-label="Movement Log" hidden>
+    <div class="store-metrics movement-metrics" id="movement-metrics"></div>
+    <form class="store-tools" id="log-filter">
+      <label>From date<input type="date" name="start" required></label>
+      <label>To date<input type="date" name="end" required></label>
+      <label>Store / site<select name="location"></select></label>
+      <label>Movement type<select name="type"><option value="">All types</option><option>Store issue</option><option>Store return</option><option>Site transfer</option></select></label>
+      <label>Search<input type="search" name="search" maxlength="150" placeholder="Asset, route or person"></label>
+      <button type="submit">Show movements</button>
+    </form>
+    <div class="section-heading"><p class="store-count" id="movement-count" role="status"></p><div class="compact-actions"><button type="button" data-export="movements">Export Excel</button><button type="button" data-print="movements">Print / PDF</button><button type="button" id="whatsapp-open">Daily WhatsApp Update</button></div></div>
+    <div class="store-table"><table>
+      <thead><tr><th scope="col">Date</th><th scope="col">Equipment</th><th scope="col">Route</th><th scope="col">Quantity</th><th scope="col">Handover</th></tr></thead>
+      <tbody id="movement-rows"></tbody>
+    </table></div>
+    <div class="store-actions"><button type="button" id="previous-page" disabled>Previous</button><button type="button" id="next-page" disabled>Next</button></div>
+  </section>
+</main>
+<section id="print-report"></section>
+<dialog id="asset-dialog" aria-labelledby="asset-title">
+<form id="asset-form">
+  <div class="dialog-heading"><h2 id="asset-title">Add equipment</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <div class="store-fields">
+      <label>Asset code<input name="code" maxlength="60" placeholder="Auto-generated if blank"></label>
+      <label>Category<select name="category" required><option>Machinery</option><option>Equipment</option><option>Tool</option></select></label>
+      <label class="wide">Description<input name="name" maxlength="150" required></label>
+      <label>Brand<input name="brand" maxlength="70"></label>
+      <label>Model<input name="model" maxlength="70"></label>
+      <label>Serial number<input name="serial_number" maxlength="70"></label>
+      <label>Vehicle registration<input name="registration_number" maxlength="35"></label>
+      <label>Equipment type<select name="equipment_type"></select></label>
+      <label>Ownership<select name="ownership"><option value="">Select if known</option><option>Company-owned</option><option>Hired / leased</option></select></label>
+      <label>LM reference<input name="lm_reference" maxlength="60"></label>
+      <label>Odometer / hour meter<input name="meter_reading" maxlength="40"></label>
+      <label>Condition<select name="condition"><option>Unverified</option><option>Good</option><option>Needs Repair</option><option>Out of Service</option></select></label>
+      <label>Purchase date<input name="purchase_date" type="date"></label>
+      <label>Last maintenance<input name="last_maintenance" type="date"></label>
+      <label>Last repair<input name="last_repair" type="date"></label>
+      <label>Last calibration<input name="last_calibration" type="date"></label>
+      <label class="wide">Remarks<textarea name="notes" maxlength="500" rows="2"></textarea></label>
+      <label>Opening quantity<input type="number" name="quantity" min="1" max="9999" value="1" required></label>
+      <label class="wide">Current store / site<select name="site" required></select></label>
+    </div>
+    <p class="form-error" id="asset-error" role="alert"></p>
+  </div>
+  <div class="store-actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save equipment</button></div>
+</form>
+</dialog>
+<dialog id="move-dialog" aria-labelledby="move-title">
+<form id="move-form">
+  <div class="dialog-heading"><h2 id="move-title">Move equipment</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <p id="move-context"></p>
+    <div class="store-fields">
+      <label class="wide">Move to<select name="destination" required></select></label>
+      <label>Movement date<input type="date" name="date" required></label>
+      <label>Quantity<input type="number" name="quantity" min="1" required></label>
+      <label>Received by<select name="received" required></select></label>
+      <label>Requested by<select name="requested"></select></label>
+      <div class="wide compact-actions"><label>Handed over by<select name="handed_over"></select></label><button type="button" id="manage-drivers" hidden>Manage drivers</button></div>
+      <label class="wide">Remark<textarea name="notes" maxlength="500" rows="2"></textarea></label>
+    </div>
+    <p class="form-error" id="move-error" role="alert"></p>
+  </div>
+  <div class="store-actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Record movement</button></div>
+</form>
+</dialog>
+<dialog id="photo-dialog" aria-labelledby="photo-title">
+  <div class="dialog-heading"><h2 id="photo-title">Record photos</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <p id="photo-notice" role="status"></p><button type="button" id="retry-photos" hidden>Retry photos</button>
+    <div id="photo-upload" class="photo-upload">
+      <div class="compact-actions">
+        <button type="button" id="photo-camera">Camera</button><button type="button" id="photo-files">Files</button><button type="button" id="photo-paste">Paste photo</button>
+      </div>
+      <input id="store-camera-input" type="file" accept="image/*" capture="environment" hidden>
+      <input id="store-file-input" type="file" accept="image/*" multiple hidden>
+      <label id="photo-paste-label" hidden>Paste an image<textarea id="photo-paste-target" rows="2" placeholder="Paste here"></textarea></label>
+      <p>Drop photos here. Up to four per record.</p>
+    </div>
+    <div id="store-photos" class="store-photos"></div>
+  </div>
+</dialog>
+<dialog id="reminder-dialog" aria-labelledby="reminder-title">
+<form id="reminder-form">
+  <div class="dialog-heading"><h2 id="reminder-title">Service reminder</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <div class="store-fields">
+      <label class="wide">Equipment<select name="asset" required></select></label>
+      <label class="wide">Required action<select name="kind" required></select></label>
+      <label>Due date<input name="due" type="date" required></label>
+      <label>Responsible person<select name="assignee"></select></label>
+      <label>Status<select name="status"><option>Open</option><option>Booked</option><option>Out for service</option></select></label>
+      <label class="wide">Certificate or booking reference<input name="reference" maxlength="300"></label>
+    </div>
+    <ul id="reminder-history" class="summary-list"></ul>
+    <p id="reminder-error" class="form-error" role="alert"></p>
+  </div>
+  <div class="store-actions"><button type="button" data-close>Close</button><button type="submit" class="primary" id="save-reminder">Save reminder</button></div>
+</form>
+</dialog>
+<dialog id="complete-dialog" aria-labelledby="complete-title">
+<form id="complete-form">
+  <div class="dialog-heading"><h2 id="complete-title">Complete reminder</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <div class="store-fields">
+      <label>Completion date<input name="done" type="date" required></label>
+      <label>Next due date<input name="next" type="date"><small>Leave blank to close the reminder.</small></label>
+      <label class="wide">Service report reference or link<input name="reference" maxlength="300"></label>
+    </div>
+    <p id="complete-error" class="form-error" role="alert"></p>
+  </div>
+  <div class="store-actions"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Record completion</button></div>
+</form>
+</dialog>
+<dialog id="driver-dialog" aria-labelledby="driver-title">
+<form id="driver-form">
+  <div class="dialog-heading"><h2 id="driver-title">Manage drivers</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body">
+    <label>Driver name<input name="name" maxlength="100" required></label>
+    <ul id="driver-list" class="summary-list"></ul>
+    <p id="driver-error" class="form-error" role="alert"></p>
+  </div>
+  <div class="store-actions"><button type="button" data-close>Close</button><button type="submit" class="primary">Save driver</button></div>
+</form>
+</dialog>
+<dialog id="whatsapp-dialog" aria-labelledby="whatsapp-title">
+  <div class="dialog-heading"><h2 id="whatsapp-title">Daily WhatsApp Update</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body store-fields">
+    <label>Movement date<input type="date" id="whatsapp-date"></label>
+    <label class="check-label"><input type="checkbox" id="whatsapp-reminders"> Include overdue and upcoming reminders</label>
+    <label class="wide">Message<textarea id="whatsapp-message" readonly rows="12"></textarea></label>
+    <p id="whatsapp-notice" class="form-error wide" role="status"></p>
+  </div>
+  <div class="store-actions"><button type="button" id="whatsapp-copy" disabled>Copy message</button><a class="store-link-button" id="whatsapp-link" target="_blank" rel="noopener noreferrer" hidden>Open WhatsApp</a></div>
+</dialog>
+</body>
+</html>
