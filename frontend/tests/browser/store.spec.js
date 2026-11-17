@@ -104,7 +104,7 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   await form.getByLabel('Last maintenance / repair').fill('2026-11-10');
   const png=await page.evaluate(()=>document.createElement('canvas').toDataURL('image/png').split(',')[1]);
   await form.locator('[data-file-input]').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await expect(form.getByText('equipment.png',{exact:true})).toBeVisible();
+  await expect(form.getByRole('img',{name:'equipment.png',exact:true})).toBeVisible();
   expect(photos).toHaveLength(0);
   await form.getByRole('button',{name:'Save equipment'}).click();
   await expect(form).toBeHidden();
