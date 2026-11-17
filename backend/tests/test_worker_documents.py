@@ -22,13 +22,17 @@ def review(data, pages=1, boxes=None):
 
 
 @pytest.fixture
-def api(request):
+def api(request, monkeypatch):
     pix = fitz.Pixmap(fitz.csRGB, (0, 0, 20, 10));pix.clear_with(255)
     state = {'role': 'site_sup', 'access': True, 'writes': [], 'uploads': [], 'reads': [], 'media_status': 200, 'audits': [], 'deletes': [], 'cleanup_status': 200, 'receipt': None, 'png': pix.tobytes('png'),
              'row': {'id': ID, 'worker_id': W, 'image_path': W+'/00000000-0000-0000-0000-000000000001.png', 'back_image_path': None, 'category': 'course', 'updated_at': 'version1'}}
 
     def transport(req):
         path = req.url.path
+        if path.endswith('/private_r2_image_receipts'):
+            assert req.headers['Authorization'] == 'Bearer service-test'
+            state.setdefault('receipts', []).append(json.loads(req.content) if req.content else None)
+            return httpx.Response(204)
         if '/storage/v1/object/public/' in path:
             assert 'Authorization' not in req.headers
         elif '/rest/v1/' in path or '/storage/v1/' in path:
@@ -68,6 +72,9 @@ def api(request):
         if path.startswith('/supabase-images/'):
             assert 'Authorization' not in req.headers
             state.setdefault('r2_requests', []).append((req.method, path))
+            if req.method == 'PUT':
+                assert req.headers['If-None-Match'] == '*'
+                return httpx.Response(200)
             return httpx.Response(state.get('r2_status', 200), content=state['png'])
         if path.startswith('/worker-cards/'):
             assert 'Authorization' not in req.headers
@@ -92,10 +99,11 @@ def api(request):
         state['audits'].append({'old': old, 'new': new, 'action': action})
 
     def user():
-        return {'role': state['role'], 'token': 'test', 'user_id': '00000000-0000-0000-0000-000000000001'}
+        return {'role': state['role'], 'token': 'test', 'auth_uid': 'auth-test', 'user_id': '00000000-0000-0000-0000-000000000001'}
 
     private_image_url = None
     if getattr(request, 'param', False):
+        monkeypatch.setattr('app.db.SUPABASE_SERVICE_KEY', 'service-test')
         def private_image_url(bucket, key, method):
             return f'https://private.example/supabase-images/{bucket}/{key}'
     app = FastAPI()
@@ -424,3 +432,16 @@ def test_scoped_historical_r2_read_and_delete(api):
     assert not response.json()['cleanup_pending']
     assert state['r2_requests'][-1] == ('DELETE', '/supabase-images/dpr-photos/' + key)
     assert state['deletes'][0][1] == {'prefixes': [key]}
+
+
+@pytest.mark.parametrize('api', [True], indirect=True)
+def test_card_upload_creates_service_receipt_before_attaching(api):
+    client, state = api
+    response = client.post(f'/api/v1/worker-documents/cards/upload?worker_id={W}',
+                           content=state['png'], headers=review(state['png']))
+    assert response.status_code == 201
+    key = response.json()['image_path']
+    assert state['r2_requests'] == [('PUT', '/supabase-images/worker-cards/' + key)]
+    assert state['receipts'] == [{'bucket_id':'worker-cards', 'object_key':key, 'uploader':'auth-test'}]
+    assert not state['uploads']
+    assert state['writes'][0]['image_path'] == key
