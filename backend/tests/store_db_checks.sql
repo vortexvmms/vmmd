@@ -88,7 +88,7 @@ begin
     end if;
 end $$;
 reset role;
-do $
+do $$
 begin
     perform set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000006',true);
     begin
@@ -102,7 +102,7 @@ begin
         perform public.store_register();
         raise exception 'Revoked account read the register';
     exception when insufficient_privilege then null; end;
-end $;
+end $$;
 set role anon;
 do $$
 begin
