@@ -34,7 +34,9 @@ async function request(path, method = 'GET', body, raw = false) {
   if (!response.ok) {
     let detail;
     try { detail = (await response.json()).detail; } catch (_) {}
-    throw new Error(typeof detail === 'string' ? detail : 'The Store request could not be completed.');
+    const error = new Error(typeof detail === 'string' ? detail : 'The Store request could not be completed.');
+    error.status = response.status;
+    throw error;
   }
   return raw && method === 'GET' ? response.blob() : response.json();
 }
@@ -803,5 +805,12 @@ for(const control of document.querySelectorAll('[data-export],[data-print]')){
     finally{control.disabled=false;}
   });
 }
-refresh().then(()=>notice('')).catch(error=>notice(error.message));
-loadRecent();
+refresh().then(()=>{
+  byId('store-sections').hidden = false;
+  byId('overview-panel').hidden = false;
+  notice('');
+  loadRecent();
+}).catch(error=>{
+  if(error.status === 403) byId('add-asset').hidden = true;
+  notice(error.message);
+});

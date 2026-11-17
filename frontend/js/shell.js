@@ -76,7 +76,7 @@
 
     function navFor(viewRole){
       const permitted=new Set(roleNav(viewRole).flatMap(section=>section.items.map(item=>item[1])));
-      if (["admin","general_manager","operation_manager","hr_assistant","main_sup","wshc_lead","logistics_sup","site_sup"].includes(viewRole)) permitted.add("store.html");
+      if (["admin","general_manager","operation_manager","main_sup"].includes(role) || me.menu?.includes("store.html")) permitted.add("store.html");
       return [
         {items:[["Home","home.html","home"],["My Tasks","todo.html","check"]]},
         {group:"Daily Site Work",items:[["Request Manpower","request.html","calendar"],["Mark Attendance","attendance.html","check"],["End-Time Verification","verify.html","clock"],["Submit Daily Report","dpr.html","document"],["WhatsApp Messages","whatsapp.html","chat"]]},

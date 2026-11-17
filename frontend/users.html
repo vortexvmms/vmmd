@@ -149,6 +149,9 @@
       ["Monthly Timesheet","timesheet.html"], ["Monthly Man-Hours","manhours.html"], ["Users & Access","users.html"],
       ["Settings","settings.html"], ["How to Use","help.html"],
     ];
+    const STORE_DEFAULT_ROLES = ["admin","general_manager","operation_manager","main_sup"];
+    const STORE_GRANT_ROLES = ["admin","general_manager","operation_manager"];
+
     function roleDefaultPages(role){ return tierMenu(role).map(m => m[1]); }
 
     function renderSections(u){
@@ -160,8 +163,15 @@
           <input type="checkbox" value="${page}" ${checked?'checked':''} ${forced?'disabled':''} class="sec-cb">
           <span>${esc(label)}</span></label>`;
       }).join("");
+      const storeDefault = STORE_DEFAULT_ROLES.includes(u.role);
+      const storeEditable = !storeDefault && STORE_GRANT_ROLES.includes(ME.role);
+      const storeChecked = storeDefault || Boolean(u.menu?.includes("store.html"));
       return `<p class="text-[11px] text-gray-500 mb-1">Tick the sections this user sees on their home menu. (Data actions are still limited by their role.)</p>
         <div class="grid grid-cols-2 gap-x-3">${boxes}</div>
+        <label class="flex items-center gap-2 text-sm mt-2">
+          <input type="checkbox" class="store-access-cb" ${storeChecked?'checked':''} ${storeEditable?'':'disabled'}>
+          <span>Equipment Store${storeDefault?' (role access)':''}</span>
+        </label>
         <button onclick="saveSections('${u.id}', this)" class="mt-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Save sections</button>`;
     }
     function toggleSections(id){ document.getElementById("sec-"+id).classList.toggle("hidden"); }
@@ -198,6 +208,8 @@
       const checked = cbs.filter(c => c.checked).map(c => c.value);
       const u = USERS.find(x => x.id === id);
       const def = u ? roleDefaultPages(u.role) : [];
+      const storeAccess = div.querySelector(".store-access-cb");
+      if(storeAccess.disabled ? u?.menu?.includes("store.html") : storeAccess.checked) checked.push("store.html");
       const isDefault = checked.length === def.length && checked.every(p => def.indexOf(p) !== -1);
       const menu = isDefault ? null : checked;   // matches role default → store null (stay in sync)
       btn.disabled = true; const t = btn.textContent; btn.textContent = "…";

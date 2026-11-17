@@ -124,3 +124,16 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   await expect(page.getByText('EQ-MANUAL-1 archived.')).toBeVisible();
   await expect(page.locator('#stock-count')).toHaveText('No matching equipment.');
 });
+
+test('Equipment Store hides controls when direct access is denied', async ({page})=>{
+  await page.addInitScript(()=>localStorage.setItem('vmms_session',JSON.stringify({
+    access_token:'test',refresh_token:'test',expires_at:Date.now()+3600000,
+  })));
+  await page.route('**/api/v1/store/register',route=>route.fulfill({
+    status:403,json:{detail:'Equipment Store access is limited to managers and selected users.'},
+  }));
+  await page.goto('/store.html');
+  await expect(page.locator('#store-notice')).toContainText('Equipment Store access is limited');
+  await expect(page.getByRole('button',{name:'Add equipment',exact:true})).toBeHidden();
+  await expect(page.getByRole('button',{name:'Movement Log',exact:true})).toBeHidden();
+});

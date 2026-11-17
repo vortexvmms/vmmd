@@ -14,6 +14,7 @@ from ..report_images import image_mime
 
 router = APIRouter(prefix="/api/v1/store", tags=["store"])
 ARCHIVE_ROLES = {"admin", "general_manager", "operation_manager"}
+STORE_COORDINATOR_ROLES = ARCHIVE_ROLES | {"main_sup", "hr_assistant", "wshc_lead", "logistics_sup"}
 
 
 class AssetDetails(BaseModel):
@@ -192,7 +193,7 @@ async def upload_photo(
     if not PRIVATE_IMAGES_R2_ENABLED:
         raise HTTPException(503, detail="Private photo storage is unavailable.")
     target = photo_target(asset, movement)
-    if movement and user["role"] == "site_sup":
+    if movement and user["role"] not in STORE_COORDINATOR_ROLES:
         raise HTTPException(403, detail="Movement photos are uploaded by logistics or coordinators.")
     existing = await call_store("store_photo_list", target, user)
     if any(row["id"] == str(photo_id) for row in existing):
