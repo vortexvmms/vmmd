@@ -62,6 +62,7 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   })));
   const site={id:'30000000-0000-0000-0000-000000000002',name:'Test site'};
   const stock=[], created=[], photos=[];
+  let samplePhoto;
   await page.route('**/api/v1/store/**',async route=>{
     const request=route.request(), url=new URL(request.url()), path=url.pathname;
     if(path.endsWith('/register')) return route.fulfill({json:{stock,can_move:true,can_archive:true,
@@ -81,10 +82,11 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
       const id=path.split('/').at(-1);
       if(request.method()==='PUT'){
         expect(url.searchParams.get('asset')).toBe(created[0].id);
-        photos.push({id,body:request.postDataBuffer()});
+        expect(request.headers()['content-type']).toBe('image/jpeg');
+        photos.push({id});
         return route.fulfill({status:201,json:{id}});
       }
-      return route.fulfill({contentType:'image/jpeg',body:photos.find(photo=>photo.id===id).body});
+      return route.fulfill({contentType:'image/png',body:samplePhoto});
     }
     return route.fulfill({json:{rows:[],has_more:false}});
   });
@@ -103,18 +105,36 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   await form.getByText('Specifications, service dates & remarks').click();
   await form.getByLabel('Last maintenance / repair').fill('2026-11-10');
   const png=await page.evaluate(()=>document.createElement('canvas').toDataURL('image/png').split(',')[1]);
-  await form.locator('[data-file-input]').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  samplePhoto=Buffer.from(png,'base64');
+  await expect(form.locator('[data-camera-input]')).toHaveAttribute('capture','environment');
+  await form.locator('[data-file-input]').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:samplePhoto});
   await expect(form.getByText('equipment.png',{exact:true})).toBeVisible();
+  await form.locator('#asset-photo-upload').evaluate((zone,encoded)=>{
+    const bytes=Uint8Array.from(atob(encoded),character=>character.charCodeAt(0));
+    const files=new DataTransfer();
+    files.items.add(new File([bytes],'dropped.png',{type:'image/png'}));
+    zone.dispatchEvent(new DragEvent('drop',{dataTransfer:files,bubbles:true,cancelable:true}));
+  },png);
+  await expect(form.getByText('dropped.png',{exact:true})).toBeVisible();
+  await form.getByLabel('Description').evaluate((input,encoded)=>{
+    const bytes=Uint8Array.from(atob(encoded),character=>character.charCodeAt(0));
+    const clipboard=new DataTransfer();
+    clipboard.items.add(new File([bytes],'pasted.png',{type:'image/png'}));
+    const event=new Event('paste',{bubbles:true,cancelable:true});
+    Object.defineProperty(event,'clipboardData',{value:clipboard});
+    input.dispatchEvent(event);
+  },png);
+  await expect(form.getByText('pasted.png',{exact:true})).toBeVisible();
   expect(photos).toHaveLength(0);
   await form.getByRole('button',{name:'Save equipment'}).click();
   await expect(form).toBeHidden();
   expect(created).toHaveLength(1);
   expect(created[0]).toMatchObject({site:site.id,asset:{code:'EQ-MANUAL-1',ownership:'Rental',last_maintenance:'2026-11-10',last_repair:null}});
-  expect(photos).toHaveLength(1);
+  expect(photos).toHaveLength(3);
   await page.getByRole('button',{name:'Equipment Register',exact:true}).click();
   await page.getByRole('button',{name:'Photos',exact:true}).click();
   const gallery=page.getByRole('dialog',{name:'Record photos'});
-  await expect(gallery.getByRole('img',{name:'Equipment or handover photo'})).toBeVisible();
+  await expect(gallery.getByRole('img',{name:'Equipment or handover photo'})).toHaveCount(3);
   await gallery.getByRole('button',{name:'Close'}).click();
   page.once('dialog',dialog=>dialog.accept());
   await page.getByRole('button',{name:'Archive',exact:true}).click();
