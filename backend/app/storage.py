@@ -84,7 +84,7 @@ def pr_r2_presign_delete(key: str, expires: int = 600) -> str:
 
 
 def private_image_url(bucket: str, key: str, method: str) -> str:
-    if bucket not in {"dpr-photos", "sic-cards", "worker-cards", "worker-photos"}:
+    if bucket not in {"dpr-photos", "sic-cards", "worker-cards", "worker-photos", "store"}:
         raise ValueError("Unsupported VCMS image bucket")
     return _presign(
         f"supabase-images/{bucket}/{key}", method, 60,

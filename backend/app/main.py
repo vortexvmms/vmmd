@@ -50,6 +50,7 @@ from .modules.report_images import router as report_images_router
 from .modules.planning.router import PlanningContext, build_planning_router; from .modules.pcs_router import PcsContext, build_pcs_router; from .modules.pcs_plan_router import PcsPlanContext, build_pcs_plan_router; from .modules.pcs_report_router import PcsReportContext, build_pcs_report_router; from .modules.pcs_dist_router import PcsDistContext, build_pcs_dist_router
 from .modules.projects.router import ProjectModuleContext, build_projects_router
 from .modules.equipment.router import EquipmentContext, build_equipment_router
+from .modules.store.router import router as store_router
 from .modules.integration.router import build_integration_router
 from .modules.lifting.router import LiftingContext, build_lifting_router
 from .modules.worker_documents.router import WorkerDocumentsContext, build_worker_documents_router
@@ -114,6 +115,7 @@ app.include_router(build_pcs_dist_router(PcsDistContext(get_current_user=get_cur
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit,
 )))
+app.include_router(store_router)
 app.include_router(build_equipment_router(EquipmentContext(
     get_current_user=get_current_user, shared_client=shared_client, rest_url=REST,
     supabase_headers=supabase_headers, audit=audit, r2_public_base=R2_PUBLIC_BASE,
