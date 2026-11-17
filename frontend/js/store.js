@@ -6,6 +6,7 @@ const mainStore = 'main';
 const today = () => new Date().toLocaleDateString('sv-SE', {timeZone:'Asia/Singapore'});
 const fmt = value => value ? value.split('-').reverse().join('/') : '—';
 const nullableSite = value => value === mainStore ? null : value;
+const serviceDate = asset => [asset.last_maintenance,asset.last_repair].filter(Boolean).sort().at(-1) || '';
 const readForm = form => Object.fromEntries(new FormData(form));
 const shift = (day, days) => {
   const date = new Date(day + 'T00:00:00Z');
@@ -28,7 +29,7 @@ const reminderForm = byId('reminder-form'), completeForm = byId('complete-form')
 async function request(path, method = 'GET', body, raw = false) {
   const options = {method};
   if (body !== undefined) options.body = raw ? body : JSON.stringify(body);
-  if (raw) options.headers = {'Content-Type':body.type || 'application/octet-stream'};
+  if (raw && body !== undefined) options.headers = {'Content-Type':body.type || 'application/octet-stream'};
   const response = await vmmsApi(root + path, options);
   if (!response.ok) {
     let detail;
@@ -96,12 +97,25 @@ function renderStock() {
     labelCell(row,'Qty',item.quantity);
     labelCell(row,'Condition',item.condition);
     labelCell(row,'Remarks',item.notes || '—');
-    const dates=[['Purchased',item.purchase_date],['Maintenance',item.last_maintenance],['Calibration',item.last_calibration],['Repair',item.last_repair]];
+    const dates=[['Purchased',item.purchase_date],['Maintenance / repair',serviceDate(item)],['Calibration',item.last_calibration]];
     labelCell(row,'Service dates',dates.filter(([,date])=>date).map(([name,date])=>name+' '+fmt(date)).join(' · ') || '—');
     labelCell(row,'Updated',fmt(item.updated_at?.slice(0,10)));
+    const archive = store.can_archive && button('Archive',event=>archiveAsset(item,event.currentTarget));
+    if(archive) archive.className='archive-action';
     labelCell(row,'Action',actions(button('Edit',()=>openAsset(item)),button('Photos',()=>openPhotos('asset',item.id)),
-      store.can_move && button('Move',()=>openMove(item),true)));
+      store.can_move && button('Move',()=>openMove(item),true),archive));
   }
+}
+async function archiveAsset(item,control){
+  if(!window.confirm('Archive '+item.code+' from all store and site listings? Movement history will be kept.')) return;
+  control.disabled=true;
+  try{
+    await request('/assets/'+item.id+'/archive','POST');
+    await refresh();
+    notice(item.code+' archived.');
+    loadRecent();
+  }catch(error){notice(error.message);}
+  finally{control.disabled=false;}
 }
 function notice(message) { byId('store-notice').textContent = message; }
 async function refresh() {
@@ -113,26 +127,48 @@ async function refresh() {
   }))].map(item => [item.id,item])).values()];
   options(filter,stockLocations,'All locations',filter.value);
   options(historySite,stockLocations,'All locations',historySite.value);
-  byId('add-asset').disabled = !locations().length;
+  const addAsset = byId('add-asset');
+  addAsset.disabled = !locations().length;
+  addAsset.title = addAsset.disabled ? 'No active sites are assigned to your VCMS account.' : '';
   byId('add-reminder').disabled = !store.stock.length;
   byId('manage-drivers').hidden = !store.can_manage_drivers;
   renderStock();
   renderOverview();
 }
 function openAsset(item) {
-  assetDraft = item || {id:crypto.randomUUID()};
+  assetDraft = item ? {...item,existing:true,photos:[]} : {id:crypto.randomUUID(),photos:[]};
   assetForm.reset();
-  options(assetForm.elements.site,locations(),'Select location',item?.site_id ?? (item ? mainStore : ''));
+  const choices=locations();
+  const selected=byId('store-location').value;
+  const defaultSite=choices.some(choice=>choice.id===selected) ? selected : (choices.length===1 ? choices[0].id : '');
+  options(assetForm.elements.site,choices,'Choose store / site',item ? (item.site_id ?? mainStore) : defaultSite);
+  if(item && !assetForm.elements.site.value){
+    assetForm.elements.site.add(new Option(item.location,item.site_id ?? mainStore,true,true));
+  }
   assetForm.elements.site.disabled = Boolean(item);
   assetForm.elements.quantity.disabled = Boolean(item);
-  for (const name of ['code','name','category','brand','model','serial_number','registration_number','ownership',
-    'lm_reference','meter_reading','condition','purchase_date','last_maintenance','last_calibration','last_repair','notes']) {
-    if (item) assetForm.elements[name].value = item[name] ?? '';
+  const locationHelp = byId('asset-location-help');
+  locationHelp.hidden = !item;
+  locationHelp.textContent = store.can_move
+    ? 'Use Move in the register to update the current store or site.'
+    : 'Ask a Store coordinator to record a location change.';
+  for(const name of ['code','name','category','brand','model','serial_number','registration_number','ownership',
+    'lm_reference','condition','purchase_date','last_calibration','notes']){
+    if(item) assetForm.elements[name].value=item[name] ?? '';
   }
-  if (item) assetForm.elements.quantity.value = item.quantity;
+  if(item){
+    assetForm.elements.quantity.value=item.quantity;
+    assetForm.elements.last_service.value=serviceDate(item);
+    if(item.ownership==='Hired / leased') assetForm.elements.ownership.value='Rental';
+  }
   fillTypes(item?.equipment_type);
-  byId('asset-title').textContent = item ? 'Edit equipment' : 'Add equipment';
-  byId('asset-error').textContent = '';
+  byId('asset-details').open=false;
+  assetPhotoUpload.hidden=!store.photos_enabled;
+  byId('asset-photo-unavailable').hidden=Boolean(store.photos_enabled);
+  assetPhotoUpload.querySelector('[data-paste-label]').hidden=true;
+  renderAssetPhotos();
+  byId('asset-title').textContent=item ? 'Edit equipment' : 'Add equipment';
+  byId('asset-error').textContent='';
   byId('asset-dialog').showModal();
 }
 function fillTypes(value = '') {
@@ -179,16 +215,38 @@ function refreshAfterSave(message) {
   if(panel==='movements') loadLog();
 }
 submit(assetForm,'asset-error',async fields=>{
-  const {site,quantity,...asset} = fields;
-  for(const name of ['purchase_date','last_maintenance','last_repair','last_calibration']) asset[name] ||= null;
-  const exists = Boolean(assetDraft.code);
-  asset.code=asset.code.trim() || 'EQ-'+assetDraft.id.slice(0,13).toUpperCase();
-  const result = exists ? await request('/assets/'+assetDraft.id,'PUT',asset) : await request('/assets','POST',{
-    id:assetDraft.id,site:nullableSite(site),quantity:Number(quantity),asset,
-  });
-  byId('asset-dialog').close();
-  refreshAfterSave('Equipment saved.');
-  if(!exists && store.photos_enabled) openPhotos('asset',result.id);
+  const draft=assetDraft;
+  const {site,quantity,last_service,...asset}=fields;
+  asset.code=asset.code.trim();
+  if(!asset.code) throw new Error('Enter the asset code.');
+  if(!draft.existing && !site) throw new Error('Choose the current store or site.');
+  if(draft.preparing) throw new Error('Wait for the photo to finish preparing.');
+  for(const name of ['purchase_date','last_calibration']) asset[name] ||= null;
+  asset.meter_reading=draft.meter_reading || '';
+  const keepDates=Boolean(draft.existing && last_service===serviceDate(draft));
+  asset.last_maintenance=(keepDates ? draft.last_maintenance : last_service) || null;
+  asset.last_repair=(keepDates ? draft.last_repair : null) || null;
+  assetPhotoUpload.inert=true;
+  try{
+    const result=draft.existing ? await request('/assets/'+draft.id,'PUT',asset) : await request('/assets','POST',{
+      id:draft.id,site:nullableSite(site),quantity:Number(quantity),asset,
+    });
+    Object.assign(draft,asset,{id:result.id,existing:true});
+    assetForm.elements.site.disabled=true;
+    assetForm.elements.quantity.disabled=true;
+    if(draft.photos.length){
+      byId('asset-photo-status').textContent='Uploading photos…';
+      await sendPhotos({kind:'asset',id:draft.id},draft.photos);
+    }
+    byId('asset-dialog').close();
+    refreshAfterSave('Equipment saved.');
+  }catch(error){
+    if(draft.existing && draft.photos.length){
+      renderAssetPhotos('Review the queued photos and try again.');
+      refreshAfterSave('Equipment record is available in the register.');
+    }
+    throw error;
+  }finally{assetPhotoUpload.inert=false;}
 });
 submit(moveForm,'move-error',async fields=>{
   const item = moveDraft.item;
@@ -423,6 +481,7 @@ for(const control of document.querySelectorAll('[data-close]')) control.addEvent
 
 let photoTarget, photoURLs=[], photoQueue=[];
 const photoDialog=byId('photo-dialog'), photoNotice=byId('photo-notice');
+const assetPhotoUpload=byId('asset-photo-upload'), movementPhotoUpload=byId('photo-upload');
 function photoQuery(target){return new URLSearchParams({[target.kind]:target.id}).toString();}
 function resetPhotoURLs(){
   for(const url of photoURLs) URL.revokeObjectURL(url);
@@ -433,7 +492,7 @@ function openPhotos(kind,id){
   photoQueue=[];
   resetPhotoURLs();
   byId('store-photos').replaceChildren();
-  byId('photo-paste-label').hidden=true;
+  movementPhotoUpload.querySelector('[data-paste-label]').hidden=true;
   byId('photo-upload').hidden=!store.photos_enabled || (kind==='movement' && !store.can_move);
   photoNotice.textContent='Loading photos…';
   photoDialog.showModal();
@@ -489,12 +548,7 @@ async function uploadPhotos(files=[]){
       if(target!==photoTarget) return;
       photoQueue.push({id:crypto.randomUUID(),blob});
     }
-    while(photoQueue.length && target===photoTarget){
-      const photo=photoQueue[0];
-      await request('/photos/'+photo.id+'?'+photoQuery(target),'PUT',photo.blob,true);
-      if(target!==photoTarget) return;
-      photoQueue.shift();
-    }
+    await sendPhotos(target,photoQueue,()=>target===photoTarget);
     if(target===photoTarget) await loadPhotos(target);
   }catch(error){
     if(target===photoTarget){
@@ -505,29 +559,91 @@ async function uploadPhotos(files=[]){
 }
 byId('retry-photos').addEventListener('click',()=>uploadPhotos());
 photoDialog.addEventListener('close',()=>{photoTarget=null;resetPhotoURLs();byId('retry-photos').hidden=true;});
-for(const [control,input] of [['photo-camera','store-camera-input'],['photo-files','store-file-input']]){
-  byId(control).addEventListener('click',()=>byId(input).click());
-  byId(input).addEventListener('change',event=>{uploadPhotos([...event.target.files]);event.target.value='';});
-}
-byId('photo-paste').addEventListener('click',async ()=>{
-  try{
-    const items=await navigator.clipboard.read();
-    for(const item of items){
-      const mime=item.types.find(type=>type.startsWith('image/'));
-      if(mime){uploadPhotos([await item.getType(mime)]);return;}
+async function sendPhotos(target,queue,active=()=>true){
+  while(queue.length && active()){
+    const photo=queue[0];
+    await request('/photos/'+photo.id+'?'+photoQuery(target),'PUT',photo.blob,true);
+    if(active()){
+      queue.shift();
+      if(photo.preview) URL.revokeObjectURL(photo.preview);
     }
-  }catch(_){}
-  byId('photo-paste-label').hidden=false;
-  byId('photo-paste-target').focus();
-});
-byId('photo-upload').addEventListener('paste',event=>{
-  const files=[...event.clipboardData.files].filter(file=>file.type.startsWith('image/'));
-  if(files.length){event.preventDefault();uploadPhotos(files);}
-});
-byId('photo-upload').addEventListener('dragover',event=>{event.preventDefault();event.currentTarget.classList.add('dragging');});
-byId('photo-upload').addEventListener('dragleave',event=>event.currentTarget.classList.remove('dragging'));
-byId('photo-upload').addEventListener('drop',event=>{
-  event.preventDefault();event.currentTarget.classList.remove('dragging');uploadPhotos([...event.dataTransfer.files]);
+  }
+}
+function bindPhotoPicker(zone,receive,pasteArea=zone){
+  for(const [control,input] of [['camera','camera-input'],['files','file-input']]){
+    const picker=zone.querySelector('[data-'+input+']');
+    zone.querySelector('[data-'+control+']').addEventListener('click',()=>picker.click());
+    picker.addEventListener('change',()=>{
+      if(picker.files.length) receive([...picker.files]);
+      picker.value='';
+    });
+  }
+  zone.querySelector('[data-paste]').addEventListener('click',async ()=>{
+    try{
+      for(const item of await navigator.clipboard.read()){
+        const mime=item.types.find(type=>type.startsWith('image/'));
+        if(mime){receive([await item.getType(mime)]);return;}
+      }
+    }catch(_){}
+    const label=zone.querySelector('[data-paste-label]');
+    label.hidden=false;
+    label.querySelector('textarea').focus();
+  });
+  pasteArea.addEventListener('paste',event=>{
+    if(zone.hidden || zone.inert) return;
+    const files=[...event.clipboardData.files].filter(file=>file.type.startsWith('image/'));
+    if(files.length){event.preventDefault();receive(files);}
+  });
+  zone.addEventListener('dragover',event=>{event.preventDefault();zone.classList.add('dragging');});
+  zone.addEventListener('dragleave',()=>zone.classList.remove('dragging'));
+  zone.addEventListener('drop',event=>{
+    event.preventDefault();
+    zone.classList.remove('dragging');
+    receive([...event.dataTransfer.files]);
+  });
+}
+function renderAssetPhotos(message=''){
+  const list=byId('asset-photo-list');
+  list.replaceChildren();
+  for(const photo of assetDraft.photos){
+    const row=document.createElement('li'), preview=document.createElement('img');
+    preview.src=photo.preview;
+    preview.alt=photo.name;
+    const remove=button('Remove',()=>{
+      URL.revokeObjectURL(photo.preview);
+      assetDraft.photos=assetDraft.photos.filter(item=>item!==photo);
+      renderAssetPhotos();
+    });
+    remove.setAttribute('aria-label','Remove '+photo.name);
+    row.append(preview,remove);
+    list.append(row);
+  }
+  byId('asset-photo-count').textContent=assetDraft.photos.length+' queued';
+  byId('asset-photo-status').textContent=message;
+}
+async function stageAssetPhotos(files){
+  const draft=assetDraft;
+  if(!byId('asset-dialog').open || draft.preparing || assetPhotoUpload.hidden || assetPhotoUpload.inert) return;
+  draft.preparing=true;
+  renderAssetPhotos('Preparing photos…');
+  let message='';
+  try{
+    for(const file of files){
+      if(draft.photos.length>=4){message='Up to four photos per record.';break;}
+      const blob=await preparePhoto(file);
+      if(assetDraft!==draft || !byId('asset-dialog').open) return;
+      draft.photos.push({id:crypto.randomUUID(),name:file.name || 'Pasted photo',blob,preview:URL.createObjectURL(blob)});
+    }
+  }catch(error){message=error.message;}
+  finally{
+    draft.preparing=false;
+    if(assetDraft===draft && byId('asset-dialog').open) renderAssetPhotos(message);
+  }
+}
+bindPhotoPicker(movementPhotoUpload,uploadPhotos);
+bindPhotoPicker(assetPhotoUpload,stageAssetPhotos,assetForm);
+byId('asset-dialog').addEventListener('close',()=>{
+  for(const photo of assetDraft.photos) URL.revokeObjectURL(photo.preview);
 });
 
 async function completeLog(params){
@@ -648,9 +764,9 @@ function makeWorkbook({headings,rows}) {
 
 async function report(kind){
   if(kind==='stock') return {title:'Equipment Register',headings:['Asset code','Equipment','Category','Type','Brand','Model','Serial',
-    'Vehicle registration','LM reference','Location','Quantity','Condition','Last maintenance','Last calibration','Remarks'],
+    'Vehicle registration','LM reference','Location','Quantity','Condition','Last maintenance / repair','Last calibration','Remarks'],
     rows:selectedStock().map(row=>[row.code,row.name,row.category,row.equipment_type,row.brand,row.model,row.serial_number,
-      row.registration_number,row.lm_reference,row.location,row.quantity,row.condition,row.last_maintenance,row.last_calibration,row.notes])};
+      row.registration_number,row.lm_reference,row.location,row.quantity,row.condition,serviceDate(row),row.last_calibration,row.notes])};
   const rows=await completeLog(logParams || logFilters());
   return {title:'Equipment Movement Log',headings:['Date','Asset code','Equipment','From','To','Type','Quantity','Handed over by','Received by','Requested by','Remarks'],
     rows:rows.map(row=>[row.moved_on,row.code,row.name,row.from_name,row.to_name,row.type,row.quantity,row.handed_over,

@@ -7,11 +7,11 @@
 <link rel="icon" href="icons/icon-192.png">
 <script src="js/theme-boot.js"></script>
 <link rel="stylesheet" href="css/theme-boot.css">
-<link rel="stylesheet" href="css/store.css?v=20261117-2">
+<link rel="stylesheet" href="css/store.css?v=20261117-4">
 <script defer src="js/core-bundle.js?v=20260904-history1"></script>
 <script defer src="js/auth.js?v=20260930-upload2"></script>
 <script defer src="js/ui.js?v=20260825-ui5"></script>
-<script defer src="js/store.js?v=20261117-1"></script>
+<script defer src="js/store.js?v=20261117-4"></script>
 </head>
 <body>
 <main class="store-main">
@@ -77,27 +77,44 @@
 <form id="asset-form">
   <div class="dialog-heading"><h2 id="asset-title">Add equipment</h2><button type="button" data-close aria-label="Close">×</button></div>
   <div class="dialog-body">
-    <div class="store-fields">
-      <label>Asset code<input name="code" maxlength="60" placeholder="Auto-generated if blank"></label>
-      <label>Category<select name="category" required><option>Machinery</option><option>Equipment</option><option>Tool</option></select></label>
-      <label class="wide">Description<input name="name" maxlength="150" required></label>
-      <label>Brand<input name="brand" maxlength="70"></label>
-      <label>Model<input name="model" maxlength="70"></label>
-      <label>Serial number<input name="serial_number" maxlength="70"></label>
-      <label>Vehicle registration<input name="registration_number" maxlength="35"></label>
-      <label>Equipment type<select name="equipment_type"></select></label>
-      <label>Ownership<select name="ownership"><option value="">Select if known</option><option>Company-owned</option><option>Hired / leased</option></select></label>
-      <label>LM reference<input name="lm_reference" maxlength="60"></label>
-      <label>Odometer / hour meter<input name="meter_reading" maxlength="40"></label>
-      <label>Condition<select name="condition"><option>Unverified</option><option>Good</option><option>Needs Repair</option><option>Out of Service</option></select></label>
-      <label>Purchase date<input name="purchase_date" type="date"></label>
-      <label>Last maintenance<input name="last_maintenance" type="date"></label>
-      <label>Last repair<input name="last_repair" type="date"></label>
-      <label>Last calibration<input name="last_calibration" type="date"></label>
-      <label class="wide">Remarks<textarea name="notes" maxlength="500" rows="2"></textarea></label>
+    <div class="store-fields asset-fields">
+      <label class="asset-code">Asset code<input name="code" maxlength="60" autocomplete="off" required></label>
+      <label class="asset-description">Description<input name="name" maxlength="150" required></label>
+      <label class="asset-location">Current Store / Site<select name="site" aria-describedby="asset-location-help" required></select></label>
       <label>Opening quantity<input type="number" name="quantity" min="1" max="9999" value="1" required></label>
-      <label class="wide">Current store / site<select name="site" required></select></label>
+      <label>Category<select name="category" required><option>Machinery</option><option>Equipment</option><option>Tool</option></select></label>
+      <label>Equipment type<select name="equipment_type"></select></label>
+      <label>Ownership<select name="ownership"><option value="">Select if known</option><option>Company-owned</option><option>Rental</option></select></label>
+      <label>Condition<select name="condition"><option>Unverified</option><option>Good</option><option>Needs Repair</option><option>Out of Service</option></select></label>
     </div>
+    <p id="asset-location-help" class="asset-help" hidden></p>
+    <div id="asset-photo-upload" class="photo-upload">
+      <div class="asset-photo-heading"><strong>Equipment photos</strong><span id="asset-photo-count">0 / 4</span></div>
+      <div class="compact-actions">
+        <button type="button" data-camera>Camera</button><button type="button" data-files>Upload files</button><button type="button" data-paste>Paste photo</button>
+      </div>
+      <input type="file" accept="image/*" capture="environment" data-camera-input hidden>
+      <input type="file" accept="image/*" multiple data-file-input hidden>
+      <label data-paste-label hidden>Paste an image<textarea rows="1" placeholder="Paste here"></textarea></label>
+      <p>Drop photos here. Photos upload when you save.</p>
+      <p id="asset-photo-status" role="status"></p>
+      <ul id="asset-photo-list" aria-label="Photos to upload"></ul>
+    </div>
+    <p id="asset-photo-unavailable" class="asset-help" hidden>Photo storage is currently unavailable.</p>
+    <details id="asset-details">
+      <summary>Specifications, service dates &amp; remarks</summary>
+      <div class="store-fields asset-fields">
+        <label>Brand<input name="brand" maxlength="70"></label>
+        <label>Model<input name="model" maxlength="70"></label>
+        <label>Serial number<input name="serial_number" maxlength="70"></label>
+        <label>Vehicle registration<input name="registration_number" maxlength="35"></label>
+        <label>LM reference<input name="lm_reference" maxlength="60"></label>
+        <label>Purchase date<input name="purchase_date" type="date"></label>
+        <label>Last maintenance / repair<input name="last_service" type="date"></label>
+        <label>Last calibration<input name="last_calibration" type="date"></label>
+        <label class="wide">Remarks<textarea name="notes" maxlength="500" rows="2"></textarea></label>
+      </div>
+    </details>
     <p class="form-error" id="asset-error" role="alert"></p>
   </div>
   <div class="store-actions"><button type="button" data-close>Cancel</button><button class="primary" type="submit">Save equipment</button></div>
@@ -128,11 +145,11 @@
     <p id="photo-notice" role="status"></p><button type="button" id="retry-photos" hidden>Retry photos</button>
     <div id="photo-upload" class="photo-upload">
       <div class="compact-actions">
-        <button type="button" id="photo-camera">Camera</button><button type="button" id="photo-files">Files</button><button type="button" id="photo-paste">Paste photo</button>
+        <button type="button" data-camera>Camera</button><button type="button" data-files>Files</button><button type="button" data-paste>Paste photo</button>
       </div>
-      <input id="store-camera-input" type="file" accept="image/*" capture="environment" hidden>
-      <input id="store-file-input" type="file" accept="image/*" multiple hidden>
-      <label id="photo-paste-label" hidden>Paste an image<textarea id="photo-paste-target" rows="2" placeholder="Paste here"></textarea></label>
+      <input type="file" accept="image/*" capture="environment" data-camera-input hidden>
+      <input type="file" accept="image/*" multiple data-file-input hidden>
+      <label data-paste-label hidden>Paste an image<textarea rows="2" placeholder="Paste here"></textarea></label>
       <p>Drop photos here. Up to four per record.</p>
     </div>
     <div id="store-photos" class="store-photos"></div>
