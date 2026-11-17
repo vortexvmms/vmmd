@@ -13,6 +13,7 @@ from ...storage import private_image_url
 from ..report_images import image_mime
 
 router = APIRouter(prefix="/api/v1/store", tags=["store"])
+ARCHIVE_ROLES = {"admin", "general_manager", "operation_manager"}
 
 
 class AssetDetails(BaseModel):
@@ -85,7 +86,11 @@ async def call_store(function: str, payload: dict, user: dict):
 async def register(user: dict = Depends(get_current_user)):
     data = await call_store("store_register", {}, user)
     extras = await call_store("store_extras", {}, user)
-    return {**data, **extras, "photos_enabled": PRIVATE_IMAGES_R2_ENABLED}
+    return {
+        **data, **extras,
+        "photos_enabled": PRIVATE_IMAGES_R2_ENABLED,
+        "can_archive": user["role"] in ARCHIVE_ROLES,
+    }
 
 
 @router.get("/movements")
@@ -108,6 +113,11 @@ async def movements(
 async def add_asset(item: AssetCreate, user: dict = Depends(get_current_user)):
     payload = {f"p_{field}": value for field, value in item.model_dump(mode="json").items()}
     return {"id": await call_store("store_add_asset", payload, user)}
+
+
+@router.post("/assets/{asset_id}/archive")
+async def archive_asset(asset_id: UUID, user: dict = Depends(get_current_user)):
+    return {"id": await call_store("store_archive_asset", {"p_id": str(asset_id)}, user)}
 
 
 @router.post("/movements", status_code=201)
