@@ -2,7 +2,7 @@
 *{box-sizing:border-box}
 body{margin:0}
 [hidden]{display:none!important}
-.store-main{max-width:none;margin:0 auto;padding:10px clamp(8px,1vw,16px) 18px}
+.store-main{container-type:inline-size;max-width:none;margin:0 auto;padding:10px clamp(8px,1vw,16px) 18px}
 .store-hero{display:flex;align-items:center;gap:8px;padding:7px 10px;background:linear-gradient(115deg,#123369,#2358a8);border-radius:8px}
 .store-hero h1{color:#fff!important;font-size:clamp(1.1rem,1.55vw,1.4rem);line-height:1.2;white-space:nowrap}
 .store-hero h1,.dialog-heading h2{margin:0}
@@ -101,8 +101,14 @@ button:active:not(:disabled){transform:translateY(1px)}
  .store-nav button{flex:1;min-width:0}
  .store-hero #add-asset{grid-column:3;grid-row:2}
  .store-hero button{padding-inline:8px}
+}
+@container(max-width:760px){
  .store-hero button > span:not(.short-label){display:none}
  .store-hero .short-label{display:inline}
+}
+@media(max-width:380px){
+ .store-hero button{padding-inline:5px;font-size:.78rem}
+ .store-nav{gap:4px}
 }
 @media(max-width:620px){
  #log-filter{grid-template-columns:repeat(2,minmax(0,1fr))}
