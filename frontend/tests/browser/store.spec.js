@@ -62,6 +62,7 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   })));
   const site={id:'30000000-0000-0000-0000-000000000002',name:'Test site'};
   const stock=[], created=[], photos=[];
+  let jpeg;
   await page.route('**/api/v1/store/**',async route=>{
     const request=route.request(), url=new URL(request.url()), path=url.pathname;
     if(path.endsWith('/register')) return route.fulfill({json:{stock,can_move:true,can_archive:true,
@@ -81,10 +82,11 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
       const id=path.split('/').at(-1);
       if(request.method()==='PUT'){
         expect(url.searchParams.get('asset')).toBe(created[0].id);
-        photos.push({id,body:request.postDataBuffer()});
+        expect(request.headers()['content-type']).toBe('image/jpeg');
+        photos.push({id});
         return route.fulfill({status:201,json:{id}});
       }
-      return route.fulfill({contentType:'image/jpeg',body:photos.find(photo=>photo.id===id).body});
+      return route.fulfill({contentType:'image/jpeg',body:jpeg});
     }
     return route.fulfill({json:{rows:[],has_more:false}});
   });
@@ -102,6 +104,7 @@ test('Add equipment stages photos, saves a manual code and can archive the recor
   await form.getByLabel('Ownership').selectOption({label:'Rental'});
   await form.getByText('Specifications, service dates & remarks').click();
   await form.getByLabel('Last maintenance / repair').fill('2026-11-10');
+  jpeg=Buffer.from(await page.evaluate(()=>document.createElement('canvas').toDataURL('image/jpeg').split(',')[1]),'base64');
   const png=await page.evaluate(()=>document.createElement('canvas').toDataURL('image/png').split(',')[1]);
   await form.locator('[data-file-input]').setInputFiles({name:'equipment.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await expect(form.getByRole('img',{name:'equipment.png',exact:true})).toBeVisible();
