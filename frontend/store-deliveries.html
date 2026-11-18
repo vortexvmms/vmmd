@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en-SG">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VCMS — Equipment Deliveries</title>
+<link rel="icon" href="icons/icon-192.png">
+<script src="js/theme-boot.js"></script>
+<link rel="stylesheet" href="css/theme-boot.css">
+<link rel="stylesheet" href="css/store.css?v=20261118-deliveries">
+<script defer src="js/core-bundle.js?v=20260904-history1"></script>
+<script defer src="js/auth.js?v=20260930-upload2"></script>
+<script defer src="js/store-photo.js?v=1"></script>
+<script defer src="js/store-deliveries.js?v=1"></script>
+</head>
+<body>
+<main class="store-main delivery-main">
+  <header class="store-hero">
+    <a class="store-home" id="delivery-home" href="home.html" hidden>‹ Home</a>
+    <h1 id="delivery-title">Movement Register</h1>
+    <button id="delivery-logout" type="button" hidden>Log out</button>
+    <button id="delivery-new" class="primary" type="button" hidden>Request equipment</button>
+  </header>
+  <div class="store-card">
+    <div class="store-actions delivery-toolbar">
+      <label>Status <select id="delivery-filter"><option value="">All statuses</option></select></label>
+      <button id="delivery-refresh" type="button">Refresh</button>
+    </div>
+    <p id="delivery-status" role="status">Loading deliveries…</p>
+    <div id="delivery-list" class="delivery-list"></div>
+    <button id="delivery-more" type="button" hidden>Load more</button>
+  </div>
+</main>
+<dialog id="request-dialog" aria-labelledby="request-title">
+  <form id="request-form">
+    <div class="dialog-heading"><h2 id="request-title">Request equipment</h2><button type="button" data-close aria-label="Close">×</button></div>
+    <div class="dialog-body store-fields delivery-fields">
+      <label>Pickup location<select name="from_site" required></select></label>
+      <label>Delivery location<select name="to_site" required></select></label>
+      <label class="wide">Find equipment by name or code<input name="search" maxlength="80" type="search" autocomplete="off"></label>
+      <label class="wide">Equipment<select name="asset_id" required></select></label>
+      <label>Quantity<input name="quantity" type="number" min="1" max="9999" required value="1"></label>
+      <label>Required date<input name="needed_on" type="date" required></label>
+      <label class="wide">Notes<textarea name="note" maxlength="500"></textarea></label>
+      <p id="request-status" class="wide" role="status"></p>
+    </div>
+    <div class="store-actions"><button type="button" data-close>Close</button><button class="primary" type="submit">Send request</button></div>
+  </form>
+</dialog>
+<dialog id="delivery-dialog" aria-labelledby="job-title">
+  <div class="dialog-heading"><h2 id="job-title">Delivery</h2><button type="button" data-close aria-label="Close">×</button></div>
+  <div class="dialog-body delivery-detail">
+    <div id="job-summary"></div>
+    <p id="job-status" role="status"></p>
+    <div id="job-actions" class="store-actions delivery-toolbar"></div>
+    <form id="job-form" hidden>
+      <div id="job-fields" class="store-fields delivery-fields"></div>
+      <div class="store-actions"><button id="action-back" type="button">Back</button><button id="action-submit" class="primary" type="submit"></button></div>
+    </form>
+    <section id="job-photo-section" hidden>
+      <h3>Pickup photo</h3>
+      <img id="job-photo" alt="Pickup photo of the equipment" hidden>
+    </section>
+    <section id="job-whatsapp" hidden>
+      <label>WhatsApp update<textarea id="job-message" readonly rows="6"></textarea></label>
+      <div class="store-actions delivery-toolbar">
+        <button id="copy-message" type="button">Copy message</button>
+        <button id="share-photo" type="button" hidden>Share photo</button>
+        <button id="copy-photo" type="button" hidden>Copy photo</button>
+        <a class="store-link-button" id="save-photo" hidden>Save photo</a>
+      </div>
+    </section>
+    <section><h3>Movement timeline</h3><ol class="delivery-timeline" id="job-timeline"></ol></section>
+  </div>
+</dialog>
+</body>
+</html>

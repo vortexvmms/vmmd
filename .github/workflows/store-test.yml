@@ -7,9 +7,13 @@ on:
       - 'backend/app/modules/store/**'
       - 'backend/tests/store*'
       - 'frontend/store.html'
+      - 'frontend/store-deliveries.html'
+      - 'frontend/js/store-deliveries.js'
+      - 'frontend/js/store-photo.js'
       - 'frontend/js/store.js'
       - 'frontend/css/store.css'
       - 'frontend/tests/browser/store.spec.js'
+      - 'frontend/tests/browser/store-deliveries.spec.js'
       - '.github/workflows/store-test.yml'
 
 permissions:
@@ -38,7 +42,9 @@ jobs:
             -f supabase/migrations/20261117080100_store_operations.sql \
             -f supabase/migrations/20261117100500_store_asset_archive.sql \
             -f supabase/migrations/20261117113000_store_user_access.sql \
-            -f backend/tests/store_db_checks.sql
+            -f supabase/migrations/20261118021600_store_delivery_workflow.sql \
+            -f backend/tests/store_db_checks.sql \
+            -f backend/tests/store_delivery_checks.sql
   responsive:
     runs-on: ubuntu-24.04
     steps:
@@ -48,7 +54,7 @@ jobs:
           node-version: '22'
       - run: npm install
       - run: npx playwright install --with-deps chromium webkit
-      - run: npx playwright test store.spec.js
+      - run: npx playwright test store.spec.js store-deliveries.spec.js
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

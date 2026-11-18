@@ -39,6 +39,16 @@ def invalidate_users(user_ids) -> None:
             _USER_CACHE.pop(token, None)
 
 
+def check_driver_route(request: Request, user: dict) -> dict:
+    if user["role"] == "driver":
+        path = request.url.path
+        if path not in {"/api/v1/me", "/api/v1/store/deliveries"} and not path.startswith(
+            "/api/v1/store/deliveries/"
+        ):
+            raise HTTPException(status_code=403, detail="This Driver account is limited to Equipment Store deliveries.")
+    return user
+
+
 async def get_current_user(request: Request) -> dict:
     authorization = request.headers.get("Authorization", "")
     if not authorization.startswith("Bearer "):
@@ -46,7 +56,7 @@ async def get_current_user(request: Request) -> dict:
     token = authorization.removeprefix("Bearer ").strip()
     cached = _cache_get(token)
     if cached:
-        return cached
+        return check_driver_route(request, cached)
 
     async with shared_client() as client:
         response = await client.get(
@@ -89,4 +99,4 @@ async def get_current_user(request: Request) -> dict:
         "dpr_reminder_sites": profile.get("dpr_reminder_sites"),
     }
     cache_user(token, user)
-    return user
+    return check_driver_route(request, user)

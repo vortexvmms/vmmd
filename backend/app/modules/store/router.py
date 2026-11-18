@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from ...auth import get_current_user
-from ...db import shared_client, supabase_headers
+from ...db import require_service, service_headers, shared_client, supabase_headers
 from ...settings import PRIVATE_IMAGES_R2_ENABLED, REST
 from ...storage import private_image_url
 from ..report_images import image_mime
@@ -57,11 +57,14 @@ class MovementCreate(BaseModel):
     notes: str = Field(default="", max_length=500)
 
 
-async def call_store(function: str, payload: dict, user: dict):
+async def call_store(function: str, payload: dict, user: dict, *, service: bool = False):
+    if service:
+        require_service()
+    headers = service_headers() if service else supabase_headers(user["token"])
     try:
         async with shared_client() as client:
             response = await client.post(
-                f"{REST}/rpc/{function}", json=payload, headers=supabase_headers(user["token"]),
+                f"{REST}/rpc/{function}", json=payload, headers=headers,
             )
     except httpx.RequestError as error:
         raise HTTPException(503, detail="Store data is temporarily unavailable.") from error
@@ -76,7 +79,7 @@ async def call_store(function: str, payload: dict, user: dict):
         raise HTTPException(403, detail=failure.get("message", "Store access denied."))
     if code == "23505":
         raise HTTPException(409, detail="That code, name or submission reference already exists.")
-    if code == "22023":
+    if code in {"22007", "22023", "22P02"}:
         raise HTTPException(422, detail=failure.get("message", "Check the submitted values."))
     if code in {"23502", "23514"}:
         raise HTTPException(422, detail="Check the equipment description, asset code and category.")
@@ -185,6 +188,41 @@ async def list_photos(asset: UUID | None = None, movement: UUID | None = None, u
     return await call_store("store_photo_list", photo_target(asset, movement), user)
 
 
+async def read_store_photo_upload(request: Request) -> tuple[bytes, str]:
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > PHOTO_LIMIT:
+            raise HTTPException(413, detail="Use an image up to 5 MB.")
+        data.extend(chunk)
+    mime = image_mime(data)
+    if not mime:
+        raise HTTPException(415, detail="Use a JPEG, PNG or WebP image.")
+    return bytes(data), mime
+
+
+async def put_store_photo(key: str, data: bytes, mime: str) -> httpx.Response:
+    async with shared_client() as client:
+        try:
+            response = await client.put(
+                private_image_url("store", key, "PUT"), content=data,
+                headers={"Content-Type": mime, "Cache-Control": "private, no-store", "If-None-Match": "*"},
+                follow_redirects=False,
+            )
+        except httpx.RequestError as error:
+            raise HTTPException(502, detail="Photo upload failed. Retry this photo.") from error
+        if not response.is_success and response.status_code != 412:
+            raise HTTPException(502, detail="Photo upload failed. Retry this photo.")
+    return response
+
+
+async def delete_unattached_photo(key: str):
+    try:
+        async with shared_client() as client:
+            await client.delete(private_image_url("store", key, "DELETE"), follow_redirects=False)
+    except httpx.RequestError:
+        pass
+
+
 @router.put("/photos/{photo_id}", status_code=201)
 async def upload_photo(
     photo_id: UUID, request: Request, asset: UUID | None = None, movement: UUID | None = None,
@@ -200,26 +238,9 @@ async def upload_photo(
         return {"id": str(photo_id)}
     if len(existing) >= 4:
         raise HTTPException(422, detail="Each record can have up to four photos.")
-    data = bytearray()
-    async for chunk in request.stream():
-        if len(data) + len(chunk) > PHOTO_LIMIT:
-            raise HTTPException(413, detail="Use an image up to 5 MB.")
-        data.extend(chunk)
-    mime = image_mime(data)
-    if not mime:
-        raise HTTPException(415, detail="Use a JPEG, PNG or WebP image.")
+    data, mime = await read_store_photo_upload(request)
     key = f"assets/{asset}/{photo_id}" if asset else f"movements/{movement}/{photo_id}"
-    async with shared_client() as client:
-        try:
-            response = await client.put(
-                private_image_url("store", key, "PUT"), content=bytes(data),
-                headers={"Content-Type": mime, "Cache-Control": "private, no-store", "If-None-Match": "*"},
-                follow_redirects=False,
-            )
-        except httpx.RequestError as error:
-            raise HTTPException(502, detail="Photo upload failed. Retry this photo.") from error
-        if not response.is_success and response.status_code != 412:
-            raise HTTPException(502, detail="Photo upload failed. Retry this photo.")
+    response = await put_store_photo(key, data, mime)
     try:
         return {"id": await call_store("store_photo_attach", {"p_id": str(photo_id), **target, "p_mime": mime}, user)}
     except HTTPException as error:
@@ -229,11 +250,7 @@ async def upload_photo(
                 return {"id": str(photo_id)}
         # A timeout can occur after the receipt commits. Keep the object for a retry.
         if response.is_success and error.status_code in {403, 422}:
-            try:
-                async with shared_client() as client:
-                    await client.delete(private_image_url("store", key, "DELETE"), follow_redirects=False)
-            except httpx.RequestError:
-                pass
+            await delete_unattached_photo(key)
         raise
 
 
@@ -242,6 +259,10 @@ async def get_photo(photo_id: UUID, user: dict = Depends(get_current_user)):
     if not PRIVATE_IMAGES_R2_ENABLED:
         raise HTTPException(503, detail="Private photo storage is unavailable.")
     record = await call_store("store_photo_read", {"p_id": str(photo_id)}, user)
+    return await download_store_photo(record)
+
+
+async def download_store_photo(record: dict):
     data = bytearray()
     try:
         async with shared_client() as client:
@@ -277,3 +298,85 @@ class CountConfirmation(BaseModel):
 async def confirm_count(count: CountConfirmation, user: dict = Depends(get_current_user)):
     params = {f"p_{field}": value for field, value in count.model_dump(mode="json").items()}
     return await call_store("store_confirm_count", params, user)
+
+
+class DeliveryChange(BaseModel):
+    event: UUID
+    action: str = Field(max_length=24)
+    detail: dict = Field(default_factory=dict)
+
+
+@router.get("/deliveries")
+async def delivery_register(
+    before: int | None = Query(None, ge=1), state: str | None = Query(None, max_length=20),
+    user: dict = Depends(get_current_user),
+):
+    result = await call_store("store_delivery_register", {"p_before": before, "p_state": state}, user)
+    result["photos_enabled"] = PRIVATE_IMAGES_R2_ENABLED
+    result["has_more"] = len(result["rows"]) > 30
+    result["rows"] = result["rows"][:30]
+    return result
+
+
+@router.get("/deliveries/equipment")
+async def delivery_equipment(
+    source: UUID | None = None, search: str = Query("", max_length=80),
+    user: dict = Depends(get_current_user),
+):
+    return await call_store(
+        "store_delivery_equipment", {"p_from": str(source) if source else None, "p_search": search.strip()}, user,
+    )
+
+
+@router.post("/deliveries/{delivery_id}")
+async def change_delivery(delivery_id: UUID, change: DeliveryChange, user: dict = Depends(get_current_user)):
+    return {"id": await call_store("store_delivery_change", {
+        "p_id": str(delivery_id), "p_event": str(change.event), "p_action": change.action, "p_detail": change.detail,
+    }, user)}
+
+
+@router.get("/deliveries/{delivery_id}/photo")
+async def delivery_photo(delivery_id: UUID, user: dict = Depends(get_current_user)):
+    if not PRIVATE_IMAGES_R2_ENABLED:
+        raise HTTPException(503, detail="Private photo storage is unavailable.")
+    record = await call_store("store_delivery_photo", {"p_delivery": str(delivery_id), "p_write": False}, user)
+    if record is None:
+        raise HTTPException(404, detail="No pickup photo has been saved.")
+    return await download_store_photo(record)
+
+
+@router.put("/deliveries/{delivery_id}/photo/{photo_id}", status_code=201)
+async def upload_delivery_photo(
+    delivery_id: UUID, photo_id: UUID, request: Request, user: dict = Depends(get_current_user),
+):
+    if not PRIVATE_IMAGES_R2_ENABLED:
+        raise HTTPException(503, detail="Private photo storage is unavailable.")
+    require_service()
+    target = {"p_delivery": str(delivery_id)}
+    existing = await call_store("store_delivery_photo", {**target, "p_write": True}, user)
+    if existing:
+        if existing["id"] == str(photo_id):
+            return {"id": str(photo_id)}
+        raise HTTPException(409, detail="This delivery already has a pickup photo.")
+    data, mime = await read_store_photo_upload(request)
+    key = f"deliveries/{delivery_id}/{photo_id}"
+    response = await put_store_photo(key, data, mime)
+    if response.status_code == 412:
+        # A retry can find the uploaded object before its receipt was saved.
+        # Use the MIME of that object rather than trusting the retry body.
+        async with shared_client() as client:
+            metadata = await client.head(private_image_url("store", key, "HEAD"), follow_redirects=False)
+        mime = metadata.headers.get("Content-Type", "")
+        if not metadata.is_success or mime not in {"image/jpeg", "image/png", "image/webp"}:
+            raise HTTPException(502, detail="The saved pickup photo could not be verified.")
+    try:
+        saved = await call_store("store_delivery_photo_attach", {
+            **target, "p_photo": str(photo_id), "p_actor": user["user_id"], "p_mime": mime,
+        }, user, service=True)
+    except HTTPException as error:
+        if response.is_success and error.status_code in {403, 409, 422}:
+            latest = await call_store("store_delivery_photo", {**target, "p_write": False}, user)
+            if not latest or latest["id"] != str(photo_id):
+                await delete_unattached_photo(key)
+        raise
+    return {"id": saved}

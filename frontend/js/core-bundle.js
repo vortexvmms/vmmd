@@ -344,7 +344,7 @@ window.esc = function (v) {
 // ---- Load the shared desktop application shell ----
 (function () {
   var shell=document.createElement("script");
-  shell.src="js/shell.js?v=20261020-cards1";
+  shell.src="js/shell.js?v=20261118-store";
   shell.defer=true;
   (document.head||document.documentElement).appendChild(shell);
   var assistant=document.createElement("script");

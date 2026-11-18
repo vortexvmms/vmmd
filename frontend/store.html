@@ -11,7 +11,8 @@
 <script defer src="js/core-bundle.js?v=20260904-history1"></script>
 <script defer src="js/auth.js?v=20260930-upload2"></script>
 <script defer src="js/ui.js?v=20260825-ui5"></script>
-<script defer src="js/store.js?v=20261117-5"></script>
+<script defer src="js/store-photo.js?v=1"></script>
+<script defer src="js/store.js?v=20261118-1"></script>
 </head>
 <body>
 <main class="store-main">
@@ -55,6 +56,7 @@
     </table></div>
   </section>
   <section class="store-card" id="movements-panel" aria-label="Movement Log" hidden>
+    <div class="store-actions delivery-toolbar"><a class="store-link-button" href="store-deliveries.html">Movement Register</a></div>
     <div class="store-metrics movement-metrics" id="movement-metrics"></div>
     <form class="store-tools" id="log-filter">
       <label>From date<input type="date" name="start" required></label>

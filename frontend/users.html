@@ -58,6 +58,7 @@
             </optgroup>
             <optgroup label="Other">
               <option value="payroll">Payroll</option>
+              <option value="driver">Driver</option>
             </optgroup>
           </select>
           <input id="n-email" type="email" placeholder="Login email" autocomplete="off"
@@ -89,7 +90,7 @@
       admin:"Administrator", general_manager:"General Manager", operation_manager:"Operation Manager",
       hr_assistant:"HR Assistant", main_sup:"Site Manager", wshc_lead:"WSHC Lead",
       site_sup:"Site Supervisor", safety_sup:"Safety Supervisor", wshc:"WSHC",
-      logistics_sup:"Logistics Supervisor", payroll:"Payroll" };
+      logistics_sup:"Logistics Supervisor", payroll:"Payroll", driver:"Driver" };
     const ROLE_CLS  = {
       admin:"bg-red-100 text-red-700", general_manager:"bg-red-100 text-red-700",
       operation_manager:"bg-red-100 text-red-700", hr_assistant:"bg-red-100 text-red-700",
@@ -104,7 +105,7 @@
       ["Full access", [["admin","Administrator"],["general_manager","General Manager"],["operation_manager","Operation Manager"],["hr_assistant","HR Assistant"]]],
       ["Site Manager level", [["main_sup","Site Manager"],["wshc_lead","WSHC Lead"]]],
       ["Supervisor level", [["site_sup","Site Supervisor"],["safety_sup","Safety Supervisor"],["wshc","WSHC"],["logistics_sup","Logistics Supervisor"]]],
-      ["Other", [["payroll","Payroll"]]],
+      ["Other", [["payroll","Payroll"],["driver","Driver"]]],
     ];
     function roleOptions(cur){
       return ROLE_GROUPS.map(([g,opts]) =>
@@ -131,8 +132,9 @@
       admin:"full", general_manager:"full", operation_manager:"full", hr_assistant:"full",
       main_sup:"manager", wshc_lead:"manager",
       site_sup:"supervisor", safety_sup:"supervisor", wshc:"supervisor", logistics_sup:"supervisor",
-      payroll:"payroll" };
+      payroll:"payroll", driver:"driver" };
     const TIER_MENU = {
+      driver:[],
       full:[["SIC Register","sic-register.html"],["Workers","workers.html"],["Sites","sites.html"],["Daily Allocation","allocation.html"],["Attendance","attendance.html"],["End-Time Verification","verify.html"],["WhatsApp Messages","whatsapp.html"],["Dashboard","dashboard.html"],["Monthly Timesheet","timesheet.html"],["Users & Access","users.html"],["Settings","settings.html"],["How to Use","help.html"]],
       manager:[["SIC Register","sic-register.html"],["Request Manpower","request.html"],["Attendance","attendance.html"],["End-Time Verification","verify.html"],["WhatsApp (Site Update)","whatsapp.html"],["Dashboard","dashboard.html"],["Monthly Timesheet","timesheet.html"],["Settings","settings.html"],["How to Use","help.html"]],
       supervisor:[["SIC Register","sic-register.html"],["Request Manpower","request.html"],["My Site — Attendance","attendance.html"],["VCMS Camera","camera.html"],["Daily Progress Report","dpr.html"],["DPR History","dprlist.html"],["WhatsApp Update","whatsapp.html"],["Dashboard","dashboard.html"],["Settings","settings.html"],["How to Use","help.html"]],
