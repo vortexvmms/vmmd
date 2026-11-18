@@ -14,7 +14,7 @@ test("assigned driver uploads pickup proof, records delivery, and generates a Wh
   const changes = [];
   let proof;
   await page.route("**/api/v1/me", route => route.fulfill({ json: { role: "driver", user_id: driver } }));
-  await page.route("**/api/v1/store/deliveries**", route => {
+  await page.route(/\/api\/v1\/store\/deliveries(?:[/?]|$)/, route => {
     const request = route.request();
     if (request.method() === "GET" && request.url().endsWith("/photo")) {
       return route.fulfill({ contentType: "image/jpeg", body: proof });
