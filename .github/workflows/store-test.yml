@@ -47,13 +47,19 @@ jobs:
             -f backend/tests/store_delivery_checks.sql
   responsive:
     runs-on: ubuntu-24.04
+    container:
+      # Match package.json so CI uses the installed Chromium and WebKit builds.
+      image: mcr.microsoft.com/playwright:v1.54.2-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm install
-      - run: npx playwright install --with-deps chromium webkit
       - run: npx playwright test store.spec.js store-deliveries.spec.js
       - uses: actions/upload-artifact@v4
         if: failure()
