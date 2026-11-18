@@ -22,7 +22,6 @@ test("assigned driver uploads pickup proof, records delivery, and generates a Wh
     if (request.method() === "PUT") {
       expect(request.headers()["content-type"]).toBe("image/jpeg");
       job.photo_id = request.url().split("/").at(-1);
-      proof = request.postDataBuffer();
       return route.fulfill({ json: { id: job.photo_id } });
     }
     if (request.method() === "POST") {
@@ -41,9 +40,10 @@ test("assigned driver uploads pickup proof, records delivery, and generates a Wh
   await page.getByRole("button", { name: /MOV-0042/ }).click();
   await expect(page.getByRole("button", { name: "Confirm pickup" })).toBeHidden();
   await page.getByRole("button", { name: "Take or upload pickup photo" }).click();
-  const png = await page.evaluate(() => document.createElement("canvas").toDataURL().split(",")[1]);
+  const image = await page.evaluate(() => document.createElement("canvas").toDataURL("image/jpeg").split(",")[1]);
+  proof = Buffer.from(image, "base64");
   await page.getByLabel("Photo of the equipment").setInputFiles({
-    name: "equipment.png", mimeType: "image/png", buffer: Buffer.from(png, "base64")
+    name: "equipment.jpg", mimeType: "image/jpeg", buffer: proof
   });
   await page.getByRole("button", { name: "Save photo" }).click();
   await expect(page.getByRole("img", { name: "Pickup photo of the equipment" })).toBeVisible();
