@@ -4,6 +4,7 @@ window.VMMS_TIER = {
   manager: ["main_sup", "wshc_lead"],
   supervisor: ["site_sup", "safety_sup", "wshc", "logistics_sup"],
   payroll: ["payroll"],
+  driver: ["driver"],
 };
 window.isFull = function (r) { return VMMS_TIER.full.indexOf(r) !== -1; };
 window.isManager = function (r) { return VMMS_TIER.manager.indexOf(r) !== -1; };

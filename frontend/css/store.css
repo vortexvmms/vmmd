@@ -174,3 +174,18 @@ button:active:not(:disabled){transform:translateY(1px)}
  .asset-location{grid-column:1/-1;grid-row:3}
  #asset-photo-upload .compact-actions button{min-height:42px}
 }
+
+.delivery-main { max-width: 1060px; }
+.delivery-toolbar { flex-wrap: wrap; }
+.delivery-toolbar label { display: flex; align-items: center; gap: .6rem; }
+.delivery-list { display: grid; gap: .6rem; margin: .7rem 0; }
+.delivery-row { width: 100%; text-align: left; display: grid; gap: .22rem; padding: .8rem; }
+.delivery-row small { font-weight: 400; }
+.delivery-row strong { overflow-wrap: anywhere; }
+.delivery-detail { max-height: min(73vh, 720px); overflow: auto; }
+.delivery-detail img { display: block; max-width: 100%; max-height: 280px; border-radius: .45rem; }
+.delivery-detail section { margin-top: 1.05rem; }
+.delivery-detail textarea { display: block; width: 100%; }
+.delivery-timeline { padding-left: 1.5rem; }
+.delivery-timeline li { margin-bottom: .5rem; overflow-wrap: anywhere; }
+.delivery-fields { padding-top: .55rem; }

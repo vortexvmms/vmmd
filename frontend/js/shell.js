@@ -20,6 +20,7 @@
       try { var response = await vmmsApi("/api/v1/me"); if (response.ok) me = await response.json(); } catch (_) {}
       if (!me) return;
       var role = me.role || "admin";
+      if (role === "driver") return;
       var ROLE_LABELS = {admin:"Administrator",general_manager:"General Manager",operation_manager:"Operation Manager",hr_assistant:"HR Assistant",main_sup:"Site Manager",wshc_lead:"WSHC Lead",site_sup:"Site Supervisor",safety_sup:"Safety Supervisor",wshc:"WSHC",logistics_sup:"Logistics Supervisor",payroll:"Payroll"};
       var TIER = {admin:"full",general_manager:"full",operation_manager:"full",hr_assistant:"full",main_sup:"manager",wshc_lead:"manager",site_sup:"supervisor",safety_sup:"supervisor",wshc:"supervisor",logistics_sup:"supervisor",payroll:"payroll"};
       var ALLOW = {
@@ -77,12 +78,13 @@
     function navFor(viewRole){
       const permitted=new Set(roleNav(viewRole).flatMap(section=>section.items.map(item=>item[1])));
       if (["admin","general_manager","operation_manager","main_sup"].includes(role) || me.menu?.includes("store.html")) permitted.add("store.html");
+      if (["admin","general_manager","operation_manager","main_sup","site_sup","safety_sup","wshc","wshc_lead","logistics_sup"].includes(role)) permitted.add("store-deliveries.html");
       return [
         {items:[["Home","home.html","home"],["My Tasks","todo.html","check"]]},
         {group:"Daily Site Work",items:[["Request Manpower","request.html","calendar"],["Mark Attendance","attendance.html","check"],["End-Time Verification","verify.html","clock"],["Submit Daily Report","dpr.html","document"],["WhatsApp Messages","whatsapp.html","chat"]]},
         {group:"Manpower & Sites",items:[["Worker Directory","workers.html","user"],["Site Directory","sites.html","building"],["Worker Allocation","allocation.html","calendar"]]},
         {group:"Safety & Training",items:[["Training Records","worker-cards.html","document"],["Site Induction Register (SIC)","sic-register.html","shield"]]},
-        {group:"Equipment & Logistics",items:[["Equipment Store","store.html","grid"],["Lifting Register (LM/LG)","lifting.html","document"],["Tipper Truck Supply","tipper-trucks.html","truck"]]},
+        {group:"Equipment & Logistics",items:[["Equipment Store","store.html","grid"],["Movement Register","store-deliveries.html","truck"],["Lifting Register (LM/LG)","lifting.html","document"],["Tipper Truck Supply","tipper-trucks.html","truck"]]},
         {group:"Projects & Planning",items:[["Project Directory","dpr-projects.html","building"],["Work Programme","planning.html","calendar"],["Site Camera","camera.html","chart"],["Daily Report History","dprlist.html","list"]]},
         {group:"Procurement",items:[["Create Purchase Request","pr-new.html","cart"],["Purchase Request Register","pr-directory.html","list"],["Import Purchase Requests","pr-import.html","upload"],["Purchase Request Status","pr-dashboard.html","chart"]]},
         {group:"Reports & Dashboards",items:[["Operations Dashboard","dashboard.html","chart"],["Worker Timesheets","timesheet.html","grid"],["Resource Summary","resource-summary.html","grid"],["Site Dashboard","site-dashboard.html","chart"]]},
