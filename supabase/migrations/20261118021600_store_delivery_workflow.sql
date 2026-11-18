@@ -7,7 +7,9 @@ alter table public.users add constraint users_role_check check (role in (
 ));
 
 -- Driver accounts share Supabase's authenticated role. Fence off existing
--- modules, including permissive policies that only check for a signed-in user.
+-- modules in public, including policies that only check for a signed-in user.
+-- Private Storage buckets already require their own module roles or scoped
+-- application records. The pickup proof itself is served through the Store API.
 create function public.store_is_driver()
 returns boolean language sql stable security definer set search_path=''
 as $$ select exists (select 1 from public.users where auth_uid=auth.uid() and role='driver'); $$;
@@ -20,7 +22,7 @@ begin
     for target in
         select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
         where c.relrowsecurity and c.relkind in ('r','p')
-        and n.nspname in ('public','storage') and (n.nspname,c.relname) <> ('public','users')
+        and n.nspname='public' and c.relname <> 'users'
     loop
         execute format('create policy store_driver_isolation on %I.%I as restrictive to authenticated
                         using (not (select public.store_is_driver()))
@@ -449,4 +451,5 @@ grant execute on function public.store_delivery_register(bigint,text),public.sto
 revoke all on function public.store_delivery_photo_attach(uuid,uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.store_delivery_photo_attach(uuid,uuid,uuid,text) to service_role;
 
+notify pgrst, 'reload schema';
 commit;
