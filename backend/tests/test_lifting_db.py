@@ -63,9 +63,19 @@ def test_renewal_preserves_old_document_and_checks_identifiers():
 def test_shared_certificate_two_independent_items():
     nd='30000000-0000-0000-0000-000000000009'
     pre=setup().split('set local role')[0]+f"insert into lifting_documents(id,kind,original_filename,object_key,mime_type,file_size,checksum,created_by) values('{nd}','lg','two.pdf','originals/two','application/pdf',100,'hash','{UID}');set local role authenticated;set local request.jwt.claim.sub='{UID}';"
-    data={'confirmed':True,'lg_number':'LG2511S025-026','gear_type':'Webbing sling','markings':['S025','S026'],'swl_kg':3000,'examination_date':'2026-01-01','certificate_expiry':'2030-01-01','renewal_months':6,'renewal_reason':'Site requirement'}
+    data={'confirmed':True,'lg_number':'LG2511S025-026','gear_type':'Webbing sling','quantity':2,'swl_kg':3000,'examination_date':'2026-01-01','certificate_expiry':'2030-01-01','renewal_months':6}
     assert run(pre+f"select lifting_review('{nd}','{json.dumps(data)}',null);select count(*) from lifting_gear_items where certificate_id=(select id from lifting_gear_certificates where lg_number='LG2511S025-026');rollback;").endswith('\n2')
 
+
+
+def test_lg_renewal_preserves_generated_or_existing_item_identifiers():
+    nd='30000000-0000-0000-0000-000000000009'
+    pre=setup().split('set local role')[0]+f"insert into lifting_documents(id,kind,original_filename,object_key,mime_type,file_size,checksum,created_by) values('{nd}','lg','renewal.pdf','originals/renewed','application/pdf',100,'hash','{UID}');set local role authenticated;set local request.jwt.claim.sub='{UID}';"
+    data={'confirmed':True,'lg_number':'LG2511S023-024','gear_type':'Webbing sling','quantity':1,'swl_kg':3000,'examination_date':'2027-01-01','certificate_expiry':'2030-01-01','renewal_months':12}
+    result=run(pre+f"select lifting_review('{nd}','{json.dumps(data)}','{G}');select marking from lifting_gear_items where certificate_id='{G}';rollback;")
+    assert result.endswith('S023')
+    data['quantity']=2
+    assert 'Renewal quantity differs' in run(pre+f"select lifting_review('{nd}','{json.dumps(data)}','{G}');rollback;",False)
 
 def test_frozen_pack_survives_movement_and_validates_new_selection():
     freeze=f"select lifting_freeze_pack('{M1}',array['{I}']::uuid[],array['{DOC}','{CHART}','{GDOC}']::uuid[],'[\"lm_log\",\"lg_log\",\"{DOC}\",\"{CHART}\",\"{GDOC}\"]',false);"

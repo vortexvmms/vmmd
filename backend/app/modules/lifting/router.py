@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from uuid import UUID
 from ...core.roles import ATTENDANCE_ROLES, COORDINATOR_ROLES
+from ...settings import PRIVATE_IMAGES_R2_ENABLED
+from ...storage import private_image_url
 from .domain import decorate,extract
 from .pdf import LM,LG,log_pdf,assemble
 
@@ -72,11 +74,23 @@ def build_lifting_router(ctx):
         if not rows: raise HTTPException(404,'Record not found')
         return rows[0]
     async def object_bytes(user,doc):
-        async with ctx.shared_client() as c:
-            r=await c.get(f"{storage_url}/storage/v1/object/authenticated/lifting-documents/{quote(doc['object_key'],safe='/')}",headers=ctx.supabase_headers(user['token']))
-            if r.status_code!=200: raise HTTPException(502,'Original document could not be read')
-            if hashlib.sha256(r.content).hexdigest()!=doc['checksum']: raise HTTPException(409,'Original document checksum differs from the saved version')
-            return r.content
+        backend=doc.get('storage_backend') or 'supabase'
+        if backend == 'r2':
+            if not PRIVATE_IMAGES_R2_ENABLED: raise HTTPException(503,'Private R2 certificate storage unavailable')
+            if doc['kind'] != 'lg' or not doc['object_key'].startswith('originals/'):
+                raise HTTPException(409,'Invalid private lifting certificate storage record')
+            url=private_image_url('lifting-documents',doc['object_key'],'GET')
+            async with ctx.shared_client() as c:
+                r=await c.get(url)
+        elif backend == 'supabase':
+            async with ctx.shared_client() as c:
+                r=await c.get(f"{storage_url}/storage/v1/object/authenticated/lifting-documents/{quote(doc['object_key'],safe='/')}",headers=ctx.supabase_headers(user['token']))
+        else:
+            raise HTTPException(409,'Unknown certificate storage backend')
+        if r.status_code != 200: raise HTTPException(502,'Original document could not be read')
+        if len(r.content) != doc['file_size'] or hashlib.sha256(r.content).hexdigest()!=doc['checksum']:
+            raise HTTPException(409,'Original certificate checksum or size differs from the saved version')
+        return r.content
     @router.get('')
     async def directory(user:dict=Depends(ctx.get_current_user)):
         require(user);return await records(user)
@@ -103,10 +117,26 @@ def build_lifting_router(ctx):
             d.close()
         except Exception: raise HTTPException(400,'Document could not be read. Use an unlocked PDF with at most 150 pages')
         id=str(uuid.uuid4());key=f'originals/{id}'
-        async with ctx.shared_client() as c:
-            r=await c.post(f'{storage_url}/storage/v1/object/lifting-documents/{key}',headers={**ctx.supabase_headers(user['token']),'Content-Type':mime,'x-upsert':'false'},content=data)
-            if r.status_code not in (200,201): raise HTTPException(503,'Private lifting storage is not ready or the upload failed')
-        rows=await request_db(user,'lifting_documents','post',payload={'id':id,'kind':kind,'original_filename':filename,'object_key':key,'mime_type':mime,'file_size':len(data),'checksum':hashlib.sha256(data).hexdigest(),'created_by':user['auth_uid']})
+        backend='r2' if kind=='lg' else 'supabase'
+        if backend=='r2':
+            # Fail closed: never silently place new LG originals in Supabase.
+            if not PRIVATE_IMAGES_R2_ENABLED: raise HTTPException(503,'Private R2 certificate storage is not configured')
+            url=private_image_url('lifting-documents',key,'PUT')
+            async with ctx.shared_client() as c:
+                r=await c.put(url,content=data,headers={'Content-Type':mime})
+            if r.status_code not in (200,201,204):
+                raise HTTPException(503,'Private R2 certificate upload failed')
+            # Verify the remote bytes before committing a certificate record.
+            url=private_image_url('lifting-documents',key,'GET')
+            async with ctx.shared_client() as c:
+                check=await c.get(url)
+            if check.status_code!=200 or hashlib.sha256(check.content).digest()!=hashlib.sha256(data).digest():
+                raise HTTPException(503,'Private R2 certificate verification failed')
+        else:
+            async with ctx.shared_client() as c:
+                r=await c.post(f'{storage_url}/storage/v1/object/lifting-documents/{key}',headers={**ctx.supabase_headers(user['token']),'Content-Type':mime,'x-upsert':'false'},content=data)
+                if r.status_code not in (200,201): raise HTTPException(503,'Private lifting storage is not ready or the upload failed')
+        rows=await request_db(user,'lifting_documents','post',payload={'id':id,'kind':kind,'original_filename':filename,'object_key':key,'storage_backend':backend,'mime_type':mime,'file_size':len(data),'checksum':hashlib.sha256(data).hexdigest(),'created_by':user['auth_uid']})
         return rows[0]
     @router.get('/documents/{document_id}/file')
     async def document_file(document_id:UUID,user:dict=Depends(ctx.get_current_user)):
